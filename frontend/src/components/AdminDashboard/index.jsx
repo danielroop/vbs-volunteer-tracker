@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useEvent } from '../../contexts/EventContext'; // Add this
+import { useTimeEntries } from '../../hooks/useTimeEntries'; // Add this
 import Button from '../common/Button';
 
 /**
@@ -12,6 +14,15 @@ import Button from '../common/Button';
  */
 export default function AdminDashboard() {
   const { user, signOut } = useAuth();
+  const { currentEvent } = useEvent();
+  const { timeEntries, loading } = useTimeEntries({
+    eventId: currentEvent?.id,
+    realtime: true
+  });
+
+// Calculate stats from real-time data
+  const checkedInCount = timeEntries.filter(e => !e.checkOutTime).length;
+  const checkedOutCount = timeEntries.filter(e => e.checkOutTime).length;
 
   const handleSignOut = async () => {
     await signOut();
@@ -23,6 +34,13 @@ export default function AdminDashboard() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">VBS Volunteer Tracker</h1>
+          {/* Current Event Indicator */}
+          <div className="flex items-center gap-2 mt-1">
+            <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
+            <span className="text-sm font-medium text-gray-600">
+              Active Event: <span className="text-primary-600">{currentEvent?.name || 'No Event Selected'}</span>
+            </span>
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-gray-600">👤 {user?.email}</span>
             <Button variant="secondary" size="sm" onClick={handleSignOut}>
@@ -50,20 +68,23 @@ export default function AdminDashboard() {
           <Link to="/admin/reports" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
             Reports
           </Link>
+          <Link to="/admin/events" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
+            Events
+          </Link>
         </div>
 
         {/* Today's Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">📊 Today's Overview</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">📊 Overview: {currentEvent?.name}</h3>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span>🟢 Checked In:</span>
-                <span className="font-bold">--</span>
+                <span className="font-bold">{loading ? '...' : checkedInCount}</span>
               </div>
               <div className="flex justify-between">
                 <span>✓ Checked Out:</span>
-                <span className="font-bold">--</span>
+                <span className="font-bold">{loading ? '...' : checkedOutCount}</span>
               </div>
               <div className="flex justify-between">
                 <span>Total:</span>
@@ -73,8 +94,12 @@ export default function AdminDashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">🔔 Recent Activity</h3>
-            <p className="text-gray-500 text-sm">No recent activity</p>
+            <h3 className="text-lg font-semibold mb-2">🔔 Recent Activity</h3>
+            {timeEntries.slice(0, 5).map(entry => (
+              <div key={entry.id} className="text-sm border-b py-2">
+                {entry.studentId} scanned at {entry.checkInTime?.toLocaleTimeString()}
+              </div>
+            ))}
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">

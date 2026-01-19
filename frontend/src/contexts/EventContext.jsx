@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../utils/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { useAuth } from './AuthContext';
 
 const EventContext = createContext(null);
 
@@ -16,10 +17,43 @@ export function EventProvider({ children }) {
   const [currentEvent, setCurrentEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuth(); // Access the logged-in user
 
   useEffect(() => {
-    loadCurrentEvent();
-  }, []);
+    if (!user) {
+          setLoading(false);
+          return;
+        }
+
+        // 1. Listen to the user's specific admin settings
+        const userPrefsRef = doc(db, 'admins', user.uid);
+        
+        const unsubscribe = onSnapshot(userPrefsRef, async (userDoc) => {
+          const selectedId = userDoc.data()?.selectedEventId;
+
+          if (selectedId) {
+            // 2. Load the user's specific selection
+            await loadEventById(selectedId);
+          } else {
+            // 3. Fallback: Load the most recently created event
+            await loadDefaultEvent();
+          }
+          setLoading(false);
+        });
+
+        return () => unsubscribe();
+  }, [user]);
+
+  /**
+   * Load the most recently created event as default
+   */
+  const loadDefaultEvent = async () => {
+    const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      setCurrentEvent({ id: snap.docs[0].id, ...snap.docs[0].data() });
+    }
+  };
 
   /**
    * Load the current active event
@@ -69,6 +103,7 @@ export function EventProvider({ children }) {
       } else {
         setError('Event not found');
       }
+      localStorage.setItem('vbs_active_event_id', eventId);
     } catch (err) {
       console.error('Error loading event:', err);
       setError(err.message);

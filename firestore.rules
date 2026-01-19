@@ -31,6 +31,11 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == adminId;
       allow write: if false;  // Only via backend setup
     }
+
+    // Allow users to read and update their own settings
+    match /admins/{userId} {
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+    }
  
     // Generated forms: Admin only
     match /generatedForms/{formId} {

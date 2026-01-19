@@ -10,6 +10,9 @@ import CheckoutPage from './pages/CheckoutPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import DailyReviewPage from './pages/DailyReviewPage';
 import FormGenerationPage from './pages/FormGenerationPage';
+import StudentsPage from './pages/StudentsPage';
+import EventsPage from './pages/EventsPage';
+import CreateEventPage from './pages/CreateEventPage';
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -62,6 +65,31 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/students"
+              element={
+                <ProtectedRoute>
+                  <StudentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/events"
+              element={
+                <ProtectedRoute>
+                  <EventsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/events/new"
+              element={
+                <ProtectedRoute>
+                  <CreateEventPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Add more admin routes as needed */}
 
             {/* Default Route */}
             <Route path="/" element={<Navigate to="/admin" />} />

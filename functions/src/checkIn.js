@@ -8,14 +8,15 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {Object} request.data
  * @param {string} request.data.studentId - Student ID
  * @param {string} request.data.eventId - Event ID
- * @param {string} request.data.scannedBy - User/device performing scan
+ * @param {string} request.data.activityId - Activity ID
+ * @param {string} request.data.scannedBy - Who scanned (e.g., 'av_scan')
  */
 export const checkIn = onCall(async (request) => {
-  const { studentId, eventId, scannedBy } = request.data;
+  const { studentId, eventId, activityId, scannedBy } = request.data;
 
   // Validate required fields
-  if (!studentId || !eventId) {
-    throw new HttpsError('invalid-argument', 'Missing required fields: studentId and eventId');
+  if (!studentId || !eventId || !activityId) {
+    throw new HttpsError('invalid-argument', 'Missing required fields: studentId, eventId, and activityId');
   }
 
   const db = getFirestore();
@@ -25,6 +26,8 @@ export const checkIn = onCall(async (request) => {
     // Check if already checked in today
     const existingQuery = await db.collection('timeEntries')
       .where('studentId', '==', studentId)
+      .where('eventId', '==', eventId)
+      .where('activityId', '==', activityId)
       .where('date', '==', today)
       .where('checkOutTime', '==', null)
       .get();
@@ -60,6 +63,7 @@ export const checkIn = onCall(async (request) => {
     const entry = {
       studentId,
       eventId,
+      activityId,
       date: today,
       checkInTime,
       checkInBy: scannedBy || 'av_scan',

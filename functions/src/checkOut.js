@@ -11,11 +11,11 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {string} request.data.method - Check-out method: 'self_scan' | 'av_scan'
  */
 export const checkOut = onCall(async (request) => {
-  const { studentId, eventId, method } = request.data;
+  const { studentId, eventId, activityId, method } = request.data;
 
   // Validate required fields
-  if (!studentId || !eventId) {
-    throw new HttpsError('invalid-argument', 'Missing required fields: studentId and eventId');
+  if (!studentId || !eventId || !activityId) {
+    throw new HttpsError('invalid-argument', 'Missing required fields: studentId, eventId, and activityId');
   }
 
   const db = getFirestore();
@@ -25,6 +25,8 @@ export const checkOut = onCall(async (request) => {
     // Find today's entry
     const entriesQuery = await db.collection('timeEntries')
       .where('studentId', '==', studentId)
+      .where('eventId', '==', eventId)
+      .where('activityId', '==', activityId)
       .where('date', '==', today)
       .where('checkOutTime', '==', null)
       .get();

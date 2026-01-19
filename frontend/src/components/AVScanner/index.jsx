@@ -6,6 +6,7 @@ import { useOfflineSync } from '../../hooks/useOfflineSync';
 import useQRScanner from '../../hooks/useQRScanner';
 import Spinner from '../common/Spinner';
 import { useParams, Link } from 'react-router-dom';
+import { parseQRData } from '../../utils/qrCodeGenerator'; // Added shared utility
 
 export default function AVScanner() {
   const { eventId: urlEventId, activityId: urlActivityId } = useParams();
@@ -19,12 +20,10 @@ export default function AVScanner() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // 1. Always fetch all events so we can show the list if needed
         const eventsSnap = await getDocs(collection(db, 'events'));
         const eventsList = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAllEvents(eventsList);
 
-        // 2. If a specific ID is in the URL, set it as the local focus
         if (urlEventId) {
           const match = eventsList.find(e => e.id === urlEventId);
           if (match) setLocalEvent(match);
@@ -39,32 +38,50 @@ export default function AVScanner() {
   }, [urlEventId]);
 
   const { startScanning, stopScanning } = useQRScanner({
-    onSuccess: async (data) => {
-      const { studentId, eventId: qrEventId } = data;
-      if (qrEventId !== urlEventId) return showMessage('error', 'Wrong Event');
+  onSuccess: async (data) => {    
+    // Ensure we are working with a string. 
+    // If 'data' is an object, extract the text property.
+    const qrString = typeof data === 'string' ? data : data?.rawData || data?.data;
 
-      try {
-        const checkInFn = httpsCallable(functions, 'checkIn');
-        const result = await checkInFn({
-          studentId,
-          eventId: urlEventId,
-          activityId: urlActivityId,
-          scannedBy: 'av_scan'
-        });
-        if (result.data.success) showMessage('success', `✓ ${result.data.studentName} Checked In`);
-      } catch (err) {
-        showMessage('error', err.message);
-      }
+
+    if (!qrString) {
+      return showMessage('error', 'Could not read QR data');
     }
-  });
 
-  // Validation Flags
+    // Pass the confirmed string to your utility
+    const { studentId, eventId: qrEventId, isValid, error } = parseQRData(qrString);
+
+    if (!isValid) {
+      return showMessage('error', error || 'Invalid QR Code');
+    }
+
+    if (qrEventId !== urlEventId) {
+      return showMessage('error', 'Wrong Event Badge');
+    }
+
+    try {
+      const checkInFn = httpsCallable(functions, 'checkIn');
+      const result = await checkInFn({
+        studentId,
+        eventId: urlEventId,
+        activityId: urlActivityId,
+        scannedBy: 'av_scan'
+      });
+      
+      if (result.data.success) {
+        showMessage('success', `✓ ${result.data.studentName} Checked In`);
+      }
+    } catch (err) {
+      showMessage('error', err.message);
+    }
+  }
+});
+
   const hasValidEvent = !!localEvent;
   const currentActivity = localEvent?.activities?.find(a => a.id === urlActivityId);
   const hasValidActivity = !!currentActivity;
 
   useEffect(() => {
-    // ONLY start camera if we have both pieces of info
     if (!loading && hasValidEvent && hasValidActivity && !isStarting.current) {
       isStarting.current = true;
       setTimeout(() => {
@@ -72,7 +89,7 @@ export default function AVScanner() {
       }, 500);
       return () => stopScanning();
     }
-  }, [loading, hasValidEvent, hasValidActivity]);
+  }, [loading, hasValidEvent, hasValidActivity, startScanning, stopScanning]);
 
   function showMessage(type, text) {
     setMessage({ type, text });
@@ -81,7 +98,6 @@ export default function AVScanner() {
 
   if (loading) return <div className="p-20 text-center"><Spinner /></div>;
 
-  // STEP 1: No Event Provided (or invalid)
   if (!hasValidEvent) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
@@ -108,7 +124,6 @@ export default function AVScanner() {
     );
   }
 
-  // STEP 2: Event is picked, but Activity is missing
   if (!hasValidActivity) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
@@ -145,7 +160,6 @@ export default function AVScanner() {
     );
   }
 
-  // STEP 3: Both provided - Render Scanner
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-2xl mx-auto">

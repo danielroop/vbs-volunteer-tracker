@@ -1,0 +1,25 @@
+{
+  "name": "vbs-volunteer-tracker-functions",
+  "version": "1.0.0",
+  "description": "Firebase Cloud Functions for VBS Volunteer Tracker",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^4.6.0",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  }
+}

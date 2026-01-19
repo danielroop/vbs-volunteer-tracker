@@ -1,0 +1,26 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Generated forms: Admin can read/write, public can read with URL
+    match /forms/{eventId}/{formId} {
+      allow read: if true; // Public read with URL
+      allow write: if isAuthenticated(); // Admin only
+    }
+
+    // Lanyard QR codes: Public read for printing
+    match /lanyards/{eventId}/{lanyardId} {
+      allow read: if true; // Public read
+      allow write: if isAuthenticated(); // Admin only
+    }
+
+    // All other files: Admin only
+    match /{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -163,21 +163,23 @@ export default function StudentsPage() {
             body { background: white; margin: 0; padding: 0; }
             .ocps-form-container {
               font-family: Arial, sans-serif;
-              padding: 0.3in;
+              padding: 0.25in;
               color: black;
-              line-height: 1.1;
-              font-size: 9pt;
+              line-height: 1.05;
+              font-size: 8.5pt;
               page-break-after: always;
+              height: 100vh;
+              box-sizing: border-box;
             }
             .ocps-form-container:last-child {
               page-break-after: auto;
             }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 4px; }
-            th, td { border: 1px solid black; padding: 4px 8px; vertical-align: middle; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 2px; }
+            th, td { border: 1px solid black; padding: 2px 6px; vertical-align: middle; }
             .field-box { border-bottom: 1px solid black; display: inline-block; min-width: 120px; padding: 0 5px; font-weight: bold; }
-            .reflection-box { border: 1px solid black; height: 210px; width: 100%; margin-top: 4px; display: flex; flex-direction: column; }
+            .reflection-box { border: 1px solid black; height: 165px; width: 100%; margin-top: 2px; display: flex; flex-direction: column; }
             .reflection-line { border-bottom: 1px solid #eee; flex: 1; }
-            .ocps-logo { width: 45px; height: 45px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 8pt; text-align: center; }
+            .ocps-logo { width: 40px; height: 40px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 7pt; text-align: center; }
           }
           #print-all-forms { display: none; }
         `}
@@ -319,12 +321,12 @@ export default function StudentsPage() {
 
           return (
             <div key={student.id} className="ocps-form-container">
-              <div className="flex items-center justify-between mb-4 border-b-2 border-black pb-2">
+              <div className="flex items-center justify-between mb-2 border-b-2 border-black pb-1">
                 <div className="ocps-logo">OCPS</div>
-                <h1 className="text-xl font-bold text-center flex-1">Community/Work Service Log and Reflection</h1>
+                <h1 className="text-lg font-bold text-center flex-1">Community/Work Service Log and Reflection</h1>
               </div>
 
-              <table className="mb-2">
+              <table className="mb-1">
                 <tbody>
                   <tr>
                     <td className="w-1/3 border-none">Student ID #: <span className="field-box" style={{ minWidth: '100px' }}></span></td>
@@ -337,10 +339,10 @@ export default function StudentsPage() {
                 </tbody>
               </table>
 
-              <p className="text-[8pt] mb-1">Social/Civic Issue/Professional Area Addressing with Service Activity Log (Optional):</p>
-              <div className="border-b border-black w-full mb-2 h-5"></div>
-              <p className="font-bold text-[9pt] mb-1">Description of Volunteer/Paid Work Activity:</p>
-              <div className="border-b border-black w-full mb-4 h-5"></div>
+              <p className="text-[7.5pt] mb-0.5">Social/Civic Issue/Professional Area Addressing with Service Activity Log (Optional):</p>
+              <div className="border-b border-black w-full mb-1 h-4"></div>
+              <p className="font-bold text-[8pt] mb-0.5">Description of Volunteer/Paid Work Activity:</p>
+              <div className="border-b border-black w-full mb-2 h-4"></div>
 
               <table className="mb-2 text-center">
                 <thead>
@@ -374,21 +376,21 @@ export default function StudentsPage() {
                 </tbody>
               </table>
 
-              <div className="mt-2">
-                <p className="font-bold text-[8pt] mb-0">Reflection on Service Activity/Work (attach additional pages if necessary):</p>
-                <p className="text-[7pt] italic mb-1">Attach a copy of your pay stub for work hours if applicable. Complete the reflection below...</p>
+              <div className="mt-1">
+                <p className="font-bold text-[7.5pt] mb-0">Reflection on Service Activity/Work (attach additional pages if necessary):</p>
+                <p className="text-[6.5pt] italic mb-0.5">Attach a copy of your pay stub for work hours if applicable. Complete the reflection below...</p>
                 <div className="reflection-box">
-                  {[...Array(8)].map((_, i) => <div key={i} className="reflection-line"></div>)}
+                  {[...Array(7)].map((_, i) => <div key={i} className="reflection-line"></div>)}
                 </div>
               </div>
 
-              <p className="text-[7.5pt] mt-4 font-bold leading-tight">By signing below, I certify that all information on this document is true and correct. I understand that if I am found to have given false testimony about these hours that the hours will be revoked and endanger my eligibility for the Bright Futures Scholarship.</p>
+              <p className="text-[7pt] mt-2 font-bold leading-tight">By signing below, I certify that all information on this document is true and correct. I understand that if I am found to have given false testimony about these hours that the hours will be revoked and endanger my eligibility for the Bright Futures Scholarship.</p>
 
-              <div className="mt-6 flex justify-between">
-                <div className="text-[8.5pt]">Student Signature: _______________________ Date: ________</div>
-                <div className="text-[8.5pt]">Parent Signature: ________________________ Date: ________</div>
+              <div className="mt-3 flex justify-between">
+                <div className="text-[8pt]">Student Signature: _______________________ Date: ________</div>
+                <div className="text-[8pt]">Parent Signature: ________________________ Date: ________</div>
               </div>
-              <p className="text-[6pt] mt-2 text-gray-400">Revised 8/2023</p>
+              <p className="text-[5.5pt] mt-1 text-gray-400">Revised 8/2023</p>
             </div>
           );
         })}

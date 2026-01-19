@@ -1,42 +1,46 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { db } from '../utils/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
+import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
-import { Link } from 'react-router-dom'; // Added for navigation to details page
 
 export default function StudentsPage() {
+  const navigate = useNavigate();
   const { currentEvent } = useEvent();
+  
   const [students, setStudents] = useState([]);
-  const [timeEntries, setTimeEntries] = useState([]);
+  const [allEntries, setAllEntries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-  const [tempHours, setTempHours] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    schoolName: '',
+    gradeLevel: '',
+    gradYear: ''
+  });
 
   useEffect(() => {
-    if (!currentEvent?.id) {
-      setLoading(false);
-      return;
-    }
-
-    const qStudents = query(
-      collection(db, 'students'),
-      where('eventId', '==', currentEvent.id)
-    );
-
-    const qEntries = query(
-      collection(db, 'timeEntries'),
-      where('eventId', '==', currentEvent.id)
-    );
-
-    const unsubStudents = onSnapshot(qStudents, (snapshot) => {
+    // 1. Listen for all student records
+    const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubEntries = onSnapshot(qEntries, (snapshot) => {
-      setTimeEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    // 2. Listen for entries linked to the active event to show current totals
+    let unsubEntries = () => {};
+    if (currentEvent?.id) {
+      const q = query(collection(db, 'timeEntries'), where('eventId', '==', currentEvent.id));
+      unsubEntries = onSnapshot(q, (snapshot) => {
+        setAllEntries(snapshot.docs.map(doc => doc.data()));
+        setLoading(false);
+      });
+    } else {
       setLoading(false);
-    });
+    }
 
     return () => {
       unsubStudents();
@@ -44,145 +48,168 @@ export default function StudentsPage() {
     };
   }, [currentEvent?.id]);
 
-  const roundTime = (hours) => {
-    return Math.round(hours * 4) / 4;
-  };
+  const roundTime = (hours) => Math.round(hours * 4) / 4;
 
-  const handleUpdateOverride = async (studentId) => {
-    try {
-      const studentRef = doc(db, 'students', studentId);
-      await updateDoc(studentRef, {
-        overrideHours: tempHours === "" ? 0 : parseFloat(tempHours)
-      });
-      setEditingId(null);
-    } catch (err) {
-      console.error("Error updating override:", err);
-    }
-  };
-
-  const calculateStudentStats = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-
+  // Calculate live totals for the table view
+  const studentsWithHours = useMemo(() => {
     return students.map(student => {
-      const studentEntries = timeEntries.filter(e => e.studentId === student.id);
-      
-      const sorted = [...studentEntries].sort((a, b) => 
-        (b.checkInTime?.seconds || 0) - (a.checkInTime?.seconds || 0)
-      );
-
-      const lastIn = sorted[0]?.checkInTime?.toDate() || null;
-      const lastOut = sorted.find(e => e.checkOutTime)?.checkOutTime?.toDate() || null;
-
-      let eventTotal = 0;
-      let todayTotal = 0;
-
-      studentEntries.forEach(entry => {
-        if (entry.checkInTime && entry.checkOutTime) {
-          const duration = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
-          const rounded = roundTime(duration);
-          eventTotal += rounded;
-
-          const entryDate = entry.checkInTime.toDate().toISOString().split('T')[0];
-          if (entryDate === todayStr) {
-            todayTotal += rounded;
-          }
-        }
-      });
-
-      // Combine calculated hours with Admin Override
-      const override = student.overrideHours || 0;
-      const finalTotal = eventTotal + override;
-
-      return {
-        ...student,
-        lastCheckin: lastIn ? lastIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
-        lastCheckout: lastOut ? lastOut.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
-        todayHours: todayTotal.toFixed(2),
-        calculatedEventHours: eventTotal.toFixed(2),
-        overrideHours: override.toFixed(2),
-        finalTotal: finalTotal.toFixed(2)
+      const studentEntries = allEntries.filter(e => e.studentId === student.id && e.checkOutTime);
+      const totalHours = studentEntries.reduce((acc, entry) => {
+        const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
+        return acc + roundTime(diff);
+      }, 0);
+      return { 
+        ...student, 
+        eventTotal: totalHours + parseFloat(student.overrideHours || 0) 
       };
-    });
-  }, [students, timeEntries]);
+    }).sort((a, b) => a.lastName.localeCompare(b.lastName));
+  }, [students, allEntries]);
 
-  if (loading) return <div className="flex justify-center p-20"><Spinner size="lg" /></div>;
+  const handleCreateStudent = async (e) => {
+    e.preventDefault();
+    try {
+      await addDoc(collection(db, 'students'), {
+        ...formData,
+        overrideHours: 0,
+        createdAt: serverTimestamp()
+      });
+      setIsModalOpen(false);
+      setFormData({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '' });
+    } catch (err) { console.error("Error adding student:", err); }
+  };
+
+  const filteredStudents = studentsWithHours.filter(s => 
+    `${s.firstName} ${s.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Volunteer Roster</h1>
-        <p className="text-sm text-gray-500">Event Context: <span className="font-semibold text-primary-600">{currentEvent?.name}</span></p>
+      {/* HEADER SECTION */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div>
+          <Link to="/" className="text-primary-600 font-bold text-sm hover:underline mb-2 block">← Back to Dashboard</Link>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Volunteer Roster</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-gray-500 font-medium text-sm">Active Event:</span>
+            <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+              {currentEvent?.name || 'No Event Selected'}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex gap-3 w-full md:w-auto">
+          <input 
+            placeholder="Search volunteers..."
+            className="border border-gray-200 rounded-xl px-4 py-2 w-full md:w-64 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button onClick={() => setIsModalOpen(true)} variant="primary">+ Add Student</Button>
+        </div>
       </div>
 
-      <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-200">
+      {/* DATA TABLE */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Volunteer Name</th>
-              <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase text-center">Last In/Out</th>
-              <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase">Today</th>
-              <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase">System Total</th>
-              <th className="px-6 py-4 text-center text-xs font-bold text-orange-600 uppercase">Admin Override</th>
-              <th className="px-6 py-4 text-center text-xs font-bold text-gray-900 uppercase">Final Total</th>
-              <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase">Actions</th>
+            <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <th className="px-6 py-4">Student Name</th>
+              <th className="px-6 py-4">School Details</th>
+              <th className="px-6 py-4 text-center">Event Hours</th>
+              <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {calculateStudentStats.map((student) => (
-              <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+          <tbody className="divide-y divide-gray-200">
+            {filteredStudents.map(student => (
+              <tr 
+                key={student.id} 
+                className="group hover:bg-primary-50 transition-colors cursor-pointer"
+                onClick={() => navigate(`/students/${student.id}`)} // Row click navigation
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-semibold text-gray-900">{student.firstName} {student.lastName}</div>
-                  <div className="text-xs text-gray-500">Grade {student.gradeLevel}</div>
+                  <div className="text-sm font-bold text-gray-900 group-hover:text-primary-700">
+                    {student.lastName}, {student.firstName}
+                  </div>
+                  <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">
+                    Grad: {student.gradYear || '----'}
+                  </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-xs text-center text-gray-600">
-                  <div>In: {student.lastCheckin}</div>
-                  <div>Out: {student.lastCheckout}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <span className="text-sm font-medium text-gray-700">{student.todayHours}</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                  {student.calculatedEventHours}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  {editingId === student.id ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <input 
-                        type="number" 
-                        className="w-16 border rounded px-1 text-sm py-1"
-                        value={tempHours}
-                        onChange={(e) => setTempHours(e.target.value)}
-                        autoFocus
-                      />
-                      <button onClick={() => handleUpdateOverride(student.id)} className="text-green-600 text-lg">✓</button>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => { setEditingId(student.id); setTempHours(student.overrideHours); }}
-                      className={`text-sm font-bold px-2 py-1 rounded border border-dashed ${parseFloat(student.overrideHours) !== 0 ? 'bg-orange-50 border-orange-300 text-orange-700' : 'text-gray-400 border-gray-300'}`}
-                    >
-                      {student.overrideHours > 0 ? `+${student.overrideHours}` : student.overrideHours < 0 ? student.overrideHours : 'Add'}
-                    </button>
-                  )}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-600">{student.schoolName || '---'}</div>
+                  <div className="text-[10px] font-black text-primary-500 uppercase">
+                    Grade {student.gradeLevel || '--'}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <span className="text-sm font-black text-gray-900 bg-yellow-100 px-3 py-1 rounded-full">
-                    {student.finalTotal} hrs
+                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-black ${
+                    student.eventTotal > 0 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-50 text-gray-400'
+                  }`}>
+                    {student.eventTotal.toFixed(2)}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <Link 
-                    to={`/admin/students/${student.id}`}
-                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors shadow-sm"
-                  >
-                    Details
-                  </Link>
+                <td className="px-6 py-4 text-right">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevents the row's own onClick from firing twice
+                      navigate(`/admin/students/${student.id}`); // Navigates to your admin path
+                    }}
+                    className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-4 py-1.5 rounded-lg group-hover:bg-primary-600 group-hover:text-white transition-all shadow-sm">
+                    View Detail →
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* CREATE STUDENT MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8">
+            <h2 className="text-2xl font-black text-gray-900 mb-6">Register Volunteer</h2>
+            <form onSubmit={handleCreateStudent} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">First Name</label>
+                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500" 
+                    value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Last Name</label>
+                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500" 
+                    value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">School Name</label>
+                <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500" 
+                  value={formData.schoolName} onChange={e => setFormData({...formData, schoolName: e.target.value})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grade</label>
+                  <select className="w-full border border-gray-200 rounded-xl p-3 outline-none" value={formData.gradeLevel} onChange={e => setFormData({...formData, gradeLevel: e.target.value})}>
+                    <option value="">Select...</option>
+                    {[9, 10, 11, 12].map(g => <option key={g} value={g}>{g}th Grade</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grad Year</label>
+                  <input placeholder="2027" className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500" 
+                    value={formData.gradYear} onChange={e => setFormData({...formData, gradYear: e.target.value})} />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-6">
+                <Button type="submit" className="flex-1 py-3">Add Student</Button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

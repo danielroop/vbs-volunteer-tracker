@@ -13,6 +13,7 @@ import FormGenerationPage from './pages/FormGenerationPage';
 import StudentsPage from './pages/StudentsPage';
 import EventsPage from './pages/EventsPage';
 import CreateEventPage from './pages/CreateEventPage';
+import StudentDetailPage from './pages/StudentDetailPage';
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -88,6 +89,11 @@ function App() {
                   <CreateEventPage />
                 </ProtectedRoute>
               }
+            />
+
+            <Route 
+              path="/admin/students/:studentId" 
+              element={<StudentDetailPage />} 
             />
             {/* Add more admin routes as needed */}
 

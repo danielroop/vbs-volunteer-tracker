@@ -1,0 +1,13 @@
+{
+  "name": "vbs-volunteer-tracker",
+  "version": "1.0.0",
+  "description": "VBS Student Volunteer Hour Tracking System",
+  "scripts": {
+    "install-all": "cd frontend && npm install && cd ../functions && npm install",
+    "dev": "cd frontend && npm run dev",
+    "emulators": "firebase emulators:start"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.0.0"
+  }
+}

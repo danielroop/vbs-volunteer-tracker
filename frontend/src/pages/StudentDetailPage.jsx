@@ -33,7 +33,7 @@ export default function StudentDetailPage() {
       collection(db, 'timeEntries'),
       where('studentId', '==', studentId),
       where('eventId', '==', currentEvent.id),
-      orderBy('checkInTime', 'desc')
+      orderBy('checkInTime', 'asc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -46,26 +46,67 @@ export default function StudentDetailPage() {
 
   const roundTime = (hours) => Math.round(hours * 4) / 4;
 
-  // --- Calculations for UI Breakdown ---
-  const activityBreakdown = useMemo(() => {
-    if (!currentEvent?.activities) return [];
+  /**
+   * Complex Date Logic: Groups consecutive dates into ranges and identifies gaps
+   */
+  const activityLog = useMemo(() => {
+    if (!currentEvent?.activities || entries.length === 0) return [];
 
     return currentEvent.activities.map(activity => {
-      const activityEntries = entries.filter(e => e.activityId === activity.id);
-      const total = activityEntries.reduce((acc, entry) => {
-        if (entry.checkInTime && entry.checkOutTime) {
-          const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
-          return acc + roundTime(diff);
+      const activityEntries = entries.filter(e => e.activityId === activity.id && e.checkOutTime);
+      if (activityEntries.length === 0) return null;
+
+      // 1. Get unique sorted dates for this activity
+      const uniqueDates = [...new Set(activityEntries.map(e => 
+        e.checkInTime.toDate().toISOString().split('T')[0]
+      ))].sort();
+
+      // 2. Identify consecutive groups
+      const groups = [];
+      if (uniqueDates.length > 0) {
+        let currentGroup = [uniqueDates[0]];
+        for (let i = 1; i < uniqueDates.length; i++) {
+          const prev = new Date(uniqueDates[i - 1]);
+          const curr = new Date(uniqueDates[i]);
+          const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
+
+          if (diffDays === 1) {
+            currentGroup.push(uniqueDates[i]);
+          } else {
+            groups.push(currentGroup);
+            currentGroup = [uniqueDates[i]];
+          }
         }
-        return acc;
+        groups.push(currentGroup);
+      }
+
+      // 3. Format strings like "1/1/26 - 1/3/26, 1/5/26"
+      const dateStrings = groups.map(group => {
+        const start = new Date(group[0]);
+        const end = new Date(group[group.length - 1]);
+        const startStr = `${start.getMonth() + 1}/${start.getDate()}/${start.getFullYear().toString().slice(-2)}`;
+        const endStr = `${end.getMonth() + 1}/${end.getDate()}/${end.getFullYear().toString().slice(-2)}`;
+        
+        return group.length > 1 ? `${startStr} - ${endStr}` : startStr;
+      });
+
+      const totalHours = activityEntries.reduce((acc, entry) => {
+        const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
+        return acc + roundTime(diff);
       }, 0);
-      return { ...activity, total };
-    });
+
+      return { 
+        name: activity.name, 
+        dateDisplay: dateStrings.join(', '), 
+        totalHours: totalHours.toFixed(2) 
+      };
+    }).filter(Boolean);
   }, [entries, currentEvent]);
 
-  const totalCalculatedHours = activityBreakdown.reduce((sum, act) => sum + act.total, 0);
+  const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);
+  const overrideHours = parseFloat(student?.overrideHours || 0);
+  const grandTotal = totalCalculatedHours + overrideHours;
 
-  // Print Handlers
   const handlePrint = (mode) => {
     setPrintMode(mode);
     setTimeout(() => { window.print(); setPrintMode(null); }, 150);
@@ -74,142 +115,159 @@ export default function StudentDetailPage() {
   if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6">
       <style>
         {`
           @media print {
             .no-print { display: none !important; }
             #printable-badge { display: ${printMode === 'badge' ? 'flex' : 'none'} !important; }
             #ocps-form { display: ${printMode === 'form' ? 'block' : 'none'} !important; }
-            #printable-badge {
-              position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-              width: 4in; height: 3in; border: 1px solid #000;
-              display: flex; flex-direction: column; align-items: center; justify-content: center;
+            
+            body { background: white; margin: 0; padding: 0; }
+            .ocps-form-container { 
+              font-family: Arial, sans-serif; 
+              padding: 0.3in; 
+              color: black;
+              line-height: 1.1;
+              font-size: 9pt;
             }
-            .ocps-form-container { font-family: serif; padding: 0.5in; color: black; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 4px; }
+            th, td { border: 1px solid black; padding: 4px 8px; vertical-align: middle; }
+            .field-box { border-bottom: 1px solid black; display: inline-block; min-width: 120px; padding: 0 5px; font-weight: bold; }
+            .reflection-box { border: 1px solid black; height: 210px; width: 100%; margin-top: 4px; display: flex; flex-direction: column; }
+            .reflection-line { border-bottom: 1px solid #eee; flex: 1; }
+            .ocps-logo { width: 45px; height: 45px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 8pt; text-align: center; }
           }
           #printable-badge, #ocps-form { display: none; }
         `}
       </style>
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6 no-print">
-        <button onClick={() => navigate(-1)} className="text-primary-600 font-bold hover:underline">
-          ← Back to Roster
-        </button>
+      {/* ADMIN UI (no-print) */}
+      <div className="flex justify-between items-center mb-8 no-print">
+        <div>
+          <button onClick={() => navigate(-1)} className="text-primary-600 font-bold hover:underline mb-2 block">← Back to Roster</button>
+          <h1 className="text-3xl font-black text-gray-900">{student?.firstName} {student?.lastName}</h1>
+          <p className="text-gray-500 font-medium">{student?.schoolName} • Grade {student?.gradeLevel}</p>
+        </div>
         <div className="flex gap-3">
-          <Button onClick={() => handlePrint('form')} variant="secondary">📄 OCPS Form</Button>
+          <Button onClick={() => handlePrint('form')} variant="secondary">📄 Print Service Log</Button>
           <Button onClick={() => handlePrint('badge')} variant="primary">🖨️ Print Badge</Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 no-print">
-        {/* Left Side: Profile & Activity Breakdown */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border p-6 text-center">
-            <div className="w-20 h-20 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-3xl font-bold mb-4 mx-auto">
-              {student?.firstName?.[0]}{student?.lastName?.[0]}
-            </div>
-            <h1 className="text-xl font-bold">{student?.firstName} {student?.lastName}</h1>
-            <p className="text-gray-500 text-sm">Grade {student?.gradeLevel}</p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border p-6">
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Hours Breakdown</h3>
-            <div className="space-y-4">
-              {activityBreakdown.map(act => (
-                <div key={act.id} className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">{act.name}</span>
-                  <span className="text-sm font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{act.total.toFixed(2)}</span>
-                </div>
-              ))}
-              <div className="pt-4 border-t flex justify-between items-center">
-                <span className="text-sm font-black text-primary-700 uppercase">Grand Total</span>
-                <span className="text-lg font-black text-primary-800">
-                  {(totalCalculatedHours + (student?.overrideHours || 0)).toFixed(2)}
-                </span>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 no-print">
+        <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border p-6 h-fit">
+          <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Summary</h3>
+          <div className="space-y-4">
+            {activityLog.map(act => (
+              <div key={act.name} className="flex justify-between items-center">
+                <span className="text-sm font-semibold text-gray-600">{act.name}</span>
+                <span className="text-sm font-black text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">{act.totalHours}</span>
               </div>
+            ))}
+            <div className="pt-4 border-t-2 border-dashed flex justify-between items-center">
+              <span className="text-sm font-black text-primary-700 uppercase">Grand Total</span>
+              <span className="text-2xl font-black text-primary-600">{grandTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        {/* Right Side: Session History */}
         <div className="lg:col-span-3">
           <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Date</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Activity</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Time In/Out</th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase">Hours</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {entries.map((entry) => {
-                  const activityName = currentEvent?.activities?.find(a => a.id === entry.activityId)?.name || 'General';
-                  const duration = entry.checkOutTime 
-                    ? roundTime((entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600)
-                    : 0;
-
-                  return (
-                    <tr key={entry.id} className="text-sm hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">{entry.checkInTime.toDate().toLocaleDateString()}</td>
-                      <td className="px-6 py-4">
-                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-blue-100">
-                          {activityName}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">
-                        {entry.checkInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
-                        {entry.checkOutTime ? entry.checkOutTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
-                      </td>
-                      <td className="px-6 py-4 text-right font-bold text-gray-900">
-                        {entry.checkOutTime ? duration.toFixed(2) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+             <table className="min-w-full divide-y divide-gray-200">
+               <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-right">Hours</th></tr></thead>
+               <tbody className="divide-y divide-gray-200">
+                 {entries.map(e => (
+                   <tr key={e.id} className="text-sm">
+                     <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
+                     <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>
+                     <td className="px-6 py-4 text-right font-black">{e.checkOutTime ? roundTime((e.checkOutTime.seconds - e.checkInTime.seconds) / 3600).toFixed(2) : '---'}</td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
           </div>
         </div>
       </div>
 
-      {/* PRINT CONTENT: OCPS Form (Grouped by Activity Type) */}
+      {/* OCPS FORM (Matches Rev 8/2023) */}
       <div id="ocps-form" className="ocps-form-container">
-        <h1 className="text-center text-2xl font-bold uppercase underline mb-8">Community Service Log</h1>
-        <p className="mb-4">Student Name: <strong>{student?.firstName} {student?.lastName}</strong></p>
-        <table className="w-full border-collapse border-2 border-black">
-          <thead>
-            <tr className="bg-gray-100 font-bold">
-              <th className="border-2 border-black p-2 text-left">Activity Type</th>
-              <th className="border-2 border-black p-2 text-center">Calculated Hours</th>
-            </tr>
-          </thead>
+        <div className="flex items-center justify-between mb-4 border-b-2 border-black pb-2">
+          <div className="ocps-logo">OCPS</div>
+          <h1 className="text-xl font-bold text-center flex-1">Community/Work Service Log and Reflection</h1>
+        </div>
+
+        <table className="mb-2">
           <tbody>
-            {activityBreakdown.map(act => (
-              <tr key={act.id}>
-                <td className="border-2 border-black p-2">{act.name}</td>
-                <td className="border-2 border-black p-2 text-center">{act.total.toFixed(2)}</td>
-              </tr>
-            ))}
-            <tr className="font-bold">
-              <td className="border-2 border-black p-2 text-right">TOTAL HOURS:</td>
-              <td className="border-2 border-black p-2 text-center">
-                {(totalCalculatedHours + (student?.overrideHours || 0)).toFixed(2)}
-              </td>
+            <tr>
+              <td className="w-1/3 border-none">Student ID #: <span className="field-box" style={{minWidth:'100px'}}></span></td>
+              <td className="border-none">Student Name: <span className="field-box" style={{minWidth:'220px'}}>{student?.firstName} {student?.lastName}</span></td>
+            </tr>
+            <tr>
+              <td className="border-none">School Name: <span className="field-box" style={{minWidth:'200px'}}>{student?.schoolName}</span></td>
+              <td className="border-none text-right">Graduation Year: <span className="field-box" style={{minWidth:'80px'}}>{student?.gradYear || '____'}</span></td>
             </tr>
           </tbody>
         </table>
-        <div className="mt-20 border-t border-black w-64 pt-1">Supervisor Signature</div>
+
+        <p className="text-[8pt] mb-1">Social/Civic Issue/Professional Area Addressing with Service Activity Log (Optional):</p>
+        <div className="border-b border-black w-full mb-2 h-5"></div>
+        <p className="font-bold text-[9pt] mb-1">Description of Volunteer/Paid Work Activity:</p>
+        <div className="border-b border-black w-full mb-4 h-5"></div>
+
+        <table className="mb-2 text-center">
+          <thead>
+            <tr className="bg-gray-100 text-[8pt]">
+              <th className="w-[20%]">Service Organization/Business</th>
+              <th className="w-[30%]">Date(s) of Service Activity/Work</th>
+              <th className="w-[15%]">Contact Name</th>
+              <th className="w-[20%]">Signature of Contact</th>
+              <th className="w-[15%]">Hours Completed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activityLog.map((act, i) => (
+              <tr key={i} className="h-9">
+                <td>{currentEvent?.organizationName}</td>
+                <td className="text-center">{act.dateDisplay}</td>
+                <td>{currentEvent?.contactName || '---'}</td>
+                <td></td>
+                <td className="font-bold">{act.totalHours}</td>
+              </tr>
+            ))}
+            {/* Blank placeholder rows to maintain form length */}
+            {[...Array(Math.max(0, 10 - activityLog.length))].map((_, i) => (
+              <tr key={`blank-${i}`} className="h-9">
+                <td></td><td></td><td></td><td></td><td></td>
+              </tr>
+            ))}
+            <tr>
+              <td colSpan="4" className="text-right font-bold uppercase">Total:</td>
+              <td className="font-bold bg-gray-50">{grandTotal.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div className="mt-2">
+          <p className="font-bold text-[8pt] mb-0">Reflection on Service Activity/Work (attach additional pages if necessary):</p>
+          <p className="text-[7pt] italic mb-1">Attach a copy of your pay stub for work hours if applicable. Complete the reflection below...</p>
+          <div className="reflection-box">
+             {[...Array(8)].map((_, i) => <div key={i} className="reflection-line"></div>)}
+          </div>
+        </div>
+
+        <p className="text-[7.5pt] mt-4 font-bold leading-tight">By signing below, I certify that all information on this document is true and correct. I understand that if I am found to have given false testimony about these hours that the hours will be revoked and endanger my eligibility for the Bright Futures Scholarship.</p>
+        
+        <div className="mt-6 flex justify-between">
+          <div className="text-[8.5pt]">Student Signature: _______________________ Date: ________</div>
+          <div className="text-[8.5pt]">Parent Signature: ________________________ Date: ________</div>
+        </div>
+        <p className="text-[6pt] mt-2 text-gray-400">Revised 8/2023</p>
       </div>
 
-      {/* PRINT CONTENT: Badge */}
-      <div id="printable-badge">
-        <h1 className="text-2xl font-bold">{student?.firstName} {student?.lastName}</h1>
-        <QRCodeSVG value={`${studentId}|${currentEvent?.id}|vbs-checksum`} size={150} />
-        <p className="text-xs mt-2 uppercase">{currentEvent?.name}</p>
+      <div id="printable-badge" className="hidden">
+        <h1 className="text-xl font-bold">{student?.firstName} {student?.lastName}</h1>
+        <QRCodeSVG value={`${studentId}|${currentEvent?.id}|vbs-checksum`} size={120} />
       </div>
     </div>
   );

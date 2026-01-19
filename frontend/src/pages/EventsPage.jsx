@@ -4,8 +4,10 @@ import { collection, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firesto
 import { useEvent } from '../contexts/EventContext';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
+import { useNavigate, Link } from 'react-router-dom'; // Added Link for navigation
 
 export default function EventsPage() {
+  const navigate = useNavigate();
   const { currentEvent, switchActiveEvent } = useEvent();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,6 +18,7 @@ export default function EventsPage() {
   const initialFormState = {
     name: '',
     organizationName: '',
+    contactName: '',
     activities: [{ id: 'general', name: 'General Hours' }]
   };
 
@@ -37,12 +40,13 @@ export default function EventsPage() {
     setIsModalOpen(true);
   };
 
-  // Handler for Edit Config button
+  // Handler for Detail/Edit button to show pre-populated form
   const handleEditConfig = (event) => {
     setEditingEvent(event);
     setFormData({
       name: event.name || '',
       organizationName: event.organizationName || '',
+      contactName: event.contactName || '',
       activities: event.activities || [{ id: 'general', name: 'General Hours' }]
     });
     setIsModalOpen(true);
@@ -91,9 +95,18 @@ export default function EventsPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Events Management</h1>
-        <Button onClick={handleCreateNew} variant="primary">+ Create New Event</Button>
+      {/* NAVIGATION & HEADER */}
+      <div className="mb-8">
+        <Link to="/" className="text-primary-600 font-bold text-sm hover:underline mb-2 block">
+          ← Back to Dashboard
+        </Link>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Events Management</h1>
+            <p className="text-gray-500 font-medium">Configure organization details and time buckets.</p>
+          </div>
+          <Button onClick={handleCreateNew} variant="primary">+ Create New Event</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -103,71 +116,83 @@ export default function EventsPage() {
           return (
             <div 
               key={event.id} 
-              className={`bg-white p-6 rounded-xl shadow-md border transition-all ${
-                isActive ? 'border-primary-500 ring-2 ring-primary-100' : 'border-gray-200'
+              className={`bg-white p-6 rounded-2xl shadow-sm border transition-all ${
+                isActive ? 'border-primary-500 ring-4 ring-primary-50' : 'border-gray-200'
               }`}
             >
               <div className="flex justify-between items-start mb-2">
                 <h2 className="text-xl font-bold text-gray-900">{event.name}</h2>
                 {isActive && (
                   <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
-                    Active Selection
+                    Active
                   </span>
                 )}
               </div>
-              <p className="text-gray-500 text-sm mb-4">{event.organizationName}</p>
+              <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4">{event.organizationName}</p>
               
               <div className="mb-6">
-                <p className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-widest">Time Buckets</p>
+                <p className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Active Buckets</p>
                 <div className="flex flex-wrap gap-2">
                   {(event.activities || []).map(act => (
-                    <span key={act.id} className="px-2 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded border border-gray-200">
+                    <span key={act.id} className="px-2 py-1 bg-gray-50 text-gray-500 text-[10px] font-bold rounded border border-gray-100">
                       {act.name}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between border-t pt-4">
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="text-xs font-bold"
+                  onClick={() => handleEditConfig(event)} 
+                >
+                  View Detail
+                </Button>
+                
+                {!isActive ? (
+                  <Button 
+                    size="sm" 
+                    className="text-xs font-bold"
+                    onClick={() => switchActiveEvent(event.id)}
+                  >
+                    Select Event
+                  </Button>
+                ) : (
+                  <div className="flex items-center justify-center text-green-600 text-xs font-bold bg-green-50 rounded-lg border border-green-100">
+                    ✓ Selected
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-center border-t pt-4">
                 <button 
                   onClick={() => handleEditConfig(event)}
-                  className="text-sm font-bold text-gray-400 hover:text-primary-600 transition-colors"
+                  className="text-[10px] font-black text-gray-400 hover:text-primary-600 transition-colors uppercase tracking-widest"
                 >
-                  Edit Config
+                  Edit Configuration
                 </button>
-
-                {!isActive ? (
-                  <button 
-                    onClick={() => switchActiveEvent(event.id)}
-                    className="text-sm font-bold text-primary-600 bg-primary-50 px-4 py-1.5 rounded-lg hover:bg-primary-100 transition-colors"
-                  >
-                    Switch to Event
-                  </button>
-                ) : (
-                  <span className="text-sm font-bold text-green-600 flex items-center">
-                    <span className="mr-1">✓</span> Selected
-                  </span>
-                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Configuration Modal */}
+      {/* Configuration/Detail Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 max-h-[85vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-6 text-gray-900">
-              {editingEvent ? 'Modify Event Config' : 'Setup New Event'}
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 max-h-[85vh] overflow-y-auto">
+            <h2 className="text-2xl font-black mb-6 text-gray-900">
+              {editingEvent ? 'Event Details' : 'Setup New Event'}
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Event Name</label>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Event Name</label>
                   <input 
-                    className="w-full border-gray-300 border rounded-lg p-3 focus:ring-2 focus:ring-primary-500 outline-none" 
+                    className="w-full border-gray-200 border rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none" 
                     value={formData.name} 
                     onChange={e => setFormData({...formData, name: e.target.value})}
                     placeholder="e.g. VBS 2026"
@@ -176,36 +201,46 @@ export default function EventsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Organization</label>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Organization Name</label>
                   <input 
-                    className="w-full border-gray-300 border rounded-lg p-3 focus:ring-2 focus:ring-primary-500 outline-none" 
+                    className="w-full border-gray-200 border rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none" 
                     value={formData.organizationName} 
                     onChange={e => setFormData({...formData, organizationName: e.target.value})}
-                    placeholder="e.g. Horizons Church"
+                    placeholder="e.g. Church Name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Contact Name (for OCPS Forms)</label>
+                  <input 
+                    className="w-full border-gray-200 border rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none" 
+                    value={formData.contactName} 
+                    onChange={e => setFormData({...formData, contactName: e.target.value})}
+                    placeholder="e.g. John Doe"
                   />
                 </div>
               </div>
 
               <div className="border-t pt-6">
                 <div className="flex justify-between items-center mb-4">
-                  <label className="text-xs font-black text-gray-500 uppercase tracking-widest">Defined Activities</label>
-                  <button type="button" onClick={handleAddActivity} className="text-primary-600 text-xs font-bold hover:underline">+ ADD ITEM</button>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activities / Buckets</label>
+                  <button type="button" onClick={handleAddActivity} className="text-primary-600 text-[10px] font-black hover:underline">+ ADD BUCKET</button>
                 </div>
                 
                 <div className="space-y-3">
                   {formData.activities.map((activity, index) => (
-                    <div key={index} className="p-4 bg-gray-50 rounded-xl border border-gray-100 relative">
+                    <div key={index} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 relative">
                       <div className="flex justify-between items-start mb-2">
                         <input 
-                          placeholder="Name (e.g. Training)" 
+                          placeholder="Activity Name" 
                           className="bg-transparent font-bold text-gray-800 focus:outline-none w-full"
                           value={activity.name}
                           onChange={e => handleActivityChange(index, 'name', e.target.value)}
                         />
                         <button type="button" onClick={() => handleRemoveActivity(index)} className="text-gray-400 hover:text-red-500 ml-2">×</button>
                       </div>
-                      <div className="flex items-center text-[10px] text-gray-400 font-mono">
-                        <span className="mr-1">URL SLUG:</span>
+                      <div className="flex items-center text-[9px] text-gray-400 font-mono">
+                        <span className="mr-1">SLUG:</span>
                         <input 
                           className="bg-white border rounded px-1 text-gray-600 focus:outline-none"
                           value={activity.id}
@@ -218,11 +253,11 @@ export default function EventsPage() {
               </div>
 
               <div className="flex gap-3 pt-6">
-                <Button type="submit" className="flex-1 py-3">Save Configuration</Button>
+                <Button type="submit" className="flex-1 py-4 text-sm font-black uppercase tracking-widest">Save Event</Button>
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)} 
-                  className="px-6 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-6 py-4 text-gray-400 font-bold hover:bg-gray-100 rounded-2xl transition-colors text-sm"
                 >
                   Cancel
                 </button>

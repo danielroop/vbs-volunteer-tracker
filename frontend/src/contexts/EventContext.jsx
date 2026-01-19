@@ -1,6 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../utils/firebase';
-import { collection, query, where, getDocs, doc, getDoc, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  onSnapshot, 
+  orderBy, 
+  limit, 
+  updateDoc // Added this import
+} from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
 const EventContext = createContext(null);
@@ -17,36 +28,46 @@ export function EventProvider({ children }) {
   const [currentEvent, setCurrentEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { user } = useAuth(); // Access the logged-in user
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!user) {
-          setLoading(false);
-          return;
-        }
+      setLoading(false);
+      return;
+    }
 
-        // 1. Listen to the user's specific admin settings
-        const userPrefsRef = doc(db, 'admins', user.uid);
-        
-        const unsubscribe = onSnapshot(userPrefsRef, async (userDoc) => {
-          const selectedId = userDoc.data()?.selectedEventId;
+    // Listen to the user's specific admin settings
+    const userPrefsRef = doc(db, 'admins', user.uid);
+    
+    const unsubscribe = onSnapshot(userPrefsRef, async (userDoc) => {
+      const selectedId = userDoc.data()?.selectedEventId;
 
-          if (selectedId) {
-            // 2. Load the user's specific selection
-            await loadEventById(selectedId);
-          } else {
-            // 3. Fallback: Load the most recently created event
-            await loadDefaultEvent();
-          }
-          setLoading(false);
-        });
+      if (selectedId) {
+        await loadEventById(selectedId);
+      } else {
+        await loadDefaultEvent();
+      }
+      setLoading(false);
+    });
 
-        return () => unsubscribe();
+    return () => unsubscribe();
   }, [user]);
 
   /**
-   * Load the most recently created event as default
+   * Updates the Admin's selected event in Firestore
    */
+  const switchActiveEvent = async (eventId) => {
+    if (!user) return;
+    try {
+      const adminRef = doc(db, 'admins', user.uid);
+      // This persistent update ensures your selection follows you across devices
+      await updateDoc(adminRef, { selectedEventId: eventId });
+    } catch (err) {
+      console.error('Error switching active event:', err);
+      setError('Failed to save event selection');
+    }
+  };
+
   const loadDefaultEvent = async () => {
     const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'), limit(1));
     const snap = await getDocs(q);
@@ -55,40 +76,6 @@ export function EventProvider({ children }) {
     }
   };
 
-  /**
-   * Load the current active event
-   * For MVP, we'll load the most recent event
-   * In production, you might want to filter by date range or status
-   */
-  const loadCurrentEvent = async () => {
-    try {
-      setLoading(true);
-      const eventsRef = collection(db, 'events');
-      const q = query(eventsRef);
-      const snapshot = await getDocs(q);
-
-      if (!snapshot.empty) {
-        // For MVP, use the first (or most recent) event
-        const eventDoc = snapshot.docs[0];
-        setCurrentEvent({
-          id: eventDoc.id,
-          ...eventDoc.data()
-        });
-      } else {
-        setError('No events found. Please create an event first.');
-      }
-    } catch (err) {
-      console.error('Error loading event:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /**
-   * Load a specific event by ID
-   * @param {string} eventId
-   */
   const loadEventById = async (eventId) => {
     try {
       setLoading(true);
@@ -111,14 +98,9 @@ export function EventProvider({ children }) {
     }
   };
 
-  /**
-   * Refresh the current event data
-   */
   const refreshEvent = async () => {
     if (currentEvent?.id) {
       await loadEventById(currentEvent.id);
-    } else {
-      await loadCurrentEvent();
     }
   };
 
@@ -127,6 +109,7 @@ export function EventProvider({ children }) {
     loading,
     error,
     loadEventById,
+    switchActiveEvent, // Now exported for use in EventsPage.jsx
     refreshEvent,
   };
 

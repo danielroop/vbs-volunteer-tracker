@@ -1,4 +1,3 @@
-```markdown
 # CLAUDE.md - VBS Volunteer Tracker Development Guide
 
 ## Project Overview

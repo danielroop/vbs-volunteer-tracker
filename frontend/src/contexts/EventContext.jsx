@@ -103,7 +103,6 @@ export function EventProvider({ children }) {
       } else {
         setError('Event not found');
       }
-      localStorage.setItem('vbs_active_event_id', eventId);
     } catch (err) {
       console.error('Error loading event:', err);
       setError(err.message);

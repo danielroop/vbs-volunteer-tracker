@@ -66,6 +66,7 @@ export default function EventsPage() {
                                             <h2 className="text-xl font-bold text-gray-800">
                                                 {event.name} {isActive && <span className="ml-2 text-sm font-normal text-primary-600">(Active)</span>}
                                             </h2>
+                                            <p className="text-gray-500 text-sm">ID: {event.id}</p>
                                             <p className="text-gray-500 text-sm">📅 {event.startDate} - {event.endDate}</p>
                                         </div>
 

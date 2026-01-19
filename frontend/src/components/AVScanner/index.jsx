@@ -1,26 +1,52 @@
-import React, { useState, useEffect } from 'react';
-import { functions } from '../../utils/firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { db, functions } from '../../utils/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useEvent } from '../../contexts/EventContext';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
 import { queueCheckIn } from '../../utils/offlineStorage';
 import useQRScanner from '../../hooks/useQRScanner';
 import Spinner from '../common/Spinner';
+import { useParams } from 'react-router-dom';
 
 /**
  * AV Scanner Component
- * Per PRD Section 3.2.1: Morning Check-In (AV Scanning)
- * - Quick lanyard distribution
- * - Shows last 5 scans
- * - Audio/visual confirmation
- * - Works offline
+ * Uses local state for event metadata to prevent "reverting" global context.
  */
 export default function AVScanner() {
-  const { currentEvent, loading: eventLoading } = useEvent();
   const { isOnline, pendingCount } = useOfflineSync();
+  const { eventId: urlEventId } = useParams(); // Renamed to avoid collision with QR data
+  
+  const [localEvent, setLocalEvent] = useState(null);
+  const [eventLoading, setEventLoading] = useState(true);
   const [recentScans, setRecentScans] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [message, setMessage] = useState(null);
+  
+  // Guard to prevent multiple scanner starts
+  const isStarting = useRef(false);
+
+  // 1. Fetch event metadata based ONLY on the URL ID
+  useEffect(() => {
+    async function fetchMetadata() {
+      if (!urlEventId) return;
+      try {
+        const eventRef = doc(db, 'events', urlEventId);
+        const snap = await getDoc(eventRef);
+        
+        if (snap.exists()) {
+          setLocalEvent({ id: snap.id, ...snap.data() });
+        } else {
+          console.error("No event found for ID:", urlEventId);
+        }
+      } catch (err) {
+        console.error("Metadata fetch failed:", err);
+      } finally {
+        setEventLoading(false);
+      }
+    }
+    fetchMetadata();
+  }, [urlEventId]);
 
   // QR Scanner hook
   const {
@@ -33,39 +59,47 @@ export default function AVScanner() {
     onError: handleScanError
   });
 
-  // Start scanning when component mounts
+  // 2. Controlled scanner start/stop with initialization delay
   useEffect(() => {
-    if (!eventLoading && currentEvent) {
-      startScanning('qr-reader');
-    }
+    if (!eventLoading && localEvent && !isStarting.current) {
+      isStarting.current = true;
+      
+      // Delay allows the 'qr-reader' div to fully render and the camera to prep
+      const timer = setTimeout(() => {
+        startScanning('qr-reader').catch((err) => {
+          console.error("Scanner start failed:", err);
+          isStarting.current = false;
+        });
+      }, 500);
 
-    return () => {
-      stopScanning();
-    };
-  }, [eventLoading, currentEvent]);
+      return () => {
+        clearTimeout(timer);
+        stopScanning();
+        isStarting.current = false;
+      };
+    }
+  }, [eventLoading, localEvent]);
 
   /**
    * Handle successful QR code scan
    */
   async function handleScanSuccess(data) {
-    const { studentId, eventId } = data;
+    // Correctly identifying student and event from QR payload
+    const { studentId, eventId: qrEventId } = data;
 
-    // Validate event matches
-    if (eventId !== currentEvent?.id) {
-      showMessage('error', 'Invalid QR code: Wrong event');
-      playErrorSound();
+    // Validate QR event matches the scanner's URL event
+    if (qrEventId !== urlEventId) {
+      showMessage('error', 'Wrong Event: This student is registered for a different session.');
       return;
     }
 
     setScanning(true);
-
     try {
       if (isOnline) {
-        // Online: Call Firebase function
         const checkInFunction = httpsCallable(functions, 'checkIn');
         const result = await checkInFunction({
           studentId,
-          eventId,
+          eventId: urlEventId,
           scannedBy: 'av_scan'
         });
 
@@ -73,15 +107,10 @@ export default function AVScanner() {
           handleCheckInSuccess(result.data);
         } else {
           showMessage('warning', result.data.error);
-          playErrorSound();
         }
       } else {
-        // Offline: Queue for later sync
-        await queueCheckIn({ studentId, eventId, scannedBy: 'av_scan' });
-        showMessage('success', 'Queued for sync (offline)');
-        playSuccessSound();
-
-        // Add to recent scans
+        await queueCheckIn({ studentId, eventId: urlEventId, scannedBy: 'av_scan' });
+        showMessage('success', 'Queued (Offline Mode)');
         addToRecentScans({
           studentName: 'Offline Scan',
           time: new Date(),
@@ -89,73 +118,44 @@ export default function AVScanner() {
         });
       }
     } catch (error) {
-      console.error('Check-in error:', error);
       showMessage('error', error.message);
-      playErrorSound();
     } finally {
       setScanning(false);
     }
   }
 
-  /**
-   * Handle check-in success
-   */
   function handleCheckInSuccess(data) {
     showMessage('success', `✓ ${data.studentName} checked in`);
-    playSuccessSound();
-
-    // Add to recent scans
     addToRecentScans({
       studentName: data.studentName,
-      time: data.checkInTime,
+      time: data.checkInTime || new Date(),
       status: 'checked-in'
     });
   }
 
-  /**
-   * Handle scan error
-   */
   function handleScanError(error) {
-    showMessage('error', error.message);
+    // Suppress common initialization errors to keep the UI clean
+    if (!error.message?.includes('IndexSizeError') && !error.message?.includes('0')) {
+      console.warn("Scanner warning:", error.message);
+    }
   }
 
-  /**
-   * Add scan to recent scans list (keep last 5)
-   */
   function addToRecentScans(scan) {
     setRecentScans(prev => [scan, ...prev].slice(0, 5));
   }
 
-  /**
-   * Show message with auto-dismiss
-   */
   function showMessage(type, text) {
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
-  }
-
-  /**
-   * Play success sound
-   */
-  function playSuccessSound() {
-    // TODO: Implement audio feedback
-    // const audio = new Audio('/sounds/beep-success.mp3');
-    // audio.play().catch(console.error);
-  }
-
-  /**
-   * Play error sound
-   */
-  function playErrorSound() {
-    // TODO: Implement audio feedback
-    // const audio = new Audio('/sounds/beep-error.mp3');
-    // audio.play().catch(console.error);
+    setTimeout(() => setMessage(null), 4000);
   }
 
   if (eventLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Spinner size="lg" />
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <Spinner size="lg" />
+          <p className="mt-4 text-gray-600">Loading scanner details...</p>
+        </div>
       </div>
     );
   }
@@ -166,75 +166,64 @@ export default function AVScanner() {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-4">
           <h1 className="text-2xl font-bold text-gray-900">
-            {currentEvent?.name || 'VBS'} - Volunteer Scanner
+            {localEvent?.name || 'Unknown Event'}
           </h1>
-          <p className="text-gray-600 mt-1">{currentEvent?.organizationName}</p>
+          <p className="text-gray-600">{localEvent?.organizationName}</p>
 
-          {/* Status indicators */}
-          <div className="flex gap-4 mt-4">
-            <div className={`flex items-center ${isOnline ? 'text-green-600' : 'text-amber-600'}`}>
-              <div className={`w-2 h-2 rounded-full mr-2 ${isOnline ? 'bg-green-600' : 'bg-amber-600'}`}></div>
-              {isOnline ? 'Online' : 'Offline'}
+          <div className="flex gap-4 mt-4 text-sm font-medium">
+            <div className={isOnline ? 'text-green-600' : 'text-amber-600'}>
+              <span className="inline-block w-2 h-2 rounded-full bg-current mr-2"></span>
+              {isOnline ? 'Online' : 'Offline Mode'}
             </div>
-            {pendingCount.total > 0 && (
+            {pendingCount?.total > 0 && (
               <div className="text-amber-600">
-                ⚠️ {pendingCount.total} pending sync
+                ⚠️ {pendingCount.total} Syncing...
               </div>
             )}
           </div>
         </div>
 
-        {/* Scanner */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-4">
+        {/* Scanner Viewport */}
+        <div className="bg-black rounded-lg overflow-hidden shadow-inner mb-4 relative min-h-[300px]">
           <div id="qr-reader" className="w-full"></div>
-
-          {/* Message */}
-          {message && (
-            <div className={`mt-4 p-4 rounded-lg ${
-              message.type === 'success' ? 'bg-green-100 text-green-800' :
-              message.type === 'warning' ? 'bg-amber-100 text-amber-800' :
-              'bg-red-100 text-red-800'
-            }`}>
-              {message.text}
-            </div>
-          )}
-
-          {/* Scan error */}
-          {scanError && (
-            <div className="mt-4 p-4 bg-red-100 text-red-800 rounded-lg">
-              {scanError}
+          {scanning && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm">
+              <Spinner size="md" color="white" />
             </div>
           )}
         </div>
 
-        {/* Recent Scans */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Scans</h2>
+        {/* Status Messages */}
+        {message && (
+          <div className={`mb-4 p-4 rounded-lg shadow-sm border ${
+            message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
+            message.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+            'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {message.text}
+          </div>
+        )}
 
+        {/* Recent Activity Feed */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-semibold mb-4 text-gray-700">Recent Activity</h2>
           {recentScans.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No scans yet</p>
+            <p className="text-gray-400 italic text-center py-4">No scans recorded for this session yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {recentScans.map((scan, index) => (
-                <li
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center">
-                    <span className="text-green-600 mr-3">✓</span>
-                    <span className="font-medium">{scan.studentName}</span>
+            <ul className="divide-y divide-gray-100">
+              {recentScans.map((scan, i) => (
+                <li key={i} className="py-3 flex justify-between items-center">
+                  <div>
+                    <span className="font-medium text-gray-900">{scan.studentName}</span>
+                    <p className="text-xs text-gray-500 uppercase">{scan.status}</p>
                   </div>
-                  <span className="text-sm text-gray-600">
+                  <span className="text-gray-500 text-xs">
                     {new Date(scan.time).toLocaleTimeString()}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-
-          <div className="mt-4 text-center text-gray-600">
-            Total scanned: {recentScans.length}
-          </div>
         </div>
       </div>
     </div>

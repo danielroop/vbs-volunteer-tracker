@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; //
+import { db } from '../../utils/firebase'; //
+import { collection, onSnapshot } from 'firebase/firestore'; //
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEvent } from '../../contexts/EventContext'; // Add this
@@ -15,14 +17,85 @@ import Button from '../common/Button';
 export default function AdminDashboard() {
   const { user, signOut } = useAuth();
   const { currentEvent } = useEvent();
+  const [students, setStudents] = useState([]); // State to store student records
   const { timeEntries, loading } = useTimeEntries({
     eventId: currentEvent?.id,
     realtime: true
   });
 
-// Calculate stats from real-time data
-  const checkedInCount = timeEntries.filter(e => !e.checkOutTime).length;
-  const checkedOutCount = timeEntries.filter(e => e.checkOutTime).length;
+  // Helper to handle both Firestore Timestamps and JS Dates
+  const convertToDate = (timeValue) => {
+    if (!timeValue) return null;
+    return typeof timeValue.toDate === 'function' ? timeValue.toDate() : new Date(timeValue);
+  };
+
+  // This creates an object where the key is the ID and the value is the First Name
+  const studentNameMap = useMemo(() => {
+    const map = {};
+
+    students.forEach(s => {
+      map[s.id] = s.firstName;
+    });
+    return map;
+  }, [students]);
+
+
+  // 1. Fetch the collection of students
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'students'), (snapshot) => {
+      setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
+
+
+  // Calculate stats from real-time data
+  const attendanceStats = useMemo(() => {
+    // Helper to handle both Firestore Timestamps and JS Dates
+    const convertToDate = (timeValue) => {
+      if (!timeValue) return null;
+      return typeof timeValue.toDate === 'function' ? timeValue.toDate() : new Date(timeValue);
+    };
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const todaysEntries = timeEntries.filter(e => {
+      const checkInDate = convertToDate(e.checkInTime);
+      return checkInDate && checkInDate >= startOfToday;
+    });
+
+
+
+    const currentlyCheckedInIds = new Set(
+      todaysEntries
+        .filter(e => !e.checkOutTime)
+        .map(e => e.studentId)
+    );
+
+
+
+    const checkedOutIds = new Set(
+      todaysEntries
+        .filter(e => e.checkOutTime)
+        .map(e => e.studentId)
+    );
+
+    const finalCheckedInCount = currentlyCheckedInIds.size;
+
+    // Only count as "Checked Out" if they aren't currently checked back in elsewhere
+    const finalCheckedOutCount = [...checkedOutIds].filter(
+      id => !currentlyCheckedInIds.has(id)
+    ).length;
+
+    return {
+      onSite: finalCheckedInCount,
+      completed: finalCheckedOutCount,
+      totalUnique: new Set(todaysEntries.map(e => e.studentId)).size
+    };
+  }, [timeEntries]);
+
+
 
   const handleSignOut = async () => {
     await signOut();
@@ -76,30 +149,43 @@ export default function AdminDashboard() {
         {/* Today's Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">📊 Overview: {currentEvent?.name}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">📊 Overview: {currentEvent?.name} - {new Date().toLocaleDateString()}</h3>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span>🟢 Checked In:</span>
-                <span className="font-bold">{loading ? '...' : checkedInCount}</span>
+                <span className="font-bold">{loading ? '...' : attendanceStats.onSite || 0}</span>
               </div>
               <div className="flex justify-between">
                 <span>✓ Checked Out:</span>
-                <span className="font-bold">{loading ? '...' : checkedOutCount}</span>
+                <span className="font-bold">{loading ? '...' : attendanceStats.completed || 0}</span>
               </div>
               <div className="flex justify-between">
                 <span>Total:</span>
-                <span className="font-bold">--</span>
+                <span className="font-bold">{loading ? '...' : attendanceStats.totalUnique || 0}</span>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-lg font-semibold mb-2">🔔 Recent Activity</h3>
-            {timeEntries.slice(0, 5).map(entry => (
-              <div key={entry.id} className="text-sm border-b py-2">
-                {entry.studentId} scanned at {entry.checkInTime?.toLocaleTimeString()}
-              </div>
-            ))}
+            {timeEntries.slice(0, 5).map(entry => {
+              // Lookup name from the map or fallback to "Student" if not found
+              const firstName = studentNameMap[entry.studentId] || 'Student';
+
+              // Safely handle the checkInTime
+              const timeString = entry.checkInTime?.toDate
+                ? entry.checkInTime.toDate().toLocaleTimeString()
+                : new Date(entry.checkInTime).toLocaleTimeString();
+
+              return (
+                <div key={entry.id} className="text-sm border-b py-2 flex justify-between">
+                  <span className="font-bold text-gray-800">{firstName}</span>
+                  <span className="text-gray-500">
+                     scanned at {timeString}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">

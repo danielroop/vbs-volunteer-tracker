@@ -38,8 +38,8 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/scan/:eventId?" element={<AVScannerPage />} />
-            <Route path="/checkout/:eventId?" element={<CheckoutPage />} />
+            <Route path="/scan/:eventId?/:activityId?" element={<AVScannerPage />} />
+            <Route path="/checkout/:eventId?/:activityId?" element={<CheckoutPage />} />
 
             {/* Protected Admin Routes */}
             <Route

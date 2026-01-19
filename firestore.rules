@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Students collection: Read-only from client
+    match /students/{studentId} {
+      allow read: if true; // Public read for scanning
+      allow write: if false; // Only Cloud Functions can write
+    }
+
+    // Time Entries: Write-only during scan, read for admin
+    match /timeEntries/{entryId} {
+      allow read: if isAuthenticated(); // Admin only
+      allow create: if true; // Allow scanner to create (validated in Cloud Function)
+      allow update, delete: if isAuthenticated(); // Admin only
+    }
+
+    // Events: Read for public, write for admin
+    match /events/{eventId} {
+      allow read: if true; // Public read
+      allow write: if isAuthenticated(); // Admin only
+    }
+
+    // Generated Forms: Admin only
+    match /generatedForms/{formId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -59,12 +59,14 @@ export default function AdminDashboard() {
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
-
+    
+    console.log(timeEntries);
     const todaysEntries = timeEntries.filter(e => {
       const checkInDate = convertToDate(e.checkInTime);
       return checkInDate && checkInDate >= startOfToday;
     });
 
+    
 
 
     const currentlyCheckedInIds = new Set(

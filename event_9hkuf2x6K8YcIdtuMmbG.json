@@ -1,0 +1,16 @@
+{
+  "id": "9hkuf2x6K8YcIdtuMmbG",
+  "name": "VBS 2026",
+  "organizationName": "St. Luke's UMC",
+  "contactName": "Heidi Estep",
+  "activities": [
+    {
+      "id": "training",
+      "name": "Training"
+    },
+    {
+      "id": "work-hours",
+      "name": "Work Hours"
+    }
+  ]
+}

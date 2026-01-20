@@ -5,6 +5,8 @@ import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'f
 import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
+import { QRCodeSVG } from 'qrcode.react';
+import { generateQRData } from '../utils/qrCodeGenerator';
 
 export default function StudentsPage() {
   const navigate = useNavigate();
@@ -16,6 +18,7 @@ export default function StudentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [printMode, setPrintMode] = useState(false);
+  const [badgePrintMode, setBadgePrintMode] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -150,6 +153,14 @@ export default function StudentsPage() {
     }, 150);
   };
 
+  const handlePrintBadges = () => {
+    setBadgePrintMode(true);
+    setTimeout(() => {
+      window.print();
+      setBadgePrintMode(false);
+    }, 150);
+  };
+
   if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
 
   return (
@@ -158,7 +169,8 @@ export default function StudentsPage() {
         {`
           @media print {
             .no-print { display: none !important; }
-            #print-all-forms { display: block !important; }
+            #print-all-forms { display: ${printMode ? 'block' : 'none'} !important; }
+            #print-all-badges { display: ${badgePrintMode ? 'block' : 'none'} !important; }
 
             body { background: white; margin: 0; padding: 0; }
             .ocps-form-container {
@@ -180,8 +192,51 @@ export default function StudentsPage() {
             .reflection-box { border: 1px solid black; height: 165px; width: 100%; margin-top: 2px; display: flex; flex-direction: column; }
             .reflection-line { border-bottom: 1px solid #eee; flex: 1; }
             .ocps-logo { width: 40px; height: 40px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 7pt; text-align: center; }
+
+            /* Badge printing styles */
+            .badge-page {
+              page-break-after: always;
+              height: 100vh;
+              width: 100vw;
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              grid-template-rows: repeat(4, 1fr);
+              gap: 0;
+              padding: 0.25in;
+              box-sizing: border-box;
+            }
+            .badge-page:last-child {
+              page-break-after: auto;
+            }
+            .student-badge {
+              border: 2px solid #000;
+              padding: 0.15in;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              background: white;
+              box-sizing: border-box;
+              text-align: center;
+              margin: 2px;
+            }
+            .badge-name {
+              font-size: 14pt;
+              font-weight: bold;
+              margin-bottom: 4px;
+              color: #000;
+            }
+            .badge-id {
+              font-size: 9pt;
+              color: #666;
+              margin-bottom: 8px;
+            }
+            .badge-qr {
+              margin: 0 auto;
+            }
           }
           #print-all-forms { display: none; }
+          #print-all-badges { display: none; }
         `}
       </style>
 
@@ -205,6 +260,7 @@ export default function StudentsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          <Button onClick={handlePrintBadges} variant="secondary">🎫 Print Badges</Button>
           <Button onClick={handlePrintReports} variant="secondary">📄 Print Reports</Button>
           <Button onClick={() => setIsModalOpen(true)} variant="primary">+ Add Student</Button>
         </div>
@@ -394,6 +450,47 @@ export default function StudentsPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* PRINT ALL BADGES */}
+      <div id="print-all-badges">
+        {(() => {
+          // Group students into pages of 8
+          const pages = [];
+          for (let i = 0; i < studentsWithHours.length; i += 8) {
+            pages.push(studentsWithHours.slice(i, i + 8));
+          }
+
+          return pages.map((pageStudents, pageIndex) => (
+            <div key={`page-${pageIndex}`} className="badge-page">
+              {pageStudents.map((student) => {
+                const qrData = currentEvent?.id ? generateQRData(student.id, currentEvent.id) : student.id;
+                return (
+                  <div key={student.id} className="student-badge">
+                    <div className="badge-name">
+                      {student.firstName} {student.lastName}
+                    </div>
+                    <div className="badge-id">
+                      ID: {student.id}
+                    </div>
+                    <div className="badge-qr">
+                      <QRCodeSVG
+                        value={qrData}
+                        size={120}
+                        level="M"
+                        includeMargin={false}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Fill remaining slots with empty badges if needed */}
+              {[...Array(Math.max(0, 8 - pageStudents.length))].map((_, i) => (
+                <div key={`empty-${i}`} className="student-badge" style={{ border: 'none' }}></div>
+              ))}
+            </div>
+          ));
+        })()}
       </div>
     </div>
   );

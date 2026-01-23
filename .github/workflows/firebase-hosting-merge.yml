@@ -20,6 +20,23 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      
+      - name: Deploy Firebase Backend (Firestore & Functions)
+        run: |
+          # 1. Save the service account secret to a temporary file
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > service-account.json
+          
+          # 2. Tell the environment where to find that file
+          export GOOGLE_APPLICATION_CREDENTIALS=service-account.json
+          
+          # 3. Run the deploy
+          npx firebase-tools deploy --only functions,firestore --project vbs-volunteer-tracker
+        env:
+          # Use the service account you already have in GitHub Secrets
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VBS_VOLUNTEER_TRACKER}}
+
+
+      - name: Deploy to Firebase Hosting
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

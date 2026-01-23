@@ -18,3 +18,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VBS_VOLUNTEER_TRACKER }}
           channelId: live
           projectId: vbs-volunteer-tracker
+          entryPoint: .

@@ -30,7 +30,7 @@ jobs:
         run: |
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > service-account.json
           export GOOGLE_APPLICATION_CREDENTIALS=service-account.json
-          npx firebase-tools deploy --only functions,firestore --project vbs-volunteer-tracker
+          npx firebase-tools deploy --only functions,firestore --project vbs-volunteer-tracker --force
         env:
           # FIX: Matches the secret name in your file
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VBS_VOLUNTEER_TRACKER }}

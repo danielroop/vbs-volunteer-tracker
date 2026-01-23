@@ -12,7 +12,12 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - run: npm run install-all && npm run build
+
+      - name: Install and Build Frontend
+        # FIX: Added 'cd frontend' because your React project is in a subfolder
+        run: |
+          npm run install-all
+          npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -23,24 +28,20 @@ jobs:
       
       - name: Deploy Firebase Backend (Firestore & Functions)
         run: |
-          # 1. Save the service account secret to a temporary file
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > service-account.json
-          
-          # 2. Tell the environment where to find that file
           export GOOGLE_APPLICATION_CREDENTIALS=service-account.json
-          
-          # 3. Run the deploy
           npx firebase-tools deploy --only functions,firestore --project vbs-volunteer-tracker
         env:
-          # Use the service account you already have in GitHub Secrets
-          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VBS_VOLUNTEER_TRACKER}}
-
+          # FIX: Matches the secret name in your file
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VBS_VOLUNTEER_TRACKER }}
 
       - name: Deploy to Firebase Hosting
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VBS_VOLUNTEER_TRACKER }}
           channelId: live
           projectId: vbs-volunteer-tracker
+          # FIX: This tells the action that firebase.json is in the root, 
+          # but Hosting public is 'frontend/dist' (as defined in your firebase.json)
           entryPoint: .

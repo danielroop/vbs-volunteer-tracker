@@ -5,8 +5,7 @@ import { EventProvider } from './contexts/EventContext';
 
 // Pages
 import LoginPage from './pages/LoginPage';
-import AVScannerPage from './pages/AVScannerPage';
-import CheckoutPage from './pages/CheckoutPage';
+import ScannerPage from './pages/ScannerPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import DailyReviewPage from './pages/DailyReviewPage';
 import FormGenerationPage from './pages/FormGenerationPage';
@@ -38,8 +37,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/scan/:eventId?/:activityId?" element={<AVScannerPage />} />
-            <Route path="/checkout/:eventId?/:activityId?" element={<CheckoutPage />} />
+            <Route path="/scan/:eventId?/:activityId?/:action?" element={<ScannerPage />} />
 
             {/* Protected Admin Routes */}
             <Route

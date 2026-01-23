@@ -36,7 +36,7 @@ if (!isProd) {
 
 const db = getFirestore();
 
-const EVENT_ID = '9hkuf2x6K8YcIdtuMmbG';
+const EVENT_ID = 'iQXG7crBIG9jMJgmXTNJ';
 
 // Helper to add random minutes (positive or negative)
 const addRandomMinutes = (date, range = 15) => {

@@ -5,7 +5,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "studentId", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "ASCENDING" },
         { "fieldPath": "checkOutTime", "order": "ASCENDING" }
       ]
     },
@@ -14,7 +13,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "eventId", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "ASCENDING" },
         { "fieldPath": "checkInTime", "order": "DESCENDING" }
       ]
     },
@@ -24,7 +22,6 @@
       "fields": [
         { "fieldPath": "studentId", "order": "ASCENDING" },
         { "fieldPath": "eventId", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "ASCENDING" },
         { "fieldPath": "checkOutTime", "order": "ASCENDING" }
       ]
     }

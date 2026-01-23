@@ -1,10 +1,41 @@
-import { initializeApp } from 'firebase-admin/app';
+import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
 
-process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+/**
+ * generate-test-users.js
+ * * Usage:
+ * Emulator:   node generate-test-users.js
+ * Production: NODE_ENV=production node generate-test-users.js
+ */
 
-const app = initializeApp({ projectId: 'vbs-volunteer-tracker' });
-const db = getFirestore(app);
+const isProd = process.env.NODE_ENV === 'production';
+
+if (!isProd) {
+  // --- EMULATOR CONFIGURATION ---
+  process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+  
+  initializeApp({ 
+    projectId: 'vbs-volunteer-tracker' 
+  });
+  
+  console.log('🔌 Connected to local FIRESTORE EMULATOR');
+} else {
+  // --- PRODUCTION CONFIGURATION ---
+  // Ensure service-account.json is present in the scripts directory
+  const serviceAccount = JSON.parse(
+    readFileSync(new URL('./service-account.json', import.meta.url))
+  );
+
+  initializeApp({
+    credential: cert(serviceAccount),
+    projectId: 'vbs-volunteer-tracker'
+  });
+  
+  console.log('🚀 Connected to PRODUCTION Firebase instance');
+}
+
+const db = getFirestore();
 
 const firstNames = [
   'James', 'Mary', 'Robert', 'Patricia', 'John', 'Jennifer', 'Michael', 'Linda', 'William', 'Elizabeth',

@@ -1,10 +1,40 @@
-import { initializeApp } from 'firebase-admin/app';
+import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
 
-process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+/**
+ * generate-time-entries.js
+ * Usage:
+ * Emulator:   node generate-time-entries.js
+ * Production: NODE_ENV=production node generate-time-entries.js
+ */
 
-const app = initializeApp({ projectId: 'vbs-volunteer-tracker' });
-const db = getFirestore(app);
+const isProd = process.env.NODE_ENV === 'production';
+
+if (!isProd) {
+  // --- EMULATOR CONFIGURATION ---
+  process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+  
+  initializeApp({ 
+    projectId: 'vbs-volunteer-tracker' 
+  });
+  
+  console.log('🔌 Connected to local FIRESTORE EMULATOR');
+} else {
+  // --- PRODUCTION CONFIGURATION ---
+  const serviceAccount = JSON.parse(
+    readFileSync(new URL('./service-account.json', import.meta.url))
+  );
+
+  initializeApp({
+    credential: cert(serviceAccount),
+    projectId: 'vbs-volunteer-tracker'
+  });
+  
+  console.log('🚀 Connected to PRODUCTION Firebase instance');
+}
+
+const db = getFirestore();
 
 const EVENT_ID = '9hkuf2x6K8YcIdtuMmbG';
 
@@ -23,7 +53,7 @@ async function generateVBSData() {
   const students = studentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
   if (students.length === 0) {
-    console.error("❌ No students found. Run generate-students.js first.");
+    console.error("❌ No students found. Run generate-test-users.js first.");
     return;
   }
 

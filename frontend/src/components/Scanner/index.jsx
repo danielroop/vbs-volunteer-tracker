@@ -7,10 +7,12 @@ import useQRScanner from '../../hooks/useQRScanner';
 import Spinner from '../common/Spinner';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { parseQRData } from '../../utils/qrCodeGenerator';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Scanner() {
   const { eventId: urlEventId, activityId: urlActivityId, action: urlAction } = useParams();
   const navigate = useNavigate();
+  const { userProfile, signOut, canAccessAdmin } = useAuth();
 
   const [localEvent, setLocalEvent] = useState(null);
   const [allEvents, setAllEvents] = useState([]);
@@ -19,6 +21,11 @@ export default function Scanner() {
   const isStarting = useRef(false);
   const isProcessing = useRef(false);
   const pauseAfterValidScan = 2000;
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   useEffect(() => {
     async function fetchData() {
@@ -143,27 +150,60 @@ export default function Scanner() {
 
   if (loading) return <div className="p-20 text-center"><Spinner /></div>;
 
+  // User header component for scanner pages
+  const ScannerHeader = () => (
+    <div className="bg-white shadow-sm border-b mb-6">
+      <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">{userProfile?.name || userProfile?.email}</span>
+          <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-100 text-blue-700">
+            {userProfile?.role === 'admin' ? 'Admin' : 'Volunteer'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {canAccessAdmin() && (
+            <Link
+              to="/admin"
+              className="text-xs font-bold text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg hover:bg-primary-100"
+            >
+              Dashboard
+            </Link>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // Step 1: Select Event
   if (!hasValidEvent) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="text-primary-600 mb-4 flex justify-center">
-            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">Select Event</h2>
-          <div className="space-y-3">
-            {allEvents.map(event => (
-              <Link
-                key={event.id}
-                to={`/scan/${event.id}`}
-                className="block p-4 bg-white hover:bg-primary-50 border border-gray-200 hover:border-primary-300 rounded-xl transition-all font-bold text-gray-700 shadow-sm"
-              >
-                {event.name}
-              </Link>
-            ))}
+      <div className="min-h-screen bg-gray-50">
+        <ScannerHeader />
+        <div className="p-6 flex items-center justify-center">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <div className="text-primary-600 mb-4 flex justify-center">
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">Select Event</h2>
+            <div className="space-y-3">
+              {allEvents.map(event => (
+                <Link
+                  key={event.id}
+                  to={`/scan/${event.id}`}
+                  className="block p-4 bg-white hover:bg-primary-50 border border-gray-200 hover:border-primary-300 rounded-xl transition-all font-bold text-gray-700 shadow-sm"
+                >
+                  {event.name}
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -173,8 +213,10 @@ export default function Scanner() {
   // Step 2: Select Activity
   if (!hasValidActivity) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-orange-100">
+      <div className="min-h-screen bg-gray-50">
+        <ScannerHeader />
+        <div className="p-6 flex items-center justify-center">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-orange-100">
           <div className="text-orange-500 mb-4 flex justify-center">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -202,6 +244,7 @@ export default function Scanner() {
           >
             ← Back to Event Selection
           </button>
+          </div>
         </div>
       </div>
     );
@@ -210,8 +253,10 @@ export default function Scanner() {
   // Step 3: Select Action (Check-in or Check-out)
   if (!hasValidAction) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
+      <div className="min-h-screen bg-gray-50">
+        <ScannerHeader />
+        <div className="p-6 flex items-center justify-center">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
           <div className="text-blue-500 mb-4 flex justify-center">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -246,6 +291,7 @@ export default function Scanner() {
           >
             ← Back to Activity Selection
           </button>
+          </div>
         </div>
       </div>
     );

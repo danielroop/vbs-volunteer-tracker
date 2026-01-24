@@ -131,20 +131,14 @@ export default function AdminDashboard() {
           <Link to="/admin" className="px-4 py-2 border-b-2 border-primary-600 font-medium text-primary-600">
             Dashboard
           </Link>
-          <Link to="/admin/daily-review" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
-            Daily Review
-          </Link>
-          <Link to="/admin/forms" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
-            Forms
-          </Link>
           <Link to="/admin/students" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
             Students
           </Link>
-          <Link to="/admin/reports" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
-            Reports
-          </Link>
           <Link to="/admin/events" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
             Events
+          </Link>
+          <Link to="/admin/users" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
+            Users
           </Link>
         </div>
 
@@ -196,24 +190,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Quick Actions</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="primary" as="link" to="/admin/daily-review">
-              Review Today
-            </Button>
-            <Button variant="primary" as="link" to="/admin/forms">
-              Generate Forms
-            </Button>
-            <Button variant="secondary">
-              Export Report
-            </Button>
-            <Button variant="secondary">
-              Search Student
-            </Button>
-          </div>
-        </div>
       </div>
     </div>
   );

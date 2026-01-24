@@ -13,20 +13,81 @@ import StudentsPage from './pages/StudentsPage';
 import EventsPage from './pages/EventsPage';
 import CreateEventPage from './pages/CreateEventPage';
 import StudentDetailPage from './pages/StudentDetailPage';
+import UsersPage from './pages/UsersPage';
 
-// Protected Route Component
+// Loading Spinner Component
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin h-8 w-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+    </div>
+  );
+}
+
+// Protected Route Component (basic authentication)
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return isAuthenticated ? children : <Navigate to="/login" />;
+}
+
+// Admin-only Protected Route Component
+function AdminRoute({ children }) {
+  const { isAuthenticated, canAccessAdmin, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  if (!canAccessAdmin()) {
+    // Redirect non-admins to scanner
+    return <Navigate to="/scan" />;
+  }
+
+  return children;
+}
+
+// Scanner Protected Route Component (admin or adult volunteer)
+function ScannerRoute({ children }) {
+  const { isAuthenticated, canAccessScanner, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  if (!canAccessScanner()) {
+    return <Navigate to="/login" />;
+  }
+
+  return children;
+}
+
+// Default redirect based on user role
+function DefaultRedirect() {
+  const { isAuthenticated, canAccessAdmin, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  // Admins go to admin dashboard, others go to scanner
+  return canAccessAdmin() ? <Navigate to="/admin" /> : <Navigate to="/scan" />;
 }
 
 function App() {
@@ -37,67 +98,86 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/scan/:eventId?/:activityId?/:action?" element={<ScannerPage />} />
+
+            {/* Scanner Routes - Protected (admin or adult volunteer) */}
+            <Route
+              path="/scan/:eventId?/:activityId?/:action?"
+              element={
+                <ScannerRoute>
+                  <ScannerPage />
+                </ScannerRoute>
+              }
+            />
 
             {/* Protected Admin Routes */}
             <Route
               path="/admin"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminDashboardPage />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/daily-review"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <DailyReviewPage />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/forms"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <FormGenerationPage />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/students"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <StudentsPage />
-                </ProtectedRoute>
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/students/:studentId"
+              element={
+                <AdminRoute>
+                  <StudentDetailPage />
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/events"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <EventsPage />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/events/new"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <CreateEventPage />
-                </ProtectedRoute>
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <AdminRoute>
+                  <UsersPage />
+                </AdminRoute>
               }
             />
 
-            <Route 
-              path="/admin/students/:studentId" 
-              element={<StudentDetailPage />} 
-            />
-            {/* Add more admin routes as needed */}
-
-            {/* Default Route */}
-            <Route path="/" element={<Navigate to="/admin" />} />
-            <Route path="*" element={<Navigate to="/admin" />} />
+            {/* Default Route - redirect based on role */}
+            <Route path="/" element={<DefaultRedirect />} />
+            <Route path="*" element={<DefaultRedirect />} />
           </Routes>
         </EventProvider>
       </AuthProvider>

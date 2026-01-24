@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'; //
 import { db } from '../../utils/firebase'; //
 import { collection, onSnapshot } from 'firebase/firestore'; //
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import { useEvent } from '../../contexts/EventContext'; // Add this
 import { useTimeEntries } from '../../hooks/useTimeEntries'; // Add this
-import Button from '../common/Button';
+import Header from '../common/Header';
 
 /**
  * Admin Dashboard Component
@@ -15,7 +13,6 @@ import Button from '../common/Button';
  * - Quick actions
  */
 export default function AdminDashboard() {
-  const { user, signOut } = useAuth();
   const { currentEvent } = useEvent();
   const [students, setStudents] = useState([]); // State to store student records
   const { timeEntries, loading } = useTimeEntries({
@@ -99,51 +96,11 @@ export default function AdminDashboard() {
 
 
 
-  const handleSignOut = async () => {
-    await signOut();
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">VBS Volunteer Tracker</h1>
-          {/* Current Event Indicator */}
-          <div className="flex items-center gap-2 mt-1">
-            <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
-            <span className="text-sm font-medium text-gray-600">
-              Active Event: <span className="text-primary-600">{currentEvent?.name || 'No Event Selected'}</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">👤 {user?.email}</span>
-            <Button variant="secondary" size="sm" onClick={handleSignOut}>
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Navigation Tabs */}
-        <div className="flex gap-2 mb-6 border-b">
-          <Link to="/admin" className="px-4 py-2 border-b-2 border-primary-600 font-medium text-primary-600">
-            Dashboard
-          </Link>
-          <Link to="/admin/daily-review" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
-            Daily Review
-          </Link>
-          <Link to="/admin/students" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
-            Students
-          </Link>
-          <Link to="/admin/events" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
-            Events
-          </Link>
-          <Link to="/admin/users" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
-            Users
-          </Link>
-        </div>
 
         {/* Today's Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

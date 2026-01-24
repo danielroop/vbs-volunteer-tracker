@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { db, functions } from '../../utils/firebase';
 import { collection, onSnapshot, query, where, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useEvent } from '../../contexts/EventContext';
 import { formatTime, formatHours, getTodayDateString, formatDate } from '../../utils/hourCalculations';
+import Header from '../common/Header';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 
@@ -515,53 +515,24 @@ export default function DailyReview() {
 
   if (!currentEvent) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-        <div className="text-center text-gray-500">
-          <p className="text-lg">No event selected</p>
-          <p className="text-sm mt-2">Please select an event from the Events page</p>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="p-4 flex items-center justify-center min-h-[60vh]">
+          <div className="text-center text-gray-500">
+            <p className="text-lg">No event selected</p>
+            <p className="text-sm mt-2">Please select an event from the Events page</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Navigation */}
-        <div className="flex gap-2 mb-6 border-b">
-          <Link
-            to="/admin"
-            className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900"
-          >
-            Dashboard
-          </Link>
-          <Link
-            to="/admin/daily-review"
-            className="px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600"
-          >
-            Daily Review
-          </Link>
-          <Link
-            to="/admin/students"
-            className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900"
-          >
-            Students
-          </Link>
-          <Link
-            to="/admin/events"
-            className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900"
-          >
-            Events
-          </Link>
-          <Link
-            to="/admin/users"
-            className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900"
-          >
-            Users
-          </Link>
-        </div>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
 
-        {/* Header */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Page Content Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>

@@ -32,6 +32,7 @@
 | Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword), forceCheckOut, forceAllCheckOut, getDailyReviewSummary |
 | Firestore Security Rules | 5.5 | Role-based access control |
 | Daily Review | 3.5.2 | Full daily review with force checkout, force all checkout, CSV/PDF export, search/filter, override reasons display |
+| Consistent Header | 4.0 | Reusable Header components for admin and scanner pages with consistent navigation |
 
 ### Partially Implemented
 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../contexts/AuthContext';
+import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import Modal from '../components/common/Modal';
@@ -211,45 +211,47 @@ export default function UsersPage() {
 
   if (loading) {
     return (
-      <div className="p-20 text-center">
-        <Spinner size="lg" />
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="p-20 text-center">
+          <Spinner size="lg" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <Link to="/admin" className="text-primary-600 font-bold text-sm hover:underline mb-2 block">
-            ← Back to Dashboard
-          </Link>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">User Management</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Manage admin users and adult volunteers who can access the scanning tool.
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <div className="p-6 max-w-7xl mx-auto">
+        {/* PAGE HEADER */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">User Management</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Manage admin users and adult volunteers who can access the scanning tool.
+            </p>
+          </div>
 
-        <div className="flex gap-3 w-full md:w-auto">
-          <input
-            placeholder="Search users..."
-            className="border border-gray-200 rounded-xl px-4 py-2 w-full md:w-64 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button
-            onClick={() => {
-              setFormData({ email: '', password: '', name: '', role: 'adult_volunteer' });
-              setActionMessage(null);
-              setIsCreateModalOpen(true);
-            }}
-            variant="primary"
-          >
-            + Add User
-          </Button>
+          <div className="flex gap-3 w-full md:w-auto">
+            <input
+              placeholder="Search users..."
+              className="border border-gray-200 rounded-xl px-4 py-2 w-full md:w-64 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <Button
+              onClick={() => {
+                setFormData({ email: '', password: '', name: '', role: 'adult_volunteer' });
+                setActionMessage(null);
+                setIsCreateModalOpen(true);
+              }}
+              variant="primary"
+            >
+              + Add User
+            </Button>
+          </div>
         </div>
-      </div>
 
       {/* Global action message */}
       {actionMessage && !isCreateModalOpen && !isEditModalOpen && !isDeleteModalOpen && !isResetPasswordModalOpen && (
@@ -613,6 +615,7 @@ export default function UsersPage() {
           )}
         </div>
       </Modal>
+      </div>
     </div>
   );
 }

@@ -4,15 +4,13 @@ import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
 import useQRScanner from '../../hooks/useQRScanner';
+import ScannerHeader from '../common/ScannerHeader';
 import Spinner from '../common/Spinner';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { parseQRData } from '../../utils/qrCodeGenerator';
-import { useAuth } from '../../contexts/AuthContext';
-
 export default function Scanner() {
   const { eventId: urlEventId, activityId: urlActivityId, action: urlAction } = useParams();
   const navigate = useNavigate();
-  const { userProfile, signOut, canAccessAdmin } = useAuth();
 
   const [localEvent, setLocalEvent] = useState(null);
   const [allEvents, setAllEvents] = useState([]);
@@ -21,11 +19,6 @@ export default function Scanner() {
   const isStarting = useRef(false);
   const isProcessing = useRef(false);
   const pauseAfterValidScan = 2000;
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
-  };
 
   useEffect(() => {
     async function fetchData() {
@@ -149,36 +142,6 @@ export default function Scanner() {
   }
 
   if (loading) return <div className="p-20 text-center"><Spinner /></div>;
-
-  // User header component for scanner pages
-  const ScannerHeader = () => (
-    <div className="bg-white shadow-sm border-b mb-6">
-      <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">{userProfile?.name || userProfile?.email}</span>
-          <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-100 text-blue-700">
-            {userProfile?.role === 'admin' ? 'Admin' : 'Volunteer'}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {canAccessAdmin() && (
-            <Link
-              to="/admin"
-              className="text-xs font-bold text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg hover:bg-primary-100"
-            >
-              Dashboard
-            </Link>
-          )}
-          <button
-            onClick={handleSignOut}
-            className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200"
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   // Step 1: Select Event
   if (!hasValidEvent) {

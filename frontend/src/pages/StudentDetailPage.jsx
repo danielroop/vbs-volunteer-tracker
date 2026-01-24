@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../utils/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
+import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
@@ -181,10 +182,17 @@ export default function StudentDetailPage() {
         setTimeout(() => { window.print(); setPrintMode(null); }, 150);
     };
 
-    if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
+    if (loading) return (
+        <div className="min-h-screen bg-gray-50">
+            <Header />
+            <div className="p-20 text-center"><Spinner size="lg" /></div>
+        </div>
+    );
 
     return (
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="min-h-screen bg-gray-50">
+            <Header />
+            <div className="max-w-7xl mx-auto p-6">
             <style>
                 {`
           @media print {
@@ -255,13 +263,12 @@ export default function StudentDetailPage() {
             {/* ADMIN UI (no-print) */}
             <div className="flex justify-between items-center mb-8 no-print">
                 <div>
-                    <button onClick={() => navigate(-1)} className="text-primary-600 font-bold hover:underline mb-2 block">← Back to Roster</button>
                     <h1 className="text-3xl font-black text-gray-900">{student?.firstName} {student?.lastName}</h1>
                     <p className="text-gray-500 font-medium">{student?.schoolName} • Grade {student?.gradeLevel}</p>
                 </div>
                 <div className="flex gap-3">
-                    <Button onClick={() => handlePrint('form')} variant="secondary">📄 Print Service Log</Button>
-                    <Button onClick={() => handlePrint('badge')} variant="primary">🖨️ Print Badge</Button>
+                    <Button onClick={() => handlePrint('form')} variant="secondary">Print Service Log</Button>
+                    <Button onClick={() => handlePrint('badge')} variant="primary">Print Badge</Button>
                 </div>
             </div>
 
@@ -506,6 +513,7 @@ export default function StudentDetailPage() {
                     </div>
                 )}
             </Modal>
+            </div>
         </div>
     );
 }

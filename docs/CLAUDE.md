@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a web-based volunteer hour tracking system for VBS (Vacation Bible School) events. Students use QR code lanyards to check in/out, and admins review hours and generate school-required forms.
+This is a web-based volunteer hour tracking system for VBS (Vacation Bible School) events. Adult Volunteers (AV) scan student QR code lanyards for check-in/out, and admins review hours and generate school-required forms.
 
 **Key Documents:**
 - Full requirements: `docs/PRD.md`
@@ -13,19 +13,22 @@ This is a web-based volunteer hour tracking system for VBS (Vacation Bible Schoo
 ## Tech Stack
 
 ### Frontend
-- **Framework:** React 18+ with Vite
-- **Styling:** TailwindCSS
+- **Framework:** React 18 with Vite
+- **Styling:** TailwindCSS (blue primary color theme)
 - **Routing:** React Router v6
-- **State Management:** React Context API + hooks (keep it simple)
+- **State Management:** React Context API (AuthContext, EventContext)
 - **QR Scanning:** html5-qrcode
-- **PWA:** Vite PWA plugin
+- **QR Generation:** qrcode + qrcode.react
+- **Date Utilities:** date-fns
+- **Offline Storage:** idb (IndexedDB wrapper)
+- **PWA:** vite-plugin-pwa
 
 ### Backend
 - **Database:** Firebase Firestore
-- **Functions:** Firebase Cloud Functions
-- **Storage:** Firebase Storage (for PDF forms)
+- **Functions:** Firebase Cloud Functions (Node 22)
+- **Storage:** Firebase Storage
 - **Hosting:** Firebase Hosting
-- **Auth:** Firebase Auth (admin only)
+- **Auth:** Firebase Authentication
 
 ### Key Libraries
 ```json
@@ -36,7 +39,9 @@ This is a web-based volunteer hour tracking system for VBS (Vacation Bible Schoo
   "html5-qrcode": "^2.3.8",
   "pdf-lib": "^1.17.1",
   "qrcode": "^1.5.3",
-  "date-fns": "^3.0.0"
+  "qrcode.react": "^4.2.0",
+  "date-fns": "^3.0.0",
+  "idb": "^7.1.1"
 }
 ```
 
@@ -45,73 +50,125 @@ This is a web-based volunteer hour tracking system for VBS (Vacation Bible Schoo
 ## Project Structure
 
 ```
-frontend/
-├── public/
-│   ├── manifest.json              # PWA manifest
-│   └── icons/                     # App icons
-├── src/
-│   ├── components/
-│   │   ├── AVScanner/
-│   │   │   ├── index.jsx          # Main scanner component
-│   │   │   ├── ScannerView.jsx    # Camera/QR interface
-│   │   │   └── RecentScans.jsx    # Last 5 scans list
-│   │   ├── SelfCheckout/
-│   │   │   ├── index.jsx          # Kiosk checkout component
-│   │   │   └── SuccessScreen.jsx  # Checkout confirmation
-│   │   ├── AdminDashboard/
-│   │   │   ├── index.jsx          # Main dashboard
-│   │   │   ├── RealTimeStats.jsx  # Live stats widget
-│   │   │   ├── ActivityFeed.jsx   # Recent check-ins/outs
-│   │   │   └── QuickActions.jsx   # Action buttons
-│   │   ├── DailyReview/
-│   │   │   ├── index.jsx          # Daily review page
-│   │   │   ├── StudentRow.jsx     # Individual student row
-│   │   │   └── EditHoursModal.jsx # Hour adjustment modal
-│   │   ├── FormGeneration/
-│   │   │   ├── index.jsx          # Form generation page
-│   │   │   └── FormList.jsx       # Generated forms list
-│   │   └── common/
-│   │       ├── Button.jsx
-│   │       ├── Modal.jsx
-│   │       ├── Input.jsx
-│   │       └── Spinner.jsx
-│   ├── pages/
-│   │   ├── AVScannerPage.jsx
-│   │   ├── CheckoutPage.jsx
-│   │   ├── AdminDashboardPage.jsx
-│   │   ├── DailyReviewPage.jsx
-│   │   ├── FormGenerationPage.jsx
-│   │   └── LoginPage.jsx
-│   ├── hooks/
-│   │   ├── useQRScanner.js        # QR scanning logic
-│   │   ├── useOfflineSync.js      # Offline sync handling
-│   │   ├── useTimeEntries.js      # Firestore time entries
-│   │   └── useRealtime.js         # Real-time updates
-│   ├── utils/
-│   │   ├── firebase.js            # Firebase config
-│   │   ├── hourCalculations.js    # Hour rounding/flagging
-│   │   ├── offlineStorage.js      # IndexedDB wrapper
-│   │   └── qrCodeGenerator.js     # Generate QR codes
-│   ├── contexts/
-│   │   ├── AuthContext.jsx        # Admin auth
-│   │   └── EventContext.jsx       # Current event data
-│   ├── App.jsx
-│   └── main.jsx
-├── package.json
-└── vite.config.js
-
-functions/
-├── src/
-│   ├── checkIn.js                 # Check-in logic
-│   ├── checkOut.js                # Check-out logic
-│   ├── generateForms.js           # PDF generation
-│   ├── calculateHours.js          # Hour calculation
-│   └── utils/
-│       ├── pdfFiller.js           # Fill PDF templates
-│       └── validators.js          # Input validation
-├── package.json
-└── index.js
+vbs-volunteer-tracker/
+├── frontend/                    # React frontend application (Node 18)
+│   ├── public/
+│   │   └── icons/               # App icons for PWA
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Scanner/
+│   │   │   │   └── index.jsx    # Unified QR scanner for check-in/out
+│   │   │   ├── AdminDashboard/
+│   │   │   │   └── index.jsx    # Main dashboard component
+│   │   │   ├── DailyReview/
+│   │   │   │   └── index.jsx    # Daily hours review
+│   │   │   ├── FormGeneration/
+│   │   │   │   └── index.jsx    # Form generation interface
+│   │   │   └── common/
+│   │   │       ├── Button.jsx
+│   │   │       ├── Modal.jsx
+│   │   │       ├── Input.jsx
+│   │   │       ├── Spinner.jsx
+│   │   │       └── PrintableBadge.jsx  # QR badge for printing
+│   │   ├── pages/
+│   │   │   ├── LoginPage.jsx           # Email/password auth
+│   │   │   ├── ScannerPage.jsx         # QR scanner page
+│   │   │   ├── AdminDashboardPage.jsx  # Admin dashboard
+│   │   │   ├── StudentsPage.jsx        # Student roster management
+│   │   │   ├── StudentDetailPage.jsx   # Individual student view
+│   │   │   ├── EventsPage.jsx          # Event management
+│   │   │   ├── CreateEventPage.jsx     # Create new events
+│   │   │   ├── UsersPage.jsx           # User (AV/admin) management
+│   │   │   ├── DailyReviewPage.jsx     # Review daily hours
+│   │   │   └── FormGenerationPage.jsx  # Generate volunteer forms
+│   │   ├── hooks/
+│   │   │   ├── useQRScanner.js         # QR scanning logic
+│   │   │   ├── useOfflineSync.js       # Offline sync handling
+│   │   │   └── useTimeEntries.js       # Firestore time entries
+│   │   ├── utils/
+│   │   │   ├── firebase.js             # Firebase configuration
+│   │   │   ├── hourCalculations.js     # Hour rounding/flagging
+│   │   │   ├── offlineStorage.js       # IndexedDB wrapper
+│   │   │   └── qrCodeGenerator.js      # Generate/validate QR codes
+│   │   ├── contexts/
+│   │   │   ├── AuthContext.jsx         # Auth state & role management
+│   │   │   └── EventContext.jsx        # Current event selection
+│   │   ├── App.jsx                     # Main app with routing
+│   │   └── main.jsx                    # Entry point
+│   ├── package.json
+│   ├── vite.config.js
+│   └── tailwind.config.js
+│
+├── functions/                   # Firebase Cloud Functions (Node 22)
+│   ├── src/
+│   │   ├── checkIn.js           # Check-in cloud function
+│   │   ├── checkOut.js          # Check-out cloud function
+│   │   ├── userManagement.js    # User CRUD operations
+│   │   └── generateForms.js     # Form generation (partial)
+│   ├── index.js                 # Function exports
+│   └── package.json
+│
+├── scripts/                     # Utility scripts
+├── firebase.json                # Firebase configuration
+├── firestore.rules              # Firestore security rules
+├── firestore.indexes.json       # Firestore indexes
+├── storage.rules                # Firebase Storage rules
+└── docs/
+    ├── PRD.md                   # Product Requirements Document
+    └── CLAUDE.md                # This file
 ```
+
+---
+
+## Authentication & Authorization
+
+### User Roles
+
+The system uses two roles with separate Firestore collections:
+
+| Role | Collection | Access |
+|------|------------|--------|
+| `admin` | `admins` | Full access to all features |
+| `adult_volunteer` | `users` | Scanner access only |
+
+### AuthContext Methods
+
+```javascript
+const {
+  user,              // Current Firebase user
+  profile,           // Firestore profile data
+  isAuthenticated,   // Boolean
+  loading,           // Auth loading state
+  hasRole,           // Check specific role
+  isAdmin,           // Shortcut for admin check
+  isAdultVolunteer,  // Shortcut for AV check
+  canAccessScanner,  // Admin OR adult_volunteer
+  canAccessAdmin,    // Admin only
+  login,             // signInWithEmailAndPassword
+  logout             // signOut
+} = useAuth();
+```
+
+### Protected Routes
+
+```jsx
+// Requires authentication
+<ProtectedRoute><Component /></ProtectedRoute>
+
+// Requires admin role (redirects non-admins to /scan)
+<AdminRoute><Component /></AdminRoute>
+
+// Requires admin OR adult_volunteer (for scanner)
+<ScannerRoute><Component /></ScannerRoute>
+```
+
+### Authentication Flow
+
+1. User navigates to `/login`
+2. Enters email/password → `signInWithEmailAndPassword()`
+3. `AuthContext` checks `admins` collection first, then `users`
+4. User must exist in Firestore to be authorized
+5. Redirects based on role: Admin → `/admin`, AV → `/scan`
 
 ---
 
@@ -120,39 +177,35 @@ functions/
 ### Student
 ```javascript
 {
-  id: string,                      // Firestore doc ID
-  eventId: string,
+  id: string,                    // Firestore doc ID
   firstName: string,
   lastName: string,
-  email: string,                   // Parent's email
-  phone: string,                   // Parent's phone
-  gradeLevel: string,              // "5th", "6th", ... "12th"
-  schoolName: string,
-  formType: string,                // "ocps" | "njhs" | "nhs" | "private" | "other"
-  studentCode: string,             // "SJ-0042"
-  qrCode: string,                  // QR code data: "studentId|eventId|checksum"
-  createdAt: timestamp,
-  lanyardPrinted: boolean
+  schoolName: string,            // For form generation
+  gradeLevel: string,            // "5th", "6th", etc.
+  gradYear: string,              // Expected graduation year
+  overrideHours: number | null,  // Manual hour override
+  createdAt: timestamp
 }
 ```
 
 ### TimeEntry
 ```javascript
 {
-  id: string,
+  id: string,                    // Firestore doc ID
   studentId: string,
   eventId: string,
-  date: string,                    // "2026-06-15"
+  activityId: string,            // Activity within event
+  date: string,                  // "YYYY-MM-DD"
   checkInTime: timestamp,
-  checkInBy: string,               // AV user ID
-  checkInMethod: string,           // "av_scan" | "self_scan"
+  checkInBy: string,             // User ID or 'av_scan'
+  checkInMethod: string,         // "av_scan"
   checkOutTime: timestamp | null,
   checkOutBy: string | null,
   checkOutMethod: string | null,
-  hoursWorked: number,             // 6.5 (rounded)
-  rawMinutes: number,              // 373 (exact)
-  reviewStatus: string,            // "pending" | "flagged" | "approved"
-  flags: string[],                 // ["early_arrival", "late_stay"]
+  hoursWorked: number | null,    // Rounded to 0.5
+  rawMinutes: number | null,     // Exact minutes
+  reviewStatus: string,          // "pending" | "flagged" | "approved"
+  flags: string[],               // ["early_arrival", "late_stay"]
   modifiedBy: string | null,
   modificationReason: string | null,
   createdAt: timestamp
@@ -162,652 +215,265 @@ functions/
 ### Event
 ```javascript
 {
-  id: string,
-  name: string,                    // "VBS 2026"
-  organizationName: string,        // "Community Church"
-  startDate: string,               // "2026-06-15"
-  endDate: string,                 // "2026-06-19"
-  supervisorName: string,          // "Pastor John Smith"
-  checkInQRUrl: string,
-  checkOutQRUrl: string,
-  typicalStartTime: string,        // "09:00" (for flagging)
-  typicalEndTime: string,          // "15:00"
+  id: string,                    // Firestore doc ID
+  name: string,                  // "VBS 2026"
+  organizationName: string,      // "Community Church"
+  contactName: string,           // Supervisor name
+  contactPhone: string,
+  contactEmail: string,
+  typicalStartTime: string,      // "09:00" (for flagging)
+  typicalEndTime: string,        // "15:00"
+  activities: [                  // Multiple activities per event
+    { id: string, name: string }
+  ],
   createdAt: timestamp
 }
 ```
 
----
-
-## Development Guidelines
-
-### 1. Component Pattern (Functional Components)
-
-```jsx
-import React from 'react';
-
-export default function ComponentName({ prop1, prop2 }) {
-  // Hooks at top
-  const [state, setState] = React.useState(initialValue);
-  const { data } = useCustomHook();
-  
-  // Effects
-  React.useEffect(() => {
-    // side effects
-  }, [dependencies]);
-  
-  // Event handlers
-  const handleAction = () => {
-    // logic
-  };
-  
-  // Early returns
-  if (loading) return <Spinner />;
-  if (error) return <ErrorMessage error={error} />;
-  
-  // Main render
-  return (
-    <div className="container">
-      {/* JSX */}
-    </div>
-  );
-}
-```
-
-### 2. Firebase Best Practices
-
-**Firestore Queries:**
+### Admin User
 ```javascript
-// Good: Use Firestore listeners for real-time
-const unsubscribe = onSnapshot(
-  collection(db, 'timeEntries'),
-  (snapshot) => {
-    const entries = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    setTimeEntries(entries);
-  }
-);
-
-// Cleanup
-return () => unsubscribe();
-```
-
-**Security Rules (firestore.rules):**
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Students: Read-only from client
-    match /students/{studentId} {
-      allow read: if true;
-      allow write: if false; // Only functions can write
-    }
-    
-    // TimeEntries: Write-only during scan, read for admin
-    match /timeEntries/{entryId} {
-      allow read: if request.auth != null; // Admin only
-      allow create: if true; // Allow scanner to create
-      allow update, delete: if request.auth != null;
-    }
-  }
+// Collection: admins
+{
+  id: string,                    // Same as Firebase Auth UID
+  email: string,
+  name: string,
+  role: "admin",
+  isActive: boolean,
+  createdAt: timestamp,
+  createdBy: string,             // UID of admin who created
+  updatedAt: timestamp,
+  updatedBy: string
 }
 ```
 
-### 3. Offline Support Strategy
-
-**Use IndexedDB for offline queue:**
+### Adult Volunteer User
 ```javascript
-// utils/offlineStorage.js
-import { openDB } from 'idb';
-
-export async function queueCheckIn(data) {
-  const db = await openDB('vbs-offline', 1);
-  await db.add('pendingCheckIns', {
-    ...data,
-    timestamp: Date.now()
-  });
-}
-
-export async function syncPendingCheckIns() {
-  const db = await openDB('vbs-offline', 1);
-  const pending = await db.getAll('pendingCheckIns');
-  
-  for (const item of pending) {
-    try {
-      await checkInToFirestore(item);
-      await db.delete('pendingCheckIns', item.id);
-    } catch (error) {
-      console.error('Sync failed:', error);
-    }
-  }
-}
-```
-
-**Service Worker (vite-plugin-pwa):**
-```javascript
-// vite.config.js
-import { VitePWA } from 'vite-plugin-pwa';
-
-export default {
-  plugins: [
-    VitePWA({
-      registerType: 'autoUpdate',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'firestore-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 // 1 hour
-              }
-            }
-          }
-        ]
-      }
-    })
-  ]
-};
-```
-
-### 4. Hour Calculation Logic
-
-**Per PRD Section 3.4.1:**
-```javascript
-// utils/hourCalculations.js
-
-/**
- * Calculate hours worked and round to nearest 0.5 hour
- * @param {Date} checkIn - Check-in timestamp
- * @param {Date} checkOut - Check-out timestamp
- * @returns {Object} { rounded, raw, minutes }
- */
-export function calculateHours(checkIn, checkOut) {
-  const minutes = Math.floor((checkOut - checkIn) / 1000 / 60);
-  const hours = minutes / 60;
-  
-  // Round to nearest 0.5
-  // 0-14 min = round down, 15-44 = +0.5, 45-59 = round up
-  const rounded = Math.round(hours * 2) / 2;
-  
-  return {
-    rounded,          // 6.5
-    raw: hours,       // 6.216666...
-    minutes           // 373
-  };
-}
-
-/**
- * Check if time should be flagged
- * @param {Date} time - Check-in or check-out time
- * @param {string} type - "checkIn" or "checkOut"
- * @param {string} typicalStart - "09:00"
- * @param {string} typicalEnd - "15:00"
- * @returns {string[]} Array of flags
- */
-export function getFlagsForTime(time, type, typicalStart, typicalEnd) {
-  const flags = [];
-  const timeStr = format(time, 'HH:mm');
-  
-  if (type === 'checkIn') {
-    const [hour, min] = typicalStart.split(':');
-    const typical = new Date(time);
-    typical.setHours(parseInt(hour), parseInt(min), 0, 0);
-    
-    // Flag if >15 min early
-    if (time < typical - (15 * 60 * 1000)) {
-      flags.push('early_arrival');
-    }
-  }
-  
-  if (type === 'checkOut') {
-    const [hour, min] = typicalEnd.split(':');
-    const typical = new Date(time);
-    typical.setHours(parseInt(hour), parseInt(min), 0, 0);
-    
-    // Flag if >15 min late
-    if (time > typical + (15 * 60 * 1000)) {
-      flags.push('late_stay');
-    }
-  }
-  
-  return flags;
-}
-```
-
-### 5. QR Scanner Component Pattern
-
-```jsx
-// components/AVScanner/index.jsx
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import { useEffect, useRef } from 'react';
-
-export default function AVScanner() {
-  const scannerRef = useRef(null);
-  const [recentScans, setRecentScans] = useState([]);
-  
-  useEffect(() => {
-    const scanner = new Html5QrcodeScanner(
-      "qr-reader",
-      { 
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0
-      }
-    );
-    
-    scanner.render(onScanSuccess, onScanFailure);
-    scannerRef.current = scanner;
-    
-    return () => {
-      scanner.clear();
-    };
-  }, []);
-  
-  const onScanSuccess = async (decodedText) => {
-    // Parse QR code: "studentId|eventId|checksum"
-    const [studentId, eventId, checksum] = decodedText.split('|');
-    
-    // Validate checksum
-    if (!validateChecksum(studentId, eventId, checksum)) {
-      showError('Invalid QR code');
-      return;
-    }
-    
-    try {
-      // Call check-in function
-      const result = await checkInStudent(studentId, eventId);
-      
-      // Update recent scans
-      setRecentScans(prev => [result, ...prev].slice(0, 5));
-      
-      // Audio feedback
-      playBeep();
-      
-      // Visual feedback
-      showSuccess(result.studentName);
-    } catch (error) {
-      showError(error.message);
-    }
-  };
-  
-  const onScanFailure = (error) => {
-    // Don't spam console with scan errors
-    if (!error.includes('NotFoundException')) {
-      console.warn('QR Scan error:', error);
-    }
-  };
-  
-  return (
-    <div className="scanner-container">
-      <div id="qr-reader" className="w-full max-w-md" />
-      <RecentScans scans={recentScans} />
-    </div>
-  );
-}
-```
-
-### 6. Error Handling Pattern
-
-```javascript
-// Use consistent error handling
-try {
-  const result = await somethingThatMightFail();
-  return { success: true, data: result };
-} catch (error) {
-  console.error('Operation failed:', error);
-  
-  // User-friendly error messages
-  const message = error.code === 'permission-denied' 
-    ? 'You do not have permission to perform this action'
-    : error.message;
-  
-  return { success: false, error: message };
+// Collection: users
+{
+  id: string,                    // Same as Firebase Auth UID
+  email: string,
+  name: string,
+  role: "adult_volunteer",
+  isActive: boolean,
+  createdAt: timestamp,
+  createdBy: string,
+  updatedAt: timestamp,
+  updatedBy: string
 }
 ```
 
 ---
 
-## Key Implementation Notes
+## Route Structure
 
-### From PRD - Critical Requirements
-
-**1. Check-In Must Be Fast (Section 3.2.1)**
-- Target: < 5 seconds per student
-- Continuous scanning (no button press)
-- Audio + visual feedback
-- Show last 5 scans for verification
-
-**2. Offline Mode is Critical (Section 5.4)**
-- Church WiFi is unreliable
-- Check-ins/outs MUST work offline
-- Queue in IndexedDB, sync when online
-- Visual indicator: "⚠️ Offline - 3 pending"
-
-**3. Hour Rounding (Section 3.4.1)**
-- Round to nearest 0.5 hour (30 min)
-- Store both rounded and raw minutes
-- 0-14 min = round down
-- 15-44 min = +0.5
-- 45-59 min = round up
-
-**4. Flagging Logic (Section 3.4.2)**
-- Flag early arrival: >15 min before typical start
-- Flag late stay: >15 min after typical end
-- Flags trigger manual review by VA
-
-**5. Multi-Form Support (Section 3.6.1)**
-- OCPS, NJHS, NHS, Private, Other
-- Each student tagged with form type
-- Use appropriate PDF template per type
-
-**6. Friday Form Generation (Section 3.6.3)**
-- Can generate before all students checked out
-- Use estimated hours (6 hrs or average)
-- Flag forms with estimates
-- Allow reprint if actual differs
+| Route | Access | Description |
+|-------|--------|-------------|
+| `/login` | Public | Login page |
+| `/scan/:eventId?/:activityId?/:action?` | Scanner | QR scanner for check-in/out |
+| `/admin` | Admin | Dashboard with real-time stats |
+| `/admin/students` | Admin | Student roster management |
+| `/admin/students/:studentId` | Admin | Individual student detail |
+| `/admin/events` | Admin | Event management |
+| `/admin/events/new` | Admin | Create new event |
+| `/admin/users` | Admin | User management (admins + AVs) |
+| `/admin/daily-review` | Admin | Review daily hours |
+| `/admin/forms` | Admin | Form generation |
+| `/` | Protected | Redirects based on role |
 
 ---
 
-## Firebase Cloud Functions
+## Cloud Functions
 
-### Check-In Function
+### checkIn
 ```javascript
-// functions/src/checkIn.js
-const { onCall } = require('firebase-functions/v2/https');
-const admin = require('firebase-admin');
-
-exports.checkIn = onCall(async (request) => {
-  const { studentId, eventId, scannedBy } = request.data;
-  
-  // Validate
-  if (!studentId || !eventId) {
-    throw new Error('Missing required fields');
-  }
-  
-  const db = admin.firestore();
-  const today = new Date().toISOString().split('T')[0]; // "2026-06-15"
-  
-  // Check if already checked in today
-  const existing = await db.collection('timeEntries')
-    .where('studentId', '==', studentId)
-    .where('date', '==', today)
-    .where('checkOutTime', '==', null)
-    .get();
-  
-  if (!existing.empty) {
-    const existingEntry = existing.docs[0].data();
-    return {
-      success: false,
-      error: `Already checked in at ${existingEntry.checkInTime.toDate().toLocaleTimeString()}`,
-      duplicate: true
-    };
-  }
-  
-  // Get student info
-  const studentDoc = await db.collection('students').doc(studentId).get();
-  if (!studentDoc.exists) {
-    throw new Error('Student not found');
-  }
-  const student = studentDoc.data();
-  
-  // Get event info for flagging
-  const eventDoc = await db.collection('events').doc(eventId).get();
-  const event = eventDoc.data();
-  
-  // Create time entry
-  const checkInTime = admin.firestore.Timestamp.now();
-  const flags = getFlagsForCheckIn(checkInTime, event.typicalStartTime);
-  
-  const entry = {
-    studentId,
-    eventId,
-    date: today,
-    checkInTime,
-    checkInBy: scannedBy,
-    checkInMethod: 'av_scan',
-    checkOutTime: null,
-    checkOutBy: null,
-    checkOutMethod: null,
-    hoursWorked: null,
-    rawMinutes: null,
-    reviewStatus: flags.length > 0 ? 'flagged' : 'pending',
-    flags,
-    createdAt: admin.firestore.Timestamp.now()
-  };
-  
-  const docRef = await db.collection('timeEntries').add(entry);
-  
-  return {
-    success: true,
-    studentName: `${student.firstName} ${student.lastName}`,
-    checkInTime: checkInTime.toDate(),
-    entryId: docRef.id
-  };
-});
-
-function getFlagsForCheckIn(checkInTime, typicalStart) {
-  const flags = [];
-  const time = checkInTime.toDate();
-  const [hour, min] = typicalStart.split(':');
-  const typical = new Date(time);
-  typical.setHours(parseInt(hour), parseInt(min), 0, 0);
-  
-  // Flag if >15 min early
-  if (time < typical - (15 * 60 * 1000)) {
-    flags.push('early_arrival');
-  }
-  
-  return flags;
-}
+// Endpoint: checkIn
+// Input: { studentId, eventId, activityId, scannedBy }
+// Returns: { success, studentName, checkInTime, entryId, flags } or { success: false, error, duplicate }
 ```
 
-### Check-Out Function
+### checkOut
 ```javascript
-// functions/src/checkOut.js
-const { onCall } = require('firebase-functions/v2/https');
-const admin = require('firebase-admin');
+// Endpoint: checkOut
+// Input: { studentId, eventId, activityId }
+// Returns: { success, studentName, hoursToday, weekTotal, checkOutTime, flags }
+```
 
-exports.checkOut = onCall(async (request) => {
-  const { studentId, eventId, method } = request.data;
-  
-  const db = admin.firestore();
-  const today = new Date().toISOString().split('T')[0];
-  
-  // Find today's entry
-  const entries = await db.collection('timeEntries')
-    .where('studentId', '==', studentId)
-    .where('date', '==', today)
-    .where('checkOutTime', '==', null)
-    .get();
-  
-  if (entries.empty) {
-    throw new Error('No check-in found for today');
-  }
-  
-  const entryDoc = entries.docs[0];
-  const entry = entryDoc.data();
-  
-  // Calculate hours
-  const checkOutTime = admin.firestore.Timestamp.now();
-  const checkInMs = entry.checkInTime.toMillis();
-  const checkOutMs = checkOutTime.toMillis();
-  const minutes = Math.floor((checkOutMs - checkInMs) / 1000 / 60);
-  const hours = minutes / 60;
-  const rounded = Math.round(hours * 2) / 2;
-  
-  // Get event for flagging
-  const eventDoc = await db.collection('events').doc(eventId).get();
-  const event = eventDoc.data();
-  const flags = [...entry.flags, ...getFlagsForCheckOut(checkOutTime, event.typicalEndTime)];
-  
-  // Update entry
-  await entryDoc.ref.update({
-    checkOutTime,
-    checkOutBy: method === 'self_scan' ? 'student_self' : request.auth?.uid || 'av',
-    checkOutMethod: method || 'self_scan',
-    hoursWorked: rounded,
-    rawMinutes: minutes,
-    flags,
-    reviewStatus: flags.length > 0 ? 'flagged' : 'pending'
-  });
-  
-  // Get student for response
-  const studentDoc = await db.collection('students').doc(studentId).get();
-  const student = studentDoc.data();
-  
-  // Get week total
-  const weekStart = new Date(today);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Monday
-  const weekEntries = await db.collection('timeEntries')
-    .where('studentId', '==', studentId)
-    .where('date', '>=', weekStart.toISOString().split('T')[0])
-    .where('checkOutTime', '!=', null)
-    .get();
-  
-  const weekTotal = weekEntries.docs.reduce((sum, doc) => sum + doc.data().hoursWorked, 0);
-  
-  return {
-    success: true,
-    studentName: `${student.firstName} ${student.lastName}`,
-    hoursToday: rounded,
-    weekTotal: weekTotal + rounded
-  };
-});
-
-function getFlagsForCheckOut(checkOutTime, typicalEnd) {
-  const flags = [];
-  const time = checkOutTime.toDate();
-  const [hour, min] = typicalEnd.split(':');
-  const typical = new Date(time);
-  typical.setHours(parseInt(hour), parseInt(min), 0, 0);
-  
-  if (time > typical + (15 * 60 * 1000)) {
-    flags.push('late_stay');
-  }
-  
-  return flags;
-}
+### User Management Functions
+```javascript
+// createUser: { email, password, name, role } → Creates auth user + Firestore doc
+// updateUser: { userId, role?, isActive?, name? } → Updates user, moves collections if role changes
+// deleteUser: { userId } → Deletes from Auth + both Firestore collections
+// listUsers: {} → Returns all admins + users sorted by name
+// resetUserPassword: { userId, newPassword? } → Resets password (generates random if not provided)
 ```
 
 ---
 
-## Common Pitfalls to Avoid
+## QR Code Format
 
-1. **Don't use client-side timestamps** - Use server timestamps (Firestore `Timestamp.now()`)
-2. **Don't store rounded hours only** - Store both rounded and raw minutes for audit
-3. **Don't skip offline mode** - Church WiFi is unreliable, offline is critical
-4. **Don't hardcode event IDs** - Use context/params for current event
+**Format:** `studentId|eventId|checksum`
+
+**Checksum:** 6-character hash generated from studentId + eventId
+
+```javascript
+// Generate QR data
+const qrData = generateQRData(studentId, eventId);
+// Result: "abc123|evt456|x7y8z9"
+
+// Parse and validate
+const { studentId, eventId, isValid } = parseQRData(qrData);
+```
+
+---
+
+## Hour Calculation Logic
+
+### Rounding Rules (PRD Section 3.4.1)
+- **0-14 minutes:** Round down
+- **15-44 minutes:** Round to 0.5
+- **45-59 minutes:** Round up
+
+```javascript
+// Examples:
+// 9:02 AM - 3:15 PM = 6h 13m → 6.0 hours
+// 9:02 AM - 3:18 PM = 6h 16m → 6.5 hours
+// 8:45 AM - 4:15 PM = 7h 30m → 7.5 hours
+```
+
+### Flagging Rules (PRD Section 3.4.2)
+- **Early arrival:** Check-in >15 min before `typicalStartTime`
+- **Late stay:** Check-out >15 min after `typicalEndTime`
+
+---
+
+## Firestore Security Rules Summary
+
+```javascript
+students:    { read: scanner, write: admin }
+timeEntries: { read: admin, create: scanner, update/delete: admin }
+events:      { read: scanner, write: admin }
+admins:      { read: self, update: self, create/delete: backend only }
+users:       { read: self, update: self, create/delete: backend only }
+generatedForms: { read/write: admin }
+```
+
+---
+
+## Offline Support
+
+### IndexedDB Storage
+```javascript
+// Queue operations when offline
+await queueCheckIn({ studentId, eventId, activityId, timestamp });
+await queueCheckOut({ studentId, eventId, activityId, timestamp });
+
+// Get pending items
+const checkIns = await getPendingCheckIns();
+const checkOuts = await getPendingCheckOuts();
+const { checkIns, checkOuts } = await getPendingCounts();
+
+// Clear after sync
+await clearAllPending();
+```
+
+### useOfflineSync Hook
+- Manages pending queue
+- Syncs when connection restored
+- Visual indicator for offline state
+
+---
+
+## Development Commands
+
+### Frontend
+```bash
+cd frontend
+npm run dev        # Start dev server (localhost:3000)
+npm run build      # Build for production
+npm run preview    # Preview production build
+npm run lint       # ESLint check
+```
+
+### Cloud Functions
+```bash
+cd functions
+npm run serve      # Start emulators
+npm run deploy     # Deploy to Firebase
+npm run logs       # View function logs
+```
+
+### Firebase
+```bash
+firebase emulators:start           # Start all emulators
+firebase deploy                    # Deploy everything
+firebase deploy --only hosting     # Frontend only
+firebase deploy --only functions   # Functions only
+firebase deploy --only firestore:rules  # Rules only
+```
+
+---
+
+## Environment Variables
+
+### Frontend (.env)
+```env
+VITE_FIREBASE_API_KEY=xxx
+VITE_FIREBASE_AUTH_DOMAIN=xxx.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=xxx
+VITE_FIREBASE_STORAGE_BUCKET=xxx.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=xxx
+VITE_FIREBASE_APP_ID=xxx
+VITE_USE_EMULATOR=true  # Optional: connect to emulators
+```
+
+---
+
+## Key Implementation Files
+
+| Purpose | File Path |
+|---------|-----------|
+| Main routing | `frontend/src/App.jsx` |
+| Auth context | `frontend/src/contexts/AuthContext.jsx` |
+| Event context | `frontend/src/contexts/EventContext.jsx` |
+| QR Scanner component | `frontend/src/components/Scanner/index.jsx` |
+| Student management | `frontend/src/pages/StudentsPage.jsx` |
+| User management | `frontend/src/pages/UsersPage.jsx` |
+| Hour calculations | `frontend/src/utils/hourCalculations.js` |
+| QR code utils | `frontend/src/utils/qrCodeGenerator.js` |
+| Check-in function | `functions/src/checkIn.js` |
+| Check-out function | `functions/src/checkOut.js` |
+| User management | `functions/src/userManagement.js` |
+| Security rules | `firestore.rules` |
+
+---
+
+## Testing
+
+### Unit Tests (Vitest)
+```bash
+cd frontend
+npm test           # Run tests
+npm run test:watch # Watch mode
+npm run test:coverage # Coverage report
+```
+
+### Cloud Functions Tests
+```bash
+cd functions
+npm test           # Run Jest tests
+```
+
+---
+
+## Common Pitfalls
+
+1. **Don't use client-side timestamps** - Use server `Timestamp.now()`
+2. **Don't store rounded hours only** - Store both rounded and rawMinutes
+3. **Don't skip offline mode** - Church WiFi is unreliable
+4. **Don't hardcode event IDs** - Use EventContext for current event
 5. **Don't forget to cleanup listeners** - Use `useEffect` return function
-6. **Don't use React Class Components** - Use functional components + hooks
-7. **Don't over-engineer state** - Context for global, local state for component-specific
-8. **Don't skip error boundaries** - Wrap major sections in error boundaries
-9. **Don't forget loading states** - Always show spinner/skeleton while loading
-10. **Don't ignore mobile viewport** - Design mobile-first, everything should work on phone/iPad
-
----
-
-## Testing Strategy
-
-### Manual Testing Checklist
-
-**AV Scanner:**
-- [ ] Can scan QR code successfully
-- [ ] Shows last 5 scans
-- [ ] Plays audio on scan
-- [ ] Shows error for invalid QR
-- [ ] Warns if already checked in
-- [ ] Works offline (IndexedDB queue)
-- [ ] Syncs when back online
-
-**Self-Checkout:**
-- [ ] Can scan lanyard
-- [ ] Shows hours today + week total
-- [ ] Auto-resets after 5 seconds
-- [ ] Works in full-screen kiosk mode
-- [ ] Works offline
-
-**Admin Dashboard:**
-- [ ] Shows real-time check-ins
-- [ ] Activity feed updates live
-- [ ] Can search students
-- [ ] Can navigate to daily review
-- [ ] Can navigate to forms
-
-**Daily Review:**
-- [ ] Lists all students for today
-- [ ] Flags early/late times
-- [ ] Can edit hours with reason
-- [ ] Can force check-out
-- [ ] Can bulk approve
-- [ ] Can export CSV
-
-**Form Generation:**
-- [ ] Can generate single form
-- [ ] Can batch generate all forms
-- [ ] PDFs have correct data
-- [ ] Can download merged PDF
-- [ ] Can download ZIP
-
----
-
-## Development Workflow
-
-### Initial Setup
-```bash
-# 1. Clone and setup
-git clone <repo>
-cd vbs-volunteer-tracker
-npm install
-
-# 2. Setup Firebase
-cd frontend
-npm install
-cd ../functions
-npm install
-
-# 3. Configure Firebase
-# Copy .env.example to .env
-# Fill in Firebase config values
-
-# 4. Run dev server
-cd frontend
-npm run dev
-```
-
-### Working on a Feature
-```bash
-# 1. Create feature branch
-git checkout -b feature/av-scanner
-
-# 2. Work on feature
-# Edit files in src/components/AVScanner/
-
-# 3. Test locally
-npm run dev
-
-# 4. Commit and push
-git add .
-git commit -m "feat: Add AV scanner component"
-git push origin feature/av-scanner
-```
-
-### Deploying
-```bash
-# 1. Build frontend
-cd frontend
-npm run build
-
-# 2. Deploy to Firebase
-firebase deploy --only hosting
-
-# 3. Deploy functions
-firebase deploy --only functions
-```
+6. **Don't use React class components** - Use functional components + hooks
+7. **Always validate QR checksums** - Use `validateChecksum()` before processing
 
 ---
 
@@ -815,54 +481,12 @@ firebase deploy --only functions
 
 Ask the human if:
 - Feature requirements are ambiguous (check PRD first)
-- Design decisions need input (e.g., color scheme, exact layout)
-- Form templates differ significantly from assumptions
+- Design decisions need input
+- Form templates differ from assumptions
 - Security rules need adjustment for new features
-- Offline sync strategy needs modification
-- Hour calculation edge cases not covered in PRD
+- Hour calculation edge cases not covered
 
 ---
 
-## Quick Reference
-
-**PRD Sections:**
-- Check-in flow: Section 3.2
-- Check-out flow: Section 3.3
-- Hour calculation: Section 3.4
-- Admin dashboard: Section 3.5
-- Form generation: Section 3.6
-- Database schema: Section 3.7-3.8
-
-**Key Files:**
-- Firebase config: `frontend/src/utils/firebase.js`
-- Hour calculations: `frontend/src/utils/hourCalculations.js`
-- Check-in function: `functions/src/checkIn.js`
-- Check-out function: `functions/src/checkOut.js`
-
-**Common Commands:**
-```bash
-npm run dev              # Start dev server
-npm run build            # Build for production
-npm run preview          # Preview production build
-firebase deploy          # Deploy everything
-firebase emulators:start # Run local emulators
-```
-
----
-
-## Notes for Future Enhancements
-
-**Phase 4 Features (Post-MVP):**
-- Student portal (view own hours)
-- Parent email notifications
-- Multi-event support
-- Mobile apps (React Native)
-- Advanced analytics
-
-These are NOT in scope for initial launch. Focus on core MVP features first.
-
----
-
-**Last Updated:** 2026-01-19  
-**Version:** 1.0
-```
+**Last Updated:** 2026-01-24
+**Version:** 2.0

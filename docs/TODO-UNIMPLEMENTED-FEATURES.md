@@ -1,0 +1,387 @@
+# Unimplemented Features - Future Work
+
+> **Last Updated:** January 24, 2026
+> This document lists features from the original PRD that are not yet implemented.
+
+---
+
+## Priority 0 (P0) - Critical for Full Functionality
+
+### 1. Self-Service Checkout Kiosk Mode
+**PRD Section:** 3.3.1
+
+**Current State:** The unified Scanner component handles both check-in and check-out via URL parameters, but there's no dedicated kiosk mode interface.
+
+**What's Missing:**
+- Full-screen kiosk mode with locked navigation
+- Large "SCAN TO CHECK OUT" prompt
+- Auto-reset after 5 seconds
+- Week total and daily hours display on success
+- iPad Guided Access mode instructions
+- Simplified UI for student self-service
+
+**Suggested Tasks:**
+```
+1. Create KioskCheckoutPage component
+2. Add full-screen mode with browser-chrome hiding
+3. Implement auto-reset timer after successful checkout
+4. Add large, accessible UI elements
+5. Test on iPad with Guided Access mode
+6. Add route /checkout/:eventId for kiosk mode
+```
+
+---
+
+### 2. CSV Import from Realm (Church Management System)
+**PRD Section:** 3.7.1
+
+**Current State:** Students can only be added manually one at a time through the UI.
+
+**What's Missing:**
+- CSV file upload interface
+- Column mapping for Realm export format
+- Bulk student creation from CSV
+- Duplicate detection and handling
+- Preview before import
+- Import validation and error reporting
+
+**Suggested Tasks:**
+```
+1. Create CSVImportPage component in admin section
+2. Add file upload with drag-and-drop
+3. Implement CSV parsing with column detection
+4. Create preview table with validation errors
+5. Add bulk student creation Cloud Function
+6. Handle duplicates (skip, update, or error)
+7. Show import summary and any failures
+```
+
+**Expected CSV Fields from Realm:**
+- Name (first, last)
+- Email (parent's)
+- Phone (parent's)
+- Address
+- Birthday
+- Grade
+
+---
+
+### 3. Multi-Form Type Support
+**PRD Section:** 3.6.1
+
+**Current State:** Only OCPS form layout exists. Form type field is not stored on students.
+
+**What's Missing:**
+- Form type selection during registration/edit
+- Multiple PDF templates (NJHS, NHS, Private, Other)
+- Form type stored on student record
+- Filter/batch generation by form type
+
+**Suggested Tasks:**
+```
+1. Add formType field to student data model
+2. Update student registration/edit forms with formType dropdown
+3. Obtain actual form templates from schools
+4. Create PDF templates for each form type
+5. Update form generation to use correct template per student
+6. Add batch generation by form type in FormGenerationPage
+```
+
+**Form Types to Support:**
+- OCPS (Orange County Public Schools) - current
+- NJHS (National Junior Honor Society)
+- NHS (National Honor Society)
+- Private School (generic or per-school)
+- Homeschool/Other
+
+---
+
+### 4. PDF Form Generation (Complete)
+**PRD Section:** 3.6.2
+
+**Current State:** `generateForms` Cloud Function returns hours data but doesn't fill PDFs.
+
+**What's Missing:**
+- PDF template loading
+- Field mapping and filling with pdf-lib
+- Generated PDF storage in Firebase Storage
+- Download URLs returned to client
+- Batch PDF merging for bulk download
+- ZIP file generation for individual downloads
+
+**Suggested Tasks:**
+```
+1. Create PDF templates with fillable fields
+2. Implement pdfFiller utility in Cloud Functions
+3. Map student data and hours to form fields
+4. Store generated PDFs in Firebase Storage
+5. Return download URLs from generateForms function
+6. Add PDF merge functionality for batch download
+7. Implement ZIP generation for individual files
+```
+
+**Fields to Auto-Fill:**
+- Student name, school, grade, graduation year
+- Organization name, supervisor name
+- Training hours (Monday only)
+- VBS week hours (Tuesday-Friday)
+- Total hours
+- Date ranges
+
+---
+
+## Priority 1 (P1) - Important Enhancements
+
+### 5. Force Check-Out Feature
+**PRD Section:** 3.5.2
+
+**Current State:** Admin can view students still checked in, but cannot force a checkout.
+
+**What's Missing:**
+- "Force Check-Out" button in daily review
+- Admin ability to set checkout time manually
+- Reason field for forced checkouts
+- Flag forced checkouts for audit trail
+
+**Suggested Tasks:**
+```
+1. Add forceCheckOut Cloud Function
+2. Add "Force Check-Out" button to DailyReviewPage
+3. Create modal with time picker and reason field
+4. Mark forced checkouts with special flag
+5. Display forced checkout indicator in review
+```
+
+---
+
+### 6. Friday Hour Estimation
+**PRD Section:** 3.6.3
+
+**Current State:** Form generation doesn't handle students not yet checked out.
+
+**What's Missing:**
+- Estimate Friday hours for unchecked-out students
+- Use average of Mon-Thu or typical 6 hours
+- Flag forms with estimated hours
+- Allow reprint after actual checkout
+
+**Suggested Tasks:**
+```
+1. Calculate average hours from Mon-Thu entries
+2. Use estimate for Friday if not checked out
+3. Add "estimated" flag to generated forms
+4. Store estimated vs. actual in form metadata
+5. Allow regeneration after student checks out
+6. UI indicator showing which forms have estimates
+```
+
+---
+
+### 7. Daily Review Enhancements
+**PRD Section:** 3.5.2
+
+**Current State:** Partial implementation - can view entries but missing bulk actions.
+
+**What's Missing:**
+- Bulk approve all non-flagged hours (one click)
+- Export daily report as PDF
+- Export daily report as CSV
+- Filter by status (flagged, approved, pending)
+- Search by student name
+
+**Suggested Tasks:**
+```
+1. Add bulkApprove Cloud Function
+2. Implement "Approve All Good Hours" button
+3. Create PDF export with daily summary
+4. Create CSV export functionality
+5. Add status filter dropdown
+6. Add student search/filter input
+```
+
+---
+
+### 8. Hour Adjustment Audit Trail
+**PRD Section:** 3.5.3
+
+**Current State:** Basic modification fields exist but full audit trail is not displayed.
+
+**What's Missing:**
+- Change history display in UI
+- Original vs modified values side by side
+- Who made each change and when
+- Modification reason visibility
+
+**Suggested Tasks:**
+```
+1. Store complete modification history array
+2. Create ChangeHistoryModal component
+3. Display modification log in student detail page
+4. Show original values alongside current values
+5. Add "View History" button to time entries
+```
+
+---
+
+## Priority 2 (P2) - Nice to Have
+
+### 9. Duplicate Check-In Override
+**PRD Section:** 3.2.1
+
+**Current State:** Duplicate check-ins show error but no override option.
+
+**What's Missing:**
+- Override button when duplicate detected
+- Reason field for override
+- Log override with admin/AV info
+
+**Suggested Tasks:**
+```
+1. Add override option in Scanner component
+2. Create overrideCheckIn Cloud Function
+3. Log override reason and who authorized
+4. Show override confirmation
+```
+
+---
+
+### 10. Manual Entry Fallback
+**PRD Section:** 3.2.1
+
+**Current State:** No way to manually enter check-in if QR is damaged.
+
+**What's Missing:**
+- Manual entry option for AV
+- Student search/selection
+- Manual check-in without QR
+
+**Suggested Tasks:**
+```
+1. Add "Manual Entry" button to Scanner
+2. Create student search/autocomplete
+3. Allow check-in by selecting student
+4. Flag manual entries for review
+```
+
+---
+
+### 11. Student Codes (Human-Readable)
+**PRD Section:** 3.7.2
+
+**Current State:** Using Firestore document IDs instead of formatted codes like "SJ-0042".
+
+**What's Missing:**
+- Generate student codes on registration
+- Display codes on badges
+- Search by student code
+
+**Suggested Tasks:**
+```
+1. Add studentCode field generation logic
+2. Update badge printing to show code
+3. Add code to student list display
+4. Enable search by code
+```
+
+---
+
+## Phase 4 (Deferred - Post-MVP)
+
+### 12. Student Portal
+**PRD Section:** Phase 4
+
+Allow students to view their own hours via web page (without accounts).
+
+**Potential Approach:**
+- Unique URL per student (e.g., /hours/{studentToken})
+- Token embedded in QR code or separate
+- Read-only hours view
+- Week-by-week breakdown
+
+---
+
+### 13. Parent Notifications
+**PRD Section:** Phase 4
+
+Email notifications to parents on check-in/out.
+
+**Potential Approach:**
+- SendGrid or Firebase Email Extension
+- Opt-in during registration
+- Configurable notification preferences
+- Daily summary option
+
+---
+
+### 14. Multi-Event Support
+**PRD Section:** Phase 4
+
+Track volunteers across VBS, mission trips, and other events.
+
+**Potential Approach:**
+- Event selector in dashboard
+- Cross-event hour totals
+- Event archive/history
+- Annual summary reports
+
+---
+
+### 15. Geolocation Validation
+**PRD Section:** 5.3
+
+Verify check-ins happen at church location.
+
+**Potential Approach:**
+- Store check-in coordinates
+- Define geofence around church
+- Flag out-of-bounds check-ins
+- Optional enforcement vs. flagging only
+
+---
+
+## Development Priority Order
+
+For the next development phase, recommended order:
+
+1. **CSV Import** - Enables bulk student loading before VBS starts
+2. **PDF Form Generation** - Critical for Friday form distribution
+3. **Force Check-Out** - Needed for daily operations
+4. **Multi-Form Type** - Required for different schools
+5. **Daily Review Bulk Approve** - Reduces admin time
+6. **Friday Hour Estimation** - Enables pre-dismissal form printing
+7. **Kiosk Mode** - Improves student self-checkout experience
+
+---
+
+## Estimation Notes
+
+Each feature above represents approximately:
+
+| Feature | Estimated Effort |
+|---------|-----------------|
+| CSV Import | 4-6 hours |
+| PDF Form Generation | 6-8 hours |
+| Multi-Form Type Support | 4-6 hours |
+| Force Check-Out | 2-3 hours |
+| Friday Estimation | 3-4 hours |
+| Daily Review Enhancements | 4-6 hours |
+| Kiosk Mode | 4-6 hours |
+| Audit Trail Display | 3-4 hours |
+| Duplicate Override | 2-3 hours |
+| Manual Entry | 3-4 hours |
+
+**Total for P0 features:** ~20-26 hours
+**Total for P1 features:** ~12-17 hours
+**Total for P2 features:** ~8-11 hours
+
+---
+
+## Testing Requirements
+
+For each feature, remember to:
+
+1. Write unit tests before/during implementation
+2. Test offline scenarios (church WiFi unreliability)
+3. Test on mobile devices (iPad, phone)
+4. Verify Firestore security rules cover new data
+5. Test with realistic data volumes (130+ students)

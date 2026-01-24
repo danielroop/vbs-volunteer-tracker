@@ -32,22 +32,22 @@ export const checkIn = onCall(async (request) => {
       .where('checkOutTime', '==', null)
       .get();
 
-    if (!existingQuery.empty) {
-      const existingEntry = existingQuery.docs[0].data();
-      const checkInTime = existingEntry.checkInTime.toDate();
-      return {
-        success: false,
-        error: `Already checked in at ${checkInTime.toLocaleTimeString()}`,
-        duplicate: true
-      };
-    }
-
     // Get student info
     const studentDoc = await db.collection('students').doc(studentId).get();
     if (!studentDoc.exists) {
       throw new HttpsError('not-found', 'Student not found');
     }
     const student = studentDoc.data();
+
+    if (!existingQuery.empty) {
+      const existingEntry = existingQuery.docs[0].data();
+      const checkInTime = existingEntry.checkInTime.toDate();
+      return {
+        success: false,
+        error: `${student.firstName} Already checked in at ${checkInTime.toLocaleTimeString()}`,
+        duplicate: true
+      };
+    }
 
     // Get event info for flagging
     const eventDoc = await db.collection('events').doc(eventId).get();

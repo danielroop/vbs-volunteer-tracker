@@ -31,8 +31,15 @@ export const checkOut = onCall(async (request) => {
       .where('checkOutTime', '==', null)
       .get();
 
+   // Get student info
+    const studentDoc = await db.collection('students').doc(studentId).get();
+    if (!studentDoc.exists) {
+      throw new HttpsError('not-found', 'Student not found');
+    }
+    const student = studentDoc.data();
+
     if (entriesQuery.empty) {
-      throw new HttpsError('not-found', 'No check-in found for today');
+      throw new HttpsError('not-found', `No check-in found for today ${student.firstName}`);
     }
 
     const entryDoc = entriesQuery.docs[0];
@@ -67,13 +74,6 @@ export const checkOut = onCall(async (request) => {
       flags: allFlags,
       reviewStatus: allFlags.length > 0 ? 'flagged' : 'pending'
     });
-
-    // Get student for response
-    const studentDoc = await db.collection('students').doc(studentId).get();
-    if (!studentDoc.exists) {
-      throw new HttpsError('not-found', 'Student not found');
-    }
-    const student = studentDoc.data();
 
     // Get week total (Monday to today)
     const weekStart = getMonday(new Date(today));

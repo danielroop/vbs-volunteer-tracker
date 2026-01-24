@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, act } from 'react';
 import { db, functions } from '../../utils/firebase';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -17,6 +17,8 @@ export default function Scanner() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
   const isStarting = useRef(false);
+  const isProcessing = useRef(false);
+  const pauseAfterValidScan = 2000;
 
   useEffect(() => {
     async function fetchData() {
@@ -49,17 +51,32 @@ export default function Scanner() {
     onSuccess: async (data) => {
       const qrString = typeof data === 'string' ? data : data?.rawData || data?.data;
 
+
+      if (isProcessing.current) {
+        console.log("still processing...");
+        return 
+      } else {
+        console.log("started processing a qr scan");
+        deactivateScanner();
+      }
+
       if (!qrString) {
+        activateScanner();
+        console.log("didn't get any data from qrscan");
         return showMessage('error', 'Could not read QR data');
       }
 
       const { studentId, eventId: qrEventId, isValid, error } = parseQRData(qrString);
 
       if (!isValid) {
+        activateScanner();
+        console.log("parsing QR data failed");
         return showMessage('error', error || 'Invalid QR Code');
       }
 
       if (qrEventId !== urlEventId) {
+        activateScanner();
+        console.log("QR data is not what we are looking for");
         return showMessage('error', 'Wrong Event Badge');
       }
 
@@ -75,9 +92,19 @@ export default function Scanner() {
 
         if (result.data.success) {
           const actionText = urlAction === 'checkout' ? 'Checked Out' : 'Checked In';
+          
+          activateScanner();
+
+          console.log("scan is complete a new scan can start");
           showMessage('success', `✓ ${result.data.studentName} ${actionText}`);
+        } else {
+          console.log("server side call failed");
+          activateScanner();
+          showMessage('error', result.data.error || 'Action failed');
         }
       } catch (err) {
+        activateScanner();
+        console.log("http call failed");
         showMessage('error', err.message);
       }
     }
@@ -101,6 +128,17 @@ export default function Scanner() {
   function showMessage(type, text) {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
+  }
+
+  function activateScanner(){
+    console.log(`activating scanner will be enabled in ${pauseAfterValidScan} ms`);
+    setTimeout(() => {
+      isProcessing.current = false;
+    }, pauseAfterValidScan);
+  }
+
+  function deactivateScanner(){
+    isProcessing.current = true;
   }
 
   if (loading) return <div className="p-20 text-center"><Spinner /></div>;

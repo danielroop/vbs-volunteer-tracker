@@ -65,6 +65,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Set loading to true when auth state changes to prevent race conditions
+      setLoading(true);
       setUser(firebaseUser);
       if (firebaseUser) {
         await fetchUserProfile(firebaseUser);

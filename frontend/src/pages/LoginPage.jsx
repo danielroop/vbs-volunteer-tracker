@@ -14,16 +14,28 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { signIn, isAuthenticated, userProfile, refreshProfile } = useAuth();
+  const { signIn, isAuthenticated, userProfile, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // Redirect if already logged in
   useEffect(() => {
+    if (authLoading) return;
+
     if (isAuthenticated && userProfile) {
       const redirectTo = userProfile.role === ROLES.ADMIN ? '/admin' : '/scan';
       navigate(redirectTo);
     }
-  }, [isAuthenticated, userProfile, navigate]);
+  }, [isAuthenticated, userProfile, authLoading, navigate]);
+
+  // Handle case where user is authenticated but has no profile (unauthorized)
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (user && !userProfile && loading) {
+      setError('Account not authorized. Please contact an administrator.');
+      setLoading(false);
+    }
+  }, [user, userProfile, authLoading, loading]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,23 +44,12 @@ export default function LoginPage() {
 
     const result = await signIn(email, password);
 
-    if (result.success) {
-      // After sign in, wait a moment for profile to load, then redirect
-      // The useEffect above will handle the redirect once userProfile is loaded
-      setTimeout(async () => {
-        const profile = await refreshProfile();
-        if (profile) {
-          const redirectTo = profile.role === ROLES.ADMIN ? '/admin' : '/scan';
-          navigate(redirectTo);
-        } else {
-          setError('Account not authorized. Please contact an administrator.');
-          setLoading(false);
-        }
-      }, 500);
-    } else {
+    if (!result.success) {
       setError(result.error || 'Failed to sign in');
       setLoading(false);
     }
+    // If success, onAuthStateChanged in AuthContext will update the state
+    // and the useEffect above will handle the redirect
   };
 
   return (

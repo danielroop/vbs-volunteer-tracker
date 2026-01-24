@@ -29,14 +29,14 @@
 | Protected Routes | 5.5 | AdminRoute, ScannerRoute, ProtectedRoute |
 | Offline Queue | 5.4 | IndexedDB queue for check-ins/outs when offline |
 | PWA Support | 5.1 | Service worker, installable, offline-capable |
-| Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword) |
+| Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword), forceCheckOut, forceAllCheckOut, getDailyReviewSummary |
 | Firestore Security Rules | 5.5 | Role-based access control |
+| Daily Review | 3.5.2 | Full daily review with force checkout, force all checkout, CSV/PDF export, search/filter, override reasons display |
 
 ### Partially Implemented
 
 | Feature | Section | Status | Missing |
 |---------|---------|--------|---------|
-| Daily Review | 3.5.2 | Partial | Bulk approve, export CSV/PDF |
 | Hour Adjustment | 3.5.3 | Partial | Full audit trail display, change history |
 | Form Generation | 3.6.2 | Partial | PDF filling not implemented (returns data only) |
 | OCPS Form Printing | 3.6.2 | Partial | Print layout exists but PDF generation incomplete |
@@ -49,7 +49,6 @@
 | CSV Import from Realm | 3.7.1 | P0 | Bulk student import from church management system |
 | Multi-Form Type Support | 3.6.1 | P0 | NJHS, NHS, Private school, Other form templates |
 | Batch PDF Generation | 3.6.2 | P0 | Generate filled PDFs for all students |
-| Force Check-Out | 3.5.2 | P1 | Force checkout for students who forgot |
 | Friday Hour Estimation | 3.6.3 | P1 | Estimate hours for students not yet checked out |
 | Duplicate Override | 3.2.1 | P2 | Allow override with reason for duplicate check-in |
 | Manual Entry Fallback | 3.2.1 | P2 | Manual entry when QR damaged/unreadable |

@@ -5,6 +5,7 @@ import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp }
 import { useEvent } from '../contexts/EventContext';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
+import Modal from '../components/common/Modal';
 import PrintableBadge from '../components/common/PrintableBadge';
 
 export default function StudentDetailPage() {
@@ -16,6 +17,7 @@ export default function StudentDetailPage() {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [printMode, setPrintMode] = useState(null);
+    const [notesModal, setNotesModal] = useState({ isOpen: false, entry: null });
 
     useEffect(() => {
         async function fetchStudent() {
@@ -298,10 +300,10 @@ export default function StudentDetailPage() {
                 <div className="lg:col-span-3">
                     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th></tr></thead>
+                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th><th className="px-6 py-4 text-center">Status</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
                                 {enrichedEntries.map(e => (
-                                    <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''}`}>
+                                    <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''} ${e.forcedCheckoutReason || e.modificationReason ? 'bg-blue-50' : ''}`}>
                                         <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
                                         <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>
                                         <td className="px-6 py-4 text-center text-gray-600">
@@ -326,6 +328,30 @@ export default function StudentDetailPage() {
                                             ) : (
                                                 e.actualHours.toFixed(2)
                                             )}
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                                {e.forcedCheckoutReason && (
+                                                    <span title="Forced checkout" className="text-lg">⚡</span>
+                                                )}
+                                                {e.modificationReason && (
+                                                    <span title="Modified" className="text-lg">✏️</span>
+                                                )}
+                                                {e.flags && e.flags.includes('early_arrival') && (
+                                                    <span title="Early arrival" className="text-lg">🌅</span>
+                                                )}
+                                                {e.flags && e.flags.includes('late_stay') && (
+                                                    <span title="Late stay" className="text-lg">🌙</span>
+                                                )}
+                                                {(e.changeLog && e.changeLog.length > 0) || e.forcedCheckoutReason || e.modificationReason ? (
+                                                    <button
+                                                        onClick={() => setNotesModal({ isOpen: true, entry: e })}
+                                                        className="text-xs text-blue-600 hover:text-blue-800 underline ml-1"
+                                                    >
+                                                        View
+                                                    </button>
+                                                ) : null}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -420,6 +446,66 @@ export default function StudentDetailPage() {
                     />
                 )}
             </div>
+
+            {/* View Notes Modal */}
+            <Modal
+                isOpen={notesModal.isOpen}
+                onClose={() => setNotesModal({ isOpen: false, entry: null })}
+                title="Entry Change History"
+                size="lg"
+            >
+                {notesModal.entry && (
+                    <div className="space-y-4">
+                        <div className="bg-gray-100 p-3 rounded-lg">
+                            <p className="text-sm text-gray-600">
+                                <span className="font-semibold">Date:</span> {notesModal.entry.checkInTime?.toDate?.().toLocaleDateString() || 'N/A'}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                                <span className="font-semibold">Activity:</span> {currentEvent?.activities?.find(a => a.id === notesModal.entry.activityId)?.name || 'Unknown'}
+                            </p>
+                        </div>
+
+                        {/* Current Override Info */}
+                        {(notesModal.entry.forcedCheckoutReason || notesModal.entry.modificationReason) && (
+                            <div className="bg-blue-50 p-3 rounded-lg">
+                                <p className="text-xs font-semibold text-blue-600 uppercase mb-2">Current Override</p>
+                                {notesModal.entry.forcedCheckoutReason && (
+                                    <p className="text-sm text-blue-700">
+                                        <span className="text-lg mr-1">⚡</span> {notesModal.entry.forcedCheckoutReason}
+                                    </p>
+                                )}
+                                {notesModal.entry.modificationReason && (
+                                    <p className="text-sm text-blue-700">
+                                        <span className="text-lg mr-1">✏️</span> {notesModal.entry.modificationReason}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Change Log History */}
+                        {notesModal.entry.changeLog && notesModal.entry.changeLog.length > 0 ? (
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Change History</p>
+                                <div className="space-y-3 max-h-64 overflow-y-auto">
+                                    {notesModal.entry.changeLog.map((log, idx) => (
+                                        <div key={idx} className="border-l-2 border-blue-400 pl-3 py-1">
+                                            <p className="text-xs text-gray-500">
+                                                {new Date(log.timestamp).toLocaleString()}
+                                                {log.type === 'force_checkout' && <span className="ml-2 text-blue-600 font-medium">Force Checkout</span>}
+                                                {log.type === 'force_checkout_bulk' && <span className="ml-2 text-blue-600 font-medium">Bulk Force Checkout</span>}
+                                                {log.type === 'edit' && <span className="ml-2 text-green-600 font-medium">Edit</span>}
+                                            </p>
+                                            <p className="text-sm text-gray-700 mt-1">{log.description}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-gray-500 italic">No change history available.</p>
+                        )}
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 }

@@ -131,6 +131,9 @@ export default function AdminDashboard() {
           <Link to="/admin" className="px-4 py-2 border-b-2 border-primary-600 font-medium text-primary-600">
             Dashboard
           </Link>
+          <Link to="/admin/daily-review" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
+            Daily Review
+          </Link>
           <Link to="/admin/students" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
             Students
           </Link>

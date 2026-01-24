@@ -2,108 +2,6 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 /**
- * Bulk Approve Cloud Function
- * Per PRD Section 3.5.2: Daily Review (Nightly)
- * Approves multiple time entries at once
- *
- * @param {Object} request.data
- * @param {string} request.data.eventId - Event ID
- * @param {string} request.data.date - Date to approve (YYYY-MM-DD)
- * @param {string[]} request.data.entryIds - Array of entry IDs to approve (optional, approves all if not provided)
- * @param {boolean} request.data.excludeFlagged - If true, skips flagged entries (default: true)
- */
-export const bulkApprove = onCall(async (request) => {
-  const { eventId, date, entryIds, excludeFlagged = true } = request.data;
-
-  // Validate required fields
-  if (!eventId || !date) {
-    throw new HttpsError('invalid-argument', 'Missing required fields: eventId and date');
-  }
-
-  // Verify the user is authenticated
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'User must be authenticated');
-  }
-
-  const db = getFirestore();
-  const userId = request.auth.uid;
-
-  try {
-    let entriesQuery;
-
-    if (entryIds && entryIds.length > 0) {
-      // Approve specific entries
-      // Firestore limits 'in' queries to 30 items, so we batch if needed
-      const batches = [];
-      for (let i = 0; i < entryIds.length; i += 30) {
-        batches.push(entryIds.slice(i, i + 30));
-      }
-
-      const allDocs = [];
-      for (const batch of batches) {
-        const querySnapshot = await db.collection('timeEntries')
-          .where('__name__', 'in', batch)
-          .get();
-        allDocs.push(...querySnapshot.docs);
-      }
-
-      entriesQuery = { docs: allDocs };
-    } else {
-      // Approve all entries for the date
-      entriesQuery = await db.collection('timeEntries')
-        .where('eventId', '==', eventId)
-        .where('date', '==', date)
-        .where('reviewStatus', '==', 'pending')
-        .get();
-    }
-
-    if (entriesQuery.docs.length === 0) {
-      return {
-        success: true,
-        approvedCount: 0,
-        message: 'No entries to approve'
-      };
-    }
-
-    // Filter out flagged entries if requested
-    const entriesToApprove = excludeFlagged
-      ? entriesQuery.docs.filter(doc => {
-          const data = doc.data();
-          return data.reviewStatus !== 'flagged' && data.reviewStatus !== 'approved';
-        })
-      : entriesQuery.docs.filter(doc => doc.data().reviewStatus !== 'approved');
-
-    // Batch update
-    const batchWrite = db.batch();
-    let approvedCount = 0;
-
-    for (const doc of entriesToApprove) {
-      batchWrite.update(doc.ref, {
-        reviewStatus: 'approved',
-        approvedBy: userId,
-        approvedAt: Timestamp.now()
-      });
-      approvedCount++;
-    }
-
-    await batchWrite.commit();
-
-    return {
-      success: true,
-      approvedCount,
-      totalEntries: entriesQuery.docs.length,
-      message: `Approved ${approvedCount} entries`
-    };
-  } catch (error) {
-    console.error('Bulk approve error:', error);
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-    throw new HttpsError('internal', error.message);
-  }
-});
-
-/**
  * Force Check-Out Cloud Function
  * Per PRD Section 3.5.2: Daily Review (Nightly)
  * Forces a checkout for students who forgot to check out
@@ -165,7 +63,7 @@ export const forceCheckOut = onCall(async (request) => {
       flags.push('forced_checkout');
     }
 
-    // Update entry
+    // Update entry - keep original scan data separate from override
     await entryRef.update({
       checkOutTime: checkOutTimestamp,
       checkOutBy: userId,
@@ -173,7 +71,7 @@ export const forceCheckOut = onCall(async (request) => {
       hoursWorked: rounded,
       rawMinutes: minutes,
       flags,
-      reviewStatus: 'flagged', // Forced checkouts should be reviewed
+      // Override tracking - separate from original scan data
       forcedCheckoutReason: reason,
       forcedCheckoutBy: userId,
       forcedCheckoutAt: Timestamp.now()
@@ -192,6 +90,124 @@ export const forceCheckOut = onCall(async (request) => {
     };
   } catch (error) {
     console.error('Force checkout error:', error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Force All Check-Out Cloud Function
+ * Per PRD Section 3.5.2: Daily Review (Nightly)
+ * Forces checkout for all students who haven't checked out yet
+ * Uses each activity's end time as the checkout time
+ *
+ * @param {Object} request.data
+ * @param {string} request.data.eventId - Event ID
+ * @param {string} request.data.date - Date (YYYY-MM-DD)
+ * @param {string} request.data.reason - Reason for bulk forced checkout
+ */
+export const forceAllCheckOut = onCall(async (request) => {
+  const { eventId, date, reason } = request.data;
+
+  // Validate required fields
+  if (!eventId || !date) {
+    throw new HttpsError('invalid-argument', 'Missing required fields: eventId and date');
+  }
+
+  // Verify the user is authenticated
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const db = getFirestore();
+  const userId = request.auth.uid;
+
+  try {
+    // Get event to access activity end times
+    const eventDoc = await db.collection('events').doc(eventId).get();
+    if (!eventDoc.exists) {
+      throw new HttpsError('not-found', 'Event not found');
+    }
+    const event = eventDoc.data();
+
+    // Create activity end time map
+    const activityEndTimes = {};
+    if (event.activities) {
+      event.activities.forEach(a => {
+        activityEndTimes[a.id] = a.endTime || event.typicalEndTime || '15:00';
+      });
+    }
+    const defaultEndTime = event.typicalEndTime || '15:00';
+
+    // Get all entries without checkout for this date
+    const entriesQuery = await db.collection('timeEntries')
+      .where('eventId', '==', eventId)
+      .where('date', '==', date)
+      .where('checkOutTime', '==', null)
+      .get();
+
+    if (entriesQuery.empty) {
+      return {
+        success: true,
+        checkedOutCount: 0,
+        message: 'No students need checkout'
+      };
+    }
+
+    // Batch update all entries
+    const batch = db.batch();
+    let checkedOutCount = 0;
+
+    for (const doc of entriesQuery.docs) {
+      const entry = doc.data();
+
+      // Get end time for this activity
+      const endTime = activityEndTimes[entry.activityId] || defaultEndTime;
+      const [hours, mins] = endTime.split(':');
+
+      // Create checkout timestamp using the entry date and activity end time
+      const checkOutDate = new Date(date);
+      checkOutDate.setHours(parseInt(hours), parseInt(mins), 0, 0);
+      const checkOutTimestamp = Timestamp.fromDate(checkOutDate);
+
+      // Calculate hours
+      const checkInMs = entry.checkInTime.toMillis();
+      const checkOutMs = checkOutTimestamp.toMillis();
+      const minutes = Math.floor((checkOutMs - checkInMs) / 1000 / 60);
+      const hoursWorked = Math.round((minutes / 60) * 2) / 2;
+
+      // Get existing flags and add forced_checkout
+      const flags = [...(entry.flags || [])];
+      if (!flags.includes('forced_checkout')) {
+        flags.push('forced_checkout');
+      }
+
+      batch.update(doc.ref, {
+        checkOutTime: checkOutTimestamp,
+        checkOutBy: userId,
+        checkOutMethod: 'forced_bulk',
+        hoursWorked,
+        rawMinutes: minutes,
+        flags,
+        forcedCheckoutReason: reason || 'End of day bulk checkout',
+        forcedCheckoutBy: userId,
+        forcedCheckoutAt: Timestamp.now()
+      });
+
+      checkedOutCount++;
+    }
+
+    await batch.commit();
+
+    return {
+      success: true,
+      checkedOutCount,
+      message: `Successfully checked out ${checkedOutCount} students`
+    };
+  } catch (error) {
+    console.error('Force all checkout error:', error);
     if (error instanceof HttpsError) {
       throw error;
     }
@@ -224,10 +240,9 @@ export const getDailyReviewSummary = onCall(async (request) => {
 
     const summary = {
       total: entriesQuery.docs.length,
-      pending: 0,
       flagged: 0,
-      approved: 0,
-      noCheckout: 0
+      noCheckout: 0,
+      modified: 0
     };
 
     entriesQuery.docs.forEach(doc => {
@@ -237,18 +252,12 @@ export const getDailyReviewSummary = onCall(async (request) => {
         summary.noCheckout++;
       }
 
-      switch (data.reviewStatus) {
-        case 'pending':
-          summary.pending++;
-          break;
-        case 'flagged':
-          summary.flagged++;
-          break;
-        case 'approved':
-          summary.approved++;
-          break;
-        default:
-          summary.pending++;
+      if (data.flags && data.flags.length > 0) {
+        summary.flagged++;
+      }
+
+      if (data.modificationReason || data.forcedCheckoutReason) {
+        summary.modified++;
       }
     });
 

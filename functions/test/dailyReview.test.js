@@ -1,6 +1,6 @@
 /**
  * Tests for Daily Review Cloud Functions
- * bulkApprove, forceCheckOut, getDailyReviewSummary
+ * forceCheckOut, forceAllCheckOut, getDailyReviewSummary
  */
 import { jest } from '@jest/globals';
 
@@ -37,58 +37,20 @@ const mockTimeEntryDoc = {
     },
     checkOutTime: null,
     flags: [],
-    reviewStatus: 'pending',
     studentId: 'student123',
+    activityId: 'activity1',
   }),
 };
 
-const mockApprovedEntryDoc = {
-  ref: {
-    update: jest.fn().mockResolvedValue(undefined),
-  },
+const mockEventDoc = {
+  exists: true,
   data: () => ({
-    checkInTime: {
-      toMillis: () => mockCheckInTime.getTime(),
-    },
-    checkOutTime: {
-      toMillis: () => mockCheckOutTime.getTime(),
-    },
-    flags: [],
-    reviewStatus: 'approved',
-    studentId: 'student123',
-  }),
-};
-
-const mockPendingEntries = {
-  docs: [
-    {
-      id: 'entry1',
-      ref: { update: jest.fn().mockResolvedValue(undefined) },
-      data: () => ({
-        reviewStatus: 'pending',
-        checkOutTime: { toMillis: () => mockCheckOutTime.getTime() },
-        flags: [],
-      }),
-    },
-    {
-      id: 'entry2',
-      ref: { update: jest.fn().mockResolvedValue(undefined) },
-      data: () => ({
-        reviewStatus: 'pending',
-        checkOutTime: { toMillis: () => mockCheckOutTime.getTime() },
-        flags: [],
-      }),
-    },
-  ],
-};
-
-const mockFlaggedEntry = {
-  id: 'entry3',
-  ref: { update: jest.fn().mockResolvedValue(undefined) },
-  data: () => ({
-    reviewStatus: 'flagged',
-    checkOutTime: { toMillis: () => mockCheckOutTime.getTime() },
-    flags: ['early_arrival'],
+    name: 'VBS 2026',
+    typicalEndTime: '15:00',
+    activities: [
+      { id: 'activity1', name: 'Training', endTime: '12:00' },
+      { id: 'activity2', name: 'VBS Week', endTime: '15:00' },
+    ],
   }),
 };
 
@@ -120,132 +82,6 @@ jest.unstable_mockModule('firebase-functions/v2/https', () => ({
     }
   },
 }));
-
-describe('bulkApprove Cloud Function', () => {
-  let bulkApprove;
-
-  beforeAll(async () => {
-    const dailyReviewModule = await import('../src/dailyReview.js');
-    bulkApprove = dailyReviewModule.bulkApprove;
-  });
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-
-    mockCollection.mockReturnValue({
-      doc: mockDoc,
-      where: mockWhere,
-    });
-
-    mockDoc.mockReturnValue({
-      get: mockGet,
-    });
-
-    mockWhere.mockReturnValue({
-      where: mockWhere,
-      get: mockGet,
-    });
-  });
-
-  describe('validation', () => {
-    it('should throw error when eventId is missing', async () => {
-      const request = {
-        data: {
-          date: '2026-06-15',
-        },
-        auth: { uid: 'admin123' },
-      };
-
-      await expect(bulkApprove(request)).rejects.toThrow('Missing required fields');
-    });
-
-    it('should throw error when date is missing', async () => {
-      const request = {
-        data: {
-          eventId: 'event123',
-        },
-        auth: { uid: 'admin123' },
-      };
-
-      await expect(bulkApprove(request)).rejects.toThrow('Missing required fields');
-    });
-
-    it('should throw error when user is not authenticated', async () => {
-      const request = {
-        data: {
-          eventId: 'event123',
-          date: '2026-06-15',
-        },
-        // No auth
-      };
-
-      await expect(bulkApprove(request)).rejects.toThrow('User must be authenticated');
-    });
-  });
-
-  describe('successful bulk approve', () => {
-    beforeEach(() => {
-      mockGet.mockResolvedValueOnce(mockPendingEntries);
-    });
-
-    it('should approve all pending entries', async () => {
-      const request = {
-        data: {
-          eventId: 'event123',
-          date: '2026-06-15',
-        },
-        auth: { uid: 'admin123' },
-      };
-
-      const result = await bulkApprove(request);
-
-      expect(result.success).toBe(true);
-      expect(result.approvedCount).toBe(2);
-    });
-
-    it('should return zero when no entries to approve', async () => {
-      mockGet.mockReset();
-      mockGet.mockResolvedValueOnce({ docs: [] });
-
-      const request = {
-        data: {
-          eventId: 'event123',
-          date: '2026-06-15',
-        },
-        auth: { uid: 'admin123' },
-      };
-
-      const result = await bulkApprove(request);
-
-      expect(result.success).toBe(true);
-      expect(result.approvedCount).toBe(0);
-    });
-  });
-
-  describe('exclude flagged entries', () => {
-    it('should skip flagged entries when excludeFlagged is true', async () => {
-      mockGet.mockResolvedValueOnce({
-        docs: [...mockPendingEntries.docs, mockFlaggedEntry],
-      });
-
-      const request = {
-        data: {
-          eventId: 'event123',
-          date: '2026-06-15',
-          excludeFlagged: true,
-        },
-        auth: { uid: 'admin123' },
-      };
-
-      const result = await bulkApprove(request);
-
-      expect(result.success).toBe(true);
-      // Should only approve 2 pending entries, not the flagged one
-      expect(result.approvedCount).toBe(2);
-      expect(result.totalEntries).toBe(3);
-    });
-  });
-});
 
 describe('forceCheckOut Cloud Function', () => {
   let forceCheckOut;
@@ -408,6 +244,151 @@ describe('forceCheckOut Cloud Function', () => {
   });
 });
 
+describe('forceAllCheckOut Cloud Function', () => {
+  let forceAllCheckOut;
+
+  beforeAll(async () => {
+    const dailyReviewModule = await import('../src/dailyReview.js');
+    forceAllCheckOut = dailyReviewModule.forceAllCheckOut;
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    mockCollection.mockReturnValue({
+      doc: mockDoc,
+      where: mockWhere,
+    });
+
+    mockDoc.mockReturnValue({
+      get: mockGet,
+    });
+
+    mockWhere.mockReturnValue({
+      where: mockWhere,
+      get: mockGet,
+    });
+  });
+
+  describe('validation', () => {
+    it('should throw error when eventId is missing', async () => {
+      const request = {
+        data: {
+          date: '2026-06-15',
+        },
+        auth: { uid: 'admin123' },
+      };
+
+      await expect(forceAllCheckOut(request)).rejects.toThrow('Missing required fields');
+    });
+
+    it('should throw error when date is missing', async () => {
+      const request = {
+        data: {
+          eventId: 'event123',
+        },
+        auth: { uid: 'admin123' },
+      };
+
+      await expect(forceAllCheckOut(request)).rejects.toThrow('Missing required fields');
+    });
+
+    it('should throw error when user is not authenticated', async () => {
+      const request = {
+        data: {
+          eventId: 'event123',
+          date: '2026-06-15',
+        },
+        // No auth
+      };
+
+      await expect(forceAllCheckOut(request)).rejects.toThrow('User must be authenticated');
+    });
+  });
+
+  describe('event not found', () => {
+    it('should throw error when event does not exist', async () => {
+      mockGet.mockResolvedValueOnce({ exists: false });
+
+      const request = {
+        data: {
+          eventId: 'nonexistent',
+          date: '2026-06-15',
+        },
+        auth: { uid: 'admin123' },
+      };
+
+      await expect(forceAllCheckOut(request)).rejects.toThrow('Event not found');
+    });
+  });
+
+  describe('no entries to checkout', () => {
+    it('should return zero when no entries need checkout', async () => {
+      mockGet
+        .mockResolvedValueOnce(mockEventDoc) // Event lookup
+        .mockResolvedValueOnce({ empty: true, docs: [] }); // Entries query
+
+      const request = {
+        data: {
+          eventId: 'event123',
+          date: '2026-06-15',
+        },
+        auth: { uid: 'admin123' },
+      };
+
+      const result = await forceAllCheckOut(request);
+
+      expect(result.success).toBe(true);
+      expect(result.checkedOutCount).toBe(0);
+    });
+  });
+
+  describe('successful bulk checkout', () => {
+    it('should checkout all entries using activity end times', async () => {
+      const mockEntries = {
+        empty: false,
+        docs: [
+          {
+            ref: { id: 'entry1' },
+            data: () => ({
+              checkInTime: { toMillis: () => mockCheckInTime.getTime() },
+              activityId: 'activity1',
+              flags: [],
+            }),
+          },
+          {
+            ref: { id: 'entry2' },
+            data: () => ({
+              checkInTime: { toMillis: () => mockCheckInTime.getTime() },
+              activityId: 'activity2',
+              flags: [],
+            }),
+          },
+        ],
+      };
+
+      mockGet
+        .mockResolvedValueOnce(mockEventDoc) // Event lookup
+        .mockResolvedValueOnce(mockEntries); // Entries query
+
+      const request = {
+        data: {
+          eventId: 'event123',
+          date: '2026-06-15',
+          reason: 'End of day checkout',
+        },
+        auth: { uid: 'admin123' },
+      };
+
+      const result = await forceAllCheckOut(request);
+
+      expect(result.success).toBe(true);
+      expect(result.checkedOutCount).toBe(2);
+      expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
 describe('getDailyReviewSummary Cloud Function', () => {
   let getDailyReviewSummary;
 
@@ -455,11 +436,11 @@ describe('getDailyReviewSummary Cloud Function', () => {
     it('should return correct summary counts', async () => {
       mockGet.mockResolvedValueOnce({
         docs: [
-          { data: () => ({ reviewStatus: 'pending', checkOutTime: {} }) },
-          { data: () => ({ reviewStatus: 'pending', checkOutTime: {} }) },
-          { data: () => ({ reviewStatus: 'approved', checkOutTime: {} }) },
-          { data: () => ({ reviewStatus: 'flagged', checkOutTime: {} }) },
-          { data: () => ({ reviewStatus: 'pending', checkOutTime: null }) }, // No checkout
+          { data: () => ({ checkOutTime: {}, flags: [] }) },
+          { data: () => ({ checkOutTime: {}, flags: [] }) },
+          { data: () => ({ checkOutTime: {}, flags: ['early_arrival'] }) },
+          { data: () => ({ checkOutTime: {}, forcedCheckoutReason: 'Left early' }) },
+          { data: () => ({ checkOutTime: null, flags: [] }) }, // No checkout
         ],
       });
 
@@ -474,10 +455,9 @@ describe('getDailyReviewSummary Cloud Function', () => {
 
       expect(result.success).toBe(true);
       expect(result.summary.total).toBe(5);
-      expect(result.summary.pending).toBe(3);
-      expect(result.summary.approved).toBe(1);
       expect(result.summary.flagged).toBe(1);
       expect(result.summary.noCheckout).toBe(1);
+      expect(result.summary.modified).toBe(1);
     });
 
     it('should handle empty results', async () => {
@@ -494,10 +474,9 @@ describe('getDailyReviewSummary Cloud Function', () => {
 
       expect(result.success).toBe(true);
       expect(result.summary.total).toBe(0);
-      expect(result.summary.pending).toBe(0);
-      expect(result.summary.approved).toBe(0);
       expect(result.summary.flagged).toBe(0);
       expect(result.summary.noCheckout).toBe(0);
+      expect(result.summary.modified).toBe(0);
     });
   });
 });

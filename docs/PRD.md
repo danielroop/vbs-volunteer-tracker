@@ -29,9 +29,9 @@
 | Protected Routes | 5.5 | AdminRoute, ScannerRoute, ProtectedRoute |
 | Offline Queue | 5.4 | IndexedDB queue for check-ins/outs when offline |
 | PWA Support | 5.1 | Service worker, installable, offline-capable |
-| Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword), bulkApprove, forceCheckOut, getDailyReviewSummary |
+| Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword), forceCheckOut, forceAllCheckOut, getDailyReviewSummary |
 | Firestore Security Rules | 5.5 | Role-based access control |
-| Daily Review | 3.5.2 | Full daily review with bulk approve, force checkout, CSV/PDF export, search/filter |
+| Daily Review | 3.5.2 | Full daily review with force checkout, force all checkout, CSV/PDF export, search/filter, override reasons display |
 
 ### Partially Implemented
 

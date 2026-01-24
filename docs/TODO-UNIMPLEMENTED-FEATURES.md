@@ -176,16 +176,21 @@
 **Status:** Fully implemented on January 24, 2026
 
 **Implemented Features:**
-- ✅ `bulkApprove` Cloud Function - approves all pending, non-flagged entries
-- ✅ "Approve All Good Hours" button with count indicator
+- ✅ `forceCheckOut` Cloud Function - force checkout individual students with reason
+- ✅ `forceAllCheckOut` Cloud Function - bulk checkout all remaining students using activity end times
+- ✅ "Force All Checkout" button for end-of-day bulk checkout
+- ✅ Force checkout defaults to activity end time
 - ✅ PDF export with formatted daily summary (opens print dialog)
 - ✅ CSV export functionality (downloads file)
-- ✅ Status filter dropdown (All, Flagged, Approved, Pending, No Checkout)
+- ✅ Status filter dropdown (All, Flagged, No Checkout, Modified)
 - ✅ Student search/filter input
 - ✅ Date picker to review any date
-- ✅ Individual approve/edit buttons per entry
+- ✅ Date column prominently displayed on each entry
+- ✅ Activity column showing which bucket each entry belongs to
 - ✅ Edit hours modal with reason field (required)
-- ✅ Real-time stats display (total, approved, flagged, pending, no checkout)
+- ✅ Override reasons displayed on StudentDetailPage
+- ✅ Real-time stats display (total, flagged, no checkout, modified)
+- ✅ Original scan data preserved separate from override data (audit trail)
 
 ---
 

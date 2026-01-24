@@ -298,10 +298,10 @@ export default function StudentDetailPage() {
                 <div className="lg:col-span-3">
                     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th></tr></thead>
+                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th><th className="px-6 py-4">Notes</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
                                 {enrichedEntries.map(e => (
-                                    <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''}`}>
+                                    <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''} ${e.forcedCheckoutReason || e.modificationReason ? 'bg-blue-50' : ''}`}>
                                         <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
                                         <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>
                                         <td className="px-6 py-4 text-center text-gray-600">
@@ -325,6 +325,23 @@ export default function StudentDetailPage() {
                                                 </span>
                                             ) : (
                                                 e.actualHours.toFixed(2)
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-xs max-w-[200px]">
+                                            {e.forcedCheckoutReason && (
+                                                <div className="text-blue-600">
+                                                    <span className="font-semibold">Forced:</span> {e.forcedCheckoutReason}
+                                                </div>
+                                            )}
+                                            {e.modificationReason && (
+                                                <div className="text-blue-600">
+                                                    <span className="font-semibold">Modified:</span> {e.modificationReason}
+                                                </div>
+                                            )}
+                                            {e.flags && e.flags.length > 0 && (
+                                                <div className="text-amber-600">
+                                                    {e.flags.map(f => f === 'early_arrival' ? 'Early' : f === 'late_stay' ? 'Late' : f === 'forced_checkout' ? 'Forced' : f).join(', ')}
+                                                </div>
                                             )}
                                         </td>
                                     </tr>

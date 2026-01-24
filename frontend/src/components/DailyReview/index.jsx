@@ -3,18 +3,17 @@ import { db, functions } from '../../utils/firebase';
 import { collection, onSnapshot, query, where, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useEvent } from '../../contexts/EventContext';
-import { formatTime, formatHours, getTodayDateString } from '../../utils/hourCalculations';
+import { formatTime, formatHours, getTodayDateString, formatDate } from '../../utils/hourCalculations';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 
 /**
  * Daily Review Component
  * Per PRD Section 3.5.2: Daily Review (Nightly)
- * - Review and approve hours
+ * - Review time entries
  * - Flag early/late times
- * - Bulk approve
- * - Individual adjustments
- * - Force checkout
+ * - Force checkout for students who forgot
+ * - Force all checkout for end of event
  * - Export CSV/PDF
  */
 export default function DailyReview() {
@@ -25,7 +24,6 @@ export default function DailyReview() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [bulkApproving, setBulkApproving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   // Force checkout modal state
@@ -34,6 +32,13 @@ export default function DailyReview() {
     entry: null,
     checkOutTime: '',
     reason: '',
+    loading: false,
+    error: null
+  });
+
+  // Force all modal state
+  const [forceAllModal, setForceAllModal] = useState({
+    isOpen: false,
     loading: false,
     error: null
   });
@@ -99,12 +104,24 @@ export default function DailyReview() {
     return map;
   }, [students]);
 
+  // Create activity lookup map
+  const activityMap = useMemo(() => {
+    const map = {};
+    if (currentEvent?.activities) {
+      currentEvent.activities.forEach(a => {
+        map[a.id] = a;
+      });
+    }
+    return map;
+  }, [currentEvent?.activities]);
+
   // Merge entries with student data and apply filters
   const filteredEntries = useMemo(() => {
     return timeEntries
       .map(entry => ({
         ...entry,
-        student: studentMap[entry.studentId] || { firstName: 'Unknown', lastName: 'Student' }
+        student: studentMap[entry.studentId] || { firstName: 'Unknown', lastName: 'Student' },
+        activity: activityMap[entry.activityId] || { name: 'Unknown', endTime: '15:00' }
       }))
       .filter(entry => {
         // Search filter
@@ -114,81 +131,43 @@ export default function DailyReview() {
         }
 
         // Status filter
-        if (statusFilter === 'flagged' && entry.reviewStatus !== 'flagged') return false;
-        if (statusFilter === 'approved' && entry.reviewStatus !== 'approved') return false;
-        if (statusFilter === 'pending' && entry.reviewStatus !== 'pending') return false;
+        if (statusFilter === 'flagged' && (!entry.flags || entry.flags.length === 0)) return false;
         if (statusFilter === 'no-checkout' && entry.checkOutTime) return false;
+        if (statusFilter === 'modified' && !entry.modificationReason && !entry.forcedCheckoutReason) return false;
 
         return true;
       })
       .sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
-  }, [timeEntries, studentMap, searchTerm, statusFilter]);
+  }, [timeEntries, studentMap, activityMap, searchTerm, statusFilter]);
 
   // Calculate summary stats
   const stats = useMemo(() => {
     return {
       total: timeEntries.length,
-      pending: timeEntries.filter(e => e.reviewStatus === 'pending').length,
-      flagged: timeEntries.filter(e => e.reviewStatus === 'flagged').length,
-      approved: timeEntries.filter(e => e.reviewStatus === 'approved').length,
+      flagged: timeEntries.filter(e => e.flags && e.flags.length > 0).length,
       noCheckout: timeEntries.filter(e => !e.checkOutTime).length,
-      goodToApprove: timeEntries.filter(e =>
-        e.reviewStatus === 'pending' &&
-        e.checkOutTime &&
-        (!e.flags || e.flags.length === 0)
-      ).length
+      modified: timeEntries.filter(e => e.modificationReason || e.forcedCheckoutReason).length
     };
   }, [timeEntries]);
 
-  // Bulk approve handler
-  const handleBulkApprove = async () => {
-    if (!currentEvent?.id) return;
-
-    setBulkApproving(true);
-    try {
-      const bulkApproveFunc = httpsCallable(functions, 'bulkApprove');
-      const result = await bulkApproveFunc({
-        eventId: currentEvent.id,
-        date: selectedDate,
-        excludeFlagged: true
-      });
-
-      if (result.data.success) {
-        alert(`Successfully approved ${result.data.approvedCount} entries`);
-      }
-    } catch (error) {
-      console.error('Bulk approve error:', error);
-      alert('Error approving entries: ' + error.message);
-    } finally {
-      setBulkApproving(false);
-    }
-  };
-
-  // Individual approve handler
-  const handleApproveEntry = async (entryId) => {
-    try {
-      const entryRef = doc(db, 'timeEntries', entryId);
-      await updateDoc(entryRef, {
-        reviewStatus: 'approved'
-      });
-    } catch (error) {
-      console.error('Error approving entry:', error);
-      alert('Error approving entry: ' + error.message);
-    }
+  // Get activity end time for a given entry
+  const getActivityEndTime = (entry) => {
+    const activity = activityMap[entry.activityId];
+    return activity?.endTime || currentEvent?.typicalEndTime || '15:00';
   };
 
   // Open force checkout modal
   const openForceCheckoutModal = (entry) => {
-    // Default to typical end time or current time
-    const defaultTime = currentEvent?.typicalEndTime || '15:00';
-    const [hours, minutes] = defaultTime.split(':');
+    // Default to activity end time
+    const endTime = getActivityEndTime(entry);
+    const [hours, minutes] = endTime.split(':');
     const date = new Date(selectedDate);
     date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
     setForceCheckoutModal({
       isOpen: true,
       entry,
-      checkOutTime: date.toISOString().slice(0, 16), // Format for datetime-local input
+      checkOutTime: date.toISOString().slice(0, 16),
       reason: '',
       loading: false,
       error: null
@@ -228,6 +207,36 @@ export default function DailyReview() {
         ...prev,
         loading: false,
         error: error.message || 'Failed to force checkout'
+      }));
+    }
+  };
+
+  // Handle force all checkout
+  const handleForceAllCheckout = async () => {
+    setForceAllModal(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const forceAllCheckOutFunc = httpsCallable(functions, 'forceAllCheckOut');
+      const result = await forceAllCheckOutFunc({
+        eventId: currentEvent.id,
+        date: selectedDate,
+        reason: 'End of day bulk checkout'
+      });
+
+      if (result.data.success) {
+        setForceAllModal({
+          isOpen: false,
+          loading: false,
+          error: null
+        });
+        alert(`Successfully checked out ${result.data.checkedOutCount} students`);
+      }
+    } catch (error) {
+      console.error('Force all checkout error:', error);
+      setForceAllModal(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message || 'Failed to force checkout all'
       }));
     }
   };
@@ -279,9 +288,10 @@ export default function DailyReview() {
         checkOutTime,
         hoursWorked,
         rawMinutes,
-        modifiedBy: 'admin', // Would use actual user ID in production
+        modifiedBy: 'admin',
         modificationReason: editModal.reason,
         modifiedAt: new Date(),
+        // Store original values for audit trail
         originalCheckInTime: editModal.entry.checkInTime,
         originalCheckOutTime: editModal.entry.checkOutTime,
         originalHours: editModal.entry.hoursWorked
@@ -311,14 +321,16 @@ export default function DailyReview() {
     setExporting(true);
 
     try {
-      const headers = ['Name', 'Check-In', 'Check-Out', 'Hours', 'Status', 'Flags'];
+      const headers = ['Date', 'Name', 'Activity', 'Check-In', 'Check-Out', 'Hours', 'Flags', 'Override Reason'];
       const rows = filteredEntries.map(entry => [
+        entry.date,
         `${entry.student.lastName}, ${entry.student.firstName}`,
+        entry.activity?.name || '--',
         entry.checkInTime ? formatTime(entry.checkInTime) : '--',
         entry.checkOutTime ? formatTime(entry.checkOutTime) : 'Not checked out',
         entry.hoursWorked !== null ? entry.hoursWorked.toString() : '--',
-        entry.reviewStatus || 'pending',
-        (entry.flags || []).join('; ')
+        (entry.flags || []).join('; '),
+        entry.forcedCheckoutReason || entry.modificationReason || ''
       ]);
 
       const csvContent = [
@@ -345,7 +357,6 @@ export default function DailyReview() {
     setExporting(true);
 
     try {
-      // Create printable HTML
       const printContent = `
         <!DOCTYPE html>
         <html>
@@ -355,14 +366,12 @@ export default function DailyReview() {
             body { font-family: Arial, sans-serif; padding: 20px; }
             h1 { font-size: 18px; margin-bottom: 10px; }
             h2 { font-size: 14px; margin-bottom: 20px; color: #666; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; }
+            th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
             th { background-color: #f5f5f5; font-weight: bold; }
-            .status-approved { color: green; }
-            .status-flagged { color: orange; }
-            .status-pending { color: gray; }
-            .status-no-checkout { color: red; }
+            .status-no-checkout { color: red; font-weight: bold; }
             .flags { font-size: 10px; color: #666; }
+            .override { font-size: 9px; color: #0066cc; font-style: italic; }
             .summary { margin-bottom: 20px; padding: 10px; background: #f9f9f9; border-radius: 4px; }
             .summary span { margin-right: 20px; }
             @media print { body { padding: 0; } }
@@ -370,36 +379,40 @@ export default function DailyReview() {
         </head>
         <body>
           <h1>Daily Review Report</h1>
-          <h2>${currentEvent?.name || 'Event'} - ${new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
+          <h2>${currentEvent?.name || 'Event'} - ${formatDate(selectedDate)}</h2>
 
           <div class="summary">
             <span><strong>Total:</strong> ${stats.total}</span>
-            <span><strong>Approved:</strong> ${stats.approved}</span>
-            <span><strong>Pending:</strong> ${stats.pending}</span>
             <span><strong>Flagged:</strong> ${stats.flagged}</span>
             <span><strong>No Checkout:</strong> ${stats.noCheckout}</span>
+            <span><strong>Modified:</strong> ${stats.modified}</span>
           </div>
 
           <table>
             <thead>
               <tr>
+                <th>Date</th>
                 <th>Name</th>
+                <th>Activity</th>
                 <th>Check-In</th>
                 <th>Check-Out</th>
                 <th>Hours</th>
-                <th>Status</th>
                 <th>Notes</th>
               </tr>
             </thead>
             <tbody>
               ${filteredEntries.map(entry => `
                 <tr>
+                  <td>${entry.date}</td>
                   <td>${entry.student.lastName}, ${entry.student.firstName}</td>
+                  <td>${entry.activity?.name || '--'}</td>
                   <td>${entry.checkInTime ? formatTime(entry.checkInTime) : '--'}</td>
                   <td class="${!entry.checkOutTime ? 'status-no-checkout' : ''}">${entry.checkOutTime ? formatTime(entry.checkOutTime) : 'Not checked out'}</td>
                   <td>${entry.hoursWorked !== null ? entry.hoursWorked : '--'}</td>
-                  <td class="status-${entry.reviewStatus || 'pending'}">${getStatusDisplay(entry)}</td>
-                  <td class="flags">${(entry.flags || []).map(f => formatFlag(f)).join(', ')}</td>
+                  <td>
+                    <span class="flags">${(entry.flags || []).map(f => formatFlag(f)).join(', ')}</span>
+                    ${entry.forcedCheckoutReason || entry.modificationReason ? `<div class="override">Override: ${entry.forcedCheckoutReason || entry.modificationReason}</div>` : ''}
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -430,17 +443,18 @@ export default function DailyReview() {
 
   // Helper functions for display
   const getStatusDisplay = (entry) => {
-    if (!entry.checkOutTime) return '🔴 No Out';
-    if (entry.reviewStatus === 'approved') return '✓ Approved';
-    if (entry.reviewStatus === 'flagged') return '⚠️ Flagged';
-    return '○ Pending';
+    if (!entry.checkOutTime) return '🔴 No Checkout';
+    if (entry.forcedCheckoutReason) return '⚡ Forced';
+    if (entry.modificationReason) return '✏️ Modified';
+    if (entry.flags && entry.flags.length > 0) return '⚠️ Flagged';
+    return '✓ Complete';
   };
 
   const getStatusClass = (entry) => {
     if (!entry.checkOutTime) return 'text-red-600';
-    if (entry.reviewStatus === 'approved') return 'text-green-600';
-    if (entry.reviewStatus === 'flagged') return 'text-amber-600';
-    return 'text-gray-500';
+    if (entry.forcedCheckoutReason || entry.modificationReason) return 'text-blue-600';
+    if (entry.flags && entry.flags.length > 0) return 'text-amber-600';
+    return 'text-green-600';
   };
 
   const formatFlag = (flag) => {
@@ -450,15 +464,6 @@ export default function DailyReview() {
       forced_checkout: 'Forced checkout'
     };
     return flagLabels[flag] || flag;
-  };
-
-  const formatDateForDisplay = (dateStr) => {
-    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
   };
 
   if (!currentEvent) {
@@ -496,8 +501,8 @@ export default function DailyReview() {
             </div>
           </div>
 
-          <div className="mt-4 text-lg">
-            {formatDateForDisplay(selectedDate)}
+          <div className="mt-4 text-lg font-semibold text-gray-800">
+            {formatDate(selectedDate)}
           </div>
 
           {/* Stats */}
@@ -505,18 +510,19 @@ export default function DailyReview() {
             <div className="text-gray-600">
               <span className="font-bold text-gray-900">{stats.total}</span> total entries
             </div>
-            <div className="text-green-600">
-              ✓ <span className="font-bold">{stats.approved}</span> approved
-            </div>
-            <div className="text-amber-600">
-              ⚠️ <span className="font-bold">{stats.flagged}</span> flagged
-            </div>
-            <div className="text-gray-500">
-              ○ <span className="font-bold">{stats.pending}</span> pending
-            </div>
+            {stats.flagged > 0 && (
+              <div className="text-amber-600">
+                ⚠️ <span className="font-bold">{stats.flagged}</span> flagged
+              </div>
+            )}
             {stats.noCheckout > 0 && (
               <div className="text-red-600">
                 🔴 <span className="font-bold">{stats.noCheckout}</span> no checkout
+              </div>
+            )}
+            {stats.modified > 0 && (
+              <div className="text-blue-600">
+                ✏️ <span className="font-bold">{stats.modified}</span> modified
               </div>
             )}
           </div>
@@ -537,9 +543,8 @@ export default function DailyReview() {
             >
               <option value="all">All Entries</option>
               <option value="flagged">Flagged Only</option>
-              <option value="approved">Approved Only</option>
-              <option value="pending">Pending Only</option>
               <option value="no-checkout">No Checkout</option>
+              <option value="modified">Modified Only</option>
             </select>
           </div>
         </div>
@@ -549,24 +554,26 @@ export default function DailyReview() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-In</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-Out</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-In</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-Out</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                     Loading...
                   </td>
                 </tr>
               ) : filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                     {searchTerm || statusFilter !== 'all'
                       ? 'No entries match your filters'
                       : 'No entries for this date'}
@@ -575,7 +582,10 @@ export default function DailyReview() {
               ) : (
                 filteredEntries.map(entry => (
                   <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {entry.date}
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">
                         {entry.student.lastName}, {entry.student.firstName}
                       </div>
@@ -584,28 +594,36 @@ export default function DailyReview() {
                           {entry.flags.map(f => formatFlag(f)).join(' • ')}
                         </div>
                       )}
+                      {(entry.forcedCheckoutReason || entry.modificationReason) && (
+                        <div className="text-xs text-blue-600 mt-1 italic">
+                          Override: {entry.forcedCheckoutReason || entry.modificationReason}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {entry.activity?.name || '--'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
                       {entry.checkInTime ? formatTime(entry.checkInTime) : '--'}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3 text-sm">
                       {entry.checkOutTime ? (
                         <span className="text-gray-600">{formatTime(entry.checkOutTime)}</span>
                       ) : (
                         <span className="text-red-600 font-medium">Not checked out</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-4 py-3 text-sm text-gray-600">
                       {entry.hoursWorked !== null && entry.hoursWorked !== undefined
                         ? formatHours(entry.hoursWorked)
                         : '--'}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`font-medium ${getStatusClass(entry)}`}>
+                    <td className="px-4 py-3">
+                      <span className={`text-sm font-medium ${getStatusClass(entry)}`}>
                         {getStatusDisplay(entry)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {!entry.checkOutTime ? (
                           <Button
@@ -615,23 +633,6 @@ export default function DailyReview() {
                           >
                             Force Out
                           </Button>
-                        ) : entry.reviewStatus !== 'approved' ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="success"
-                              onClick={() => handleApproveEntry(entry.id)}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => openEditModal(entry)}
-                            >
-                              Edit
-                            </Button>
-                          </>
                         ) : (
                           <Button
                             size="sm"
@@ -658,24 +659,24 @@ export default function DailyReview() {
               onClick={handleExportCSV}
               disabled={exporting || filteredEntries.length === 0}
             >
-              📊 Export CSV
+              Export CSV
             </Button>
             <Button
               variant="secondary"
               onClick={handleExportPDF}
               disabled={exporting || filteredEntries.length === 0}
             >
-              📄 Export PDF
+              Export PDF
             </Button>
           </div>
-          <Button
-            variant="success"
-            onClick={handleBulkApprove}
-            disabled={bulkApproving || stats.goodToApprove === 0}
-            loading={bulkApproving}
-          >
-            ✓ Approve All Good Hours ({stats.goodToApprove})
-          </Button>
+          {stats.noCheckout > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setForceAllModal({ isOpen: true, loading: false, error: null })}
+            >
+              Force All Checkout ({stats.noCheckout})
+            </Button>
+          )}
         </div>
       </div>
 
@@ -714,7 +715,13 @@ export default function DailyReview() {
                 </span>
               </p>
               <p className="text-sm text-gray-500 mt-1">
+                Activity: {forceCheckoutModal.entry.activity?.name || 'Unknown'}
+              </p>
+              <p className="text-sm text-gray-500">
                 Checked in at: {formatTime(forceCheckoutModal.entry.checkInTime)}
+              </p>
+              <p className="text-sm text-blue-600 mt-2">
+                Default checkout time is set to activity end time ({getActivityEndTime(forceCheckoutModal.entry)})
               </p>
             </div>
 
@@ -757,6 +764,51 @@ export default function DailyReview() {
         )}
       </Modal>
 
+      {/* Force All Checkout Modal */}
+      <Modal
+        isOpen={forceAllModal.isOpen}
+        onClose={() => setForceAllModal({ isOpen: false, loading: false, error: null })}
+        title="Force All Checkout"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setForceAllModal({ isOpen: false, loading: false, error: null })}
+              disabled={forceAllModal.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleForceAllCheckout}
+              loading={forceAllModal.loading}
+            >
+              Force All Checkout
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            This will force checkout <span className="font-bold text-red-600">{stats.noCheckout}</span> students
+            who haven't checked out yet.
+          </p>
+          <p className="text-gray-600">
+            Each student will be checked out at their activity's end time.
+          </p>
+          <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded">
+            This action is typically used at the end of the event day or week to generate reports.
+          </p>
+
+          {forceAllModal.error && (
+            <div className="text-red-600 text-sm">
+              {forceAllModal.error}
+            </div>
+          )}
+        </div>
+      </Modal>
+
       {/* Edit Hours Modal */}
       <Modal
         isOpen={editModal.isOpen}
@@ -790,6 +842,9 @@ export default function DailyReview() {
                 <span className="font-bold text-gray-900">
                   {editModal.entry.student?.firstName} {editModal.entry.student?.lastName}
                 </span>
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Date: {editModal.entry.date} | Activity: {editModal.entry.activity?.name || 'Unknown'}
               </p>
             </div>
 

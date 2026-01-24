@@ -19,4 +19,4 @@ export { generateForms } from './src/generateForms.js';
 export { createUser, updateUser, deleteUser, listUsers, resetUserPassword } from './src/userManagement.js';
 
 // Daily Review Functions (PRD Section 3.5.2)
-export { bulkApprove, forceCheckOut, getDailyReviewSummary } from './src/dailyReview.js';
+export { forceCheckOut, forceAllCheckOut, getDailyReviewSummary } from './src/dailyReview.js';

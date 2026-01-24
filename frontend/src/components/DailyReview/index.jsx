@@ -48,6 +48,8 @@ export default function DailyReview() {
   const [editModal, setEditModal] = useState({
     isOpen: false,
     entry: null,
+    originalCheckInTime: '',
+    originalCheckOutTime: '',
     checkInTime: '',
     checkOutTime: '',
     reason: '',
@@ -250,11 +252,16 @@ export default function DailyReview() {
       return d.toISOString().slice(0, 16);
     };
 
+    const originalIn = formatDateTimeLocal(entry.checkInTime);
+    const originalOut = formatDateTimeLocal(entry.checkOutTime);
+
     setEditModal({
       isOpen: true,
       entry,
-      checkInTime: formatDateTimeLocal(entry.checkInTime),
-      checkOutTime: formatDateTimeLocal(entry.checkOutTime),
+      originalCheckInTime: originalIn,
+      originalCheckOutTime: originalOut,
+      checkInTime: originalIn,
+      checkOutTime: originalOut,
       reason: '',
       loading: false,
       error: null
@@ -283,6 +290,30 @@ export default function DailyReview() {
         hoursWorked = Math.round((minutes / 60) * 2) / 2; // Round to nearest 0.5
       }
 
+      // Build change log message
+      const oldIn = editModal.originalCheckInTime ? formatTime(new Date(editModal.originalCheckInTime)) : 'none';
+      const newIn = formatTime(checkInTime);
+      const oldOut = editModal.originalCheckOutTime ? formatTime(new Date(editModal.originalCheckOutTime)) : 'none';
+      const newOut = checkOutTime ? formatTime(checkOutTime) : 'none';
+
+      const changeDescription = `Changed Check-In from ${oldIn} to ${newIn} and Check-Out from ${oldOut} to ${newOut} for "${editModal.reason}"`;
+
+      // Create change log entry
+      const changeLogEntry = {
+        timestamp: new Date().toISOString(),
+        modifiedBy: 'admin',
+        type: 'edit',
+        oldCheckInTime: editModal.originalCheckInTime,
+        newCheckInTime: editModal.checkInTime,
+        oldCheckOutTime: editModal.originalCheckOutTime,
+        newCheckOutTime: editModal.checkOutTime,
+        reason: editModal.reason,
+        description: changeDescription
+      };
+
+      // Get existing change log or create new array
+      const existingChangeLog = editModal.entry.changeLog || [];
+
       const entryRef = doc(db, 'timeEntries', editModal.entry.id);
       await updateDoc(entryRef, {
         checkInTime,
@@ -290,17 +321,16 @@ export default function DailyReview() {
         hoursWorked,
         rawMinutes,
         modifiedBy: 'admin',
-        modificationReason: editModal.reason,
+        modificationReason: changeDescription,
         modifiedAt: new Date(),
-        // Store original values for audit trail
-        originalCheckInTime: editModal.entry.checkInTime,
-        originalCheckOutTime: editModal.entry.checkOutTime,
-        originalHours: editModal.entry.hoursWorked
+        changeLog: [...existingChangeLog, changeLogEntry]
       });
 
       setEditModal({
         isOpen: false,
         entry: null,
+        originalCheckInTime: '',
+        originalCheckOutTime: '',
         checkInTime: '',
         checkOutTime: '',
         reason: '',
@@ -617,26 +647,18 @@ export default function DailyReview() {
               ) : (
                 filteredEntries.map(entry => (
                   <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      {entry.date}
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {entry.checkInTime ? new Date(entry.checkInTime).toLocaleDateString() : entry.date}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">
                         {entry.student.lastName}, {entry.student.firstName}
                       </div>
-                      {entry.flags && entry.flags.length > 0 && (
-                        <div className="text-xs text-amber-600 mt-1">
-                          {entry.flags.map(f => formatFlag(f)).join(' • ')}
-                        </div>
-                      )}
-                      {(entry.forcedCheckoutReason || entry.modificationReason) && (
-                        <div className="text-xs text-blue-600 mt-1 italic">
-                          Override: {entry.forcedCheckoutReason || entry.modificationReason}
-                        </div>
-                      )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {entry.activity?.name || '--'}
+                    <td className="px-4 py-3">
+                      <span className="uppercase font-bold text-[10px] text-blue-600">
+                        {entry.activity?.name || '--'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {entry.checkInTime ? formatTime(entry.checkInTime) : '--'}
@@ -660,21 +682,20 @@ export default function DailyReview() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
-                        {!entry.checkOutTime ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openEditModal(entry)}
+                        >
+                          Edit
+                        </Button>
+                        {!entry.checkOutTime && (
                           <Button
                             size="sm"
                             variant="danger"
                             onClick={() => openForceCheckoutModal(entry)}
                           >
                             Force Out
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => openEditModal(entry)}
-                          >
-                            Edit
                           </Button>
                         )}
                       </div>
@@ -879,14 +900,34 @@ export default function DailyReview() {
                 </span>
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                Date: {editModal.entry.date} | Activity: {editModal.entry.activity?.name || 'Unknown'}
+                Date: {editModal.entry.checkInTime ? new Date(editModal.entry.checkInTime).toLocaleDateString() : editModal.entry.date} | Activity: {editModal.entry.activity?.name || 'Unknown'}
               </p>
             </div>
 
+            {/* Original Times (Read-Only) */}
+            <div className="bg-gray-100 p-3 rounded-lg">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Original Values</p>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Check-In:</span>{' '}
+                  <span className="font-medium">
+                    {editModal.originalCheckInTime ? formatTime(new Date(editModal.originalCheckInTime)) : 'None'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Check-Out:</span>{' '}
+                  <span className="font-medium">
+                    {editModal.originalCheckOutTime ? formatTime(new Date(editModal.originalCheckOutTime)) : 'None'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Editable Times */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Check-In Time
+                  New Check-In Time
                 </label>
                 <input
                   type="datetime-local"
@@ -900,7 +941,7 @@ export default function DailyReview() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Check-Out Time
+                  New Check-Out Time
                 </label>
                 <input
                   type="datetime-local"
@@ -928,6 +969,20 @@ export default function DailyReview() {
                     })()}
                   </span>
                 </p>
+              </div>
+            )}
+
+            {/* Existing Change Log */}
+            {editModal.entry.changeLog && editModal.entry.changeLog.length > 0 && (
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-xs font-semibold text-blue-600 uppercase mb-2">Previous Changes</p>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {editModal.entry.changeLog.map((log, idx) => (
+                    <div key={idx} className="text-xs text-blue-700">
+                      <span className="text-gray-500">{new Date(log.timestamp).toLocaleString()}:</span> {log.description}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

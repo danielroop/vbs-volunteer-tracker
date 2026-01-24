@@ -1,6 +1,15 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
+// Helper to safely convert Timestamp or mock to Date
+const toDate = (timestamp) => {
+  if (!timestamp) return null;
+  if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp.toMillis === 'function') return new Date(timestamp.toMillis());
+  return new Date(timestamp);
+};
+
 /**
  * Force Check-Out Cloud Function
  * Per PRD Section 3.5.2: Daily Review (Nightly)
@@ -63,6 +72,24 @@ export const forceCheckOut = onCall(async (request) => {
       flags.push('forced_checkout');
     }
 
+    // Build change log entry
+    const checkInTimeStr = toDate(entry.checkInTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const checkOutTimeStr = toDate(checkOutTimestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const changeDescription = `Forced Check-Out at ${checkOutTimeStr} (checked in at ${checkInTimeStr}) for "${reason}"`;
+
+    const changeLogEntry = {
+      timestamp: new Date().toISOString(),
+      modifiedBy: userId,
+      type: 'force_checkout',
+      oldCheckOutTime: null,
+      newCheckOutTime: toDate(checkOutTimestamp).toISOString(),
+      reason: reason,
+      description: changeDescription
+    };
+
+    // Get existing change log or create new array
+    const existingChangeLog = entry.changeLog || [];
+
     // Update entry - keep original scan data separate from override
     await entryRef.update({
       checkOutTime: checkOutTimestamp,
@@ -72,9 +99,10 @@ export const forceCheckOut = onCall(async (request) => {
       rawMinutes: minutes,
       flags,
       // Override tracking - separate from original scan data
-      forcedCheckoutReason: reason,
+      forcedCheckoutReason: changeDescription,
       forcedCheckoutBy: userId,
-      forcedCheckoutAt: Timestamp.now()
+      forcedCheckoutAt: Timestamp.now(),
+      changeLog: [...existingChangeLog, changeLogEntry]
     });
 
     // Get student info for response
@@ -184,6 +212,25 @@ export const forceAllCheckOut = onCall(async (request) => {
         flags.push('forced_checkout');
       }
 
+      // Build change log entry
+      const checkInTimeStr = toDate(entry.checkInTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const checkOutTimeStr = toDate(checkOutTimestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const forceReason = reason || 'End of day bulk checkout';
+      const changeDescription = `Bulk Forced Check-Out at ${checkOutTimeStr} (checked in at ${checkInTimeStr}) for "${forceReason}"`;
+
+      const changeLogEntry = {
+        timestamp: new Date().toISOString(),
+        modifiedBy: userId,
+        type: 'force_checkout_bulk',
+        oldCheckOutTime: null,
+        newCheckOutTime: toDate(checkOutTimestamp).toISOString(),
+        reason: forceReason,
+        description: changeDescription
+      };
+
+      // Get existing change log or create new array
+      const existingChangeLog = entry.changeLog || [];
+
       batch.update(doc.ref, {
         checkOutTime: checkOutTimestamp,
         checkOutBy: userId,
@@ -191,9 +238,10 @@ export const forceAllCheckOut = onCall(async (request) => {
         hoursWorked,
         rawMinutes: minutes,
         flags,
-        forcedCheckoutReason: reason || 'End of day bulk checkout',
+        forcedCheckoutReason: changeDescription,
         forcedCheckoutBy: userId,
-        forcedCheckoutAt: Timestamp.now()
+        forcedCheckoutAt: Timestamp.now(),
+        changeLog: [...existingChangeLog, changeLogEntry]
       });
 
       checkedOutCount++;

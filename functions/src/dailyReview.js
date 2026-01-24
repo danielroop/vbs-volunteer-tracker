@@ -196,7 +196,9 @@ export const forceAllCheckOut = onCall(async (request) => {
       const [hours, mins] = endTime.split(':');
 
       // Create checkout timestamp using the entry date and activity end time
-      const checkOutDate = new Date(date);
+      // Parse date string as local time (not UTC) by using components
+      const [year, month, day] = date.split('-').map(Number);
+      const checkOutDate = new Date(year, month - 1, day); // month is 0-indexed
       checkOutDate.setHours(parseInt(hours), parseInt(mins), 0, 0);
       const checkOutTimestamp = Timestamp.fromDate(checkOutDate);
 

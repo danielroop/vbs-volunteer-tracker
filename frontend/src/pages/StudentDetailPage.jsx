@@ -100,8 +100,6 @@ export default function StudentDetailPage() {
                 return entry;
             });
 
-            console.log(updatedActivityEntries);
-
             // 4. Format strings like "1/1/26 - 1/3/26, 1/5/26"
             const dateStrings = groups.map(group => {
                 const start = new Date(group[0]);
@@ -143,12 +141,43 @@ export default function StudentDetailPage() {
     const overrideHours = parseFloat(student?.overrideHours || 0);
     const grandTotal = totalCalculatedHours + overrideHours;
 
+    /**
+     * Enriched entries with projected checkout times for display in the table
+     */
+    const enrichedEntries = useMemo(() => {
+        if (!currentEvent?.activities || entries.length === 0) return [];
+
+        return entries.map(entry => {
+            const activity = currentEvent.activities.find(a => a.id === entry.activityId);
+
+            if (!entry.checkOutTime && activity?.endTime) {
+                const datePart = entry.checkInTime.toDate().toISOString().split('T')[0];
+                const defaultedDateTime = `${datePart}T${activity.endTime}`;
+                const projectedCheckOut = Timestamp.fromDate(new Date(defaultedDateTime));
+                const diff = (projectedCheckOut.seconds - entry.checkInTime.seconds) / 3600;
+
+                return {
+                    ...entry,
+                    projectedCheckOut,
+                    projectedHours: roundTime(diff),
+                    isProjected: true
+                };
+            }
+
+            // Real checkout exists
+            const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
+            return {
+                ...entry,
+                actualHours: roundTime(diff),
+                isProjected: false
+            };
+        });
+    }, [entries, currentEvent]);
+
     const handlePrint = (mode) => {
         setPrintMode(mode);
         setTimeout(() => { window.print(); setPrintMode(null); }, 150);
     };
-
-    console.log(activityLog);
 
     if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
 
@@ -200,12 +229,27 @@ export default function StudentDetailPage() {
                         {activityLog.map(act => (
                             <div key={act.name} className="flex justify-between items-center">
                                 <span className="text-sm font-semibold text-gray-600">{act.name}</span>
-                                <span className="text-sm font-black text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">{act.totalHours}</span>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-sm font-black text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">{act.totalHours}</span>
+                                    {parseFloat(act.totalProjectedHours) > 0 && (
+                                        <span className="text-sm font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">+{act.totalProjectedHours}</span>
+                                    )}
+                                </div>
                             </div>
                         ))}
-                        <div className="pt-4 border-t-2 border-dashed flex justify-between items-center">
-                            <span className="text-sm font-black text-primary-700 uppercase">Grand Total</span>
-                            <span className="text-2xl font-black text-primary-600">{grandTotal.toFixed(2)} + {totalProjectedHours.toFixed(2)}</span>
+                        <div className="pt-4 border-t-2 border-dashed">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-black text-primary-700 uppercase">Grand Total</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-2xl font-black text-primary-600">{grandTotal.toFixed(2)}</span>
+                                    {totalProjectedHours > 0 && (
+                                        <span className="text-lg font-bold text-amber-600">+{totalProjectedHours.toFixed(2)}</span>
+                                    )}
+                                </div>
+                            </div>
+                            {totalProjectedHours > 0 && (
+                                <p className="text-xs text-amber-600 mt-2 italic">Projected hours based on activity end times</p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -215,11 +259,20 @@ export default function StudentDetailPage() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-right">Hours</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
-                                {events.map(e => (
-                                    <tr key={e.id} className="text-sm">
+                                {enrichedEntries.map(e => (
+                                    <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''}`}>
                                         <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
                                         <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>
-                                        <td className="px-6 py-4 text-right font-black">{e.checkOutTime ? roundTime((e.checkOutTime.seconds - e.checkInTime.seconds) / 3600).toFixed(2) : '---'}</td>
+                                        <td className={`px-6 py-4 text-right font-black ${e.isProjected ? 'text-amber-600' : ''}`}>
+                                            {e.isProjected ? (
+                                                <span className="inline-flex items-center gap-1">
+                                                    {e.projectedHours.toFixed(2)}
+                                                    <span className="text-[10px] font-medium text-amber-500">(projected)</span>
+                                                </span>
+                                            ) : (
+                                                e.actualHours.toFixed(2)
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

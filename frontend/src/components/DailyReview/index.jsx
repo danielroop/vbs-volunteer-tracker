@@ -164,7 +164,9 @@ export default function DailyReview() {
     // Default to activity end time
     const endTime = getActivityEndTime(entry);
     const [hours, mins] = endTime.split(':');
-    const date = new Date(selectedDate);
+    // Parse date string as local time (not UTC) by using components
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    const date = new Date(year, month - 1, day); // month is 0-indexed
     date.setHours(parseInt(hours), parseInt(mins), 0, 0);
 
     // Format for datetime-local using LOCAL time (not UTC)

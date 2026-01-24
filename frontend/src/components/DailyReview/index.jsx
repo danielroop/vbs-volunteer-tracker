@@ -163,14 +163,22 @@ export default function DailyReview() {
   const openForceCheckoutModal = (entry) => {
     // Default to activity end time
     const endTime = getActivityEndTime(entry);
-    const [hours, minutes] = endTime.split(':');
+    const [hours, mins] = endTime.split(':');
     const date = new Date(selectedDate);
-    date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    date.setHours(parseInt(hours), parseInt(mins), 0, 0);
+
+    // Format for datetime-local using LOCAL time (not UTC)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const localDateTime = `${year}-${month}-${day}T${hh}:${mm}`;
 
     setForceCheckoutModal({
       isOpen: true,
       entry,
-      checkOutTime: date.toISOString().slice(0, 16),
+      checkOutTime: localDateTime,
       reason: '',
       loading: false,
       error: null
@@ -246,10 +254,16 @@ export default function DailyReview() {
 
   // Open edit modal
   const openEditModal = (entry) => {
+    // Format date for datetime-local input using LOCAL time (not UTC)
     const formatDateTimeLocal = (date) => {
       if (!date) return '';
       const d = new Date(date);
-      return d.toISOString().slice(0, 16);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
 
     const originalIn = formatDateTimeLocal(entry.checkInTime);

@@ -296,7 +296,8 @@ describe('getFlagsForCheckOut helper', () => {
     typical.setHours(parseInt(hour), parseInt(min), 0, 0);
 
     const fifteenMinutes = 15 * 60 * 1000;
-    const isLate = checkOutTime > (typical + fifteenMinutes);
+    // Use getTime() for reliable comparison
+    const isLate = checkOutTime.getTime() > (typical.getTime() + fifteenMinutes);
 
     expect(isLate).toBe(true);
   });
@@ -310,7 +311,8 @@ describe('getFlagsForCheckOut helper', () => {
     typical.setHours(parseInt(hour), parseInt(min), 0, 0);
 
     const fifteenMinutes = 15 * 60 * 1000;
-    const isLate = checkOutTime > (typical + fifteenMinutes);
+    // Use getTime() for reliable comparison
+    const isLate = checkOutTime.getTime() > (typical.getTime() + fifteenMinutes);
 
     expect(isLate).toBe(false);
   });
@@ -318,7 +320,8 @@ describe('getFlagsForCheckOut helper', () => {
 
 describe('getMonday helper', () => {
   it('should return Monday for a Wednesday', () => {
-    const wednesday = new Date('2026-06-17'); // Wednesday
+    // Use explicit time to avoid timezone issues
+    const wednesday = new Date('2026-06-17T12:00:00'); // Wednesday
     const d = new Date(wednesday);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
@@ -329,7 +332,8 @@ describe('getMonday helper', () => {
   });
 
   it('should return previous Monday for a Sunday', () => {
-    const sunday = new Date('2026-06-21'); // Sunday
+    // Use explicit time to avoid timezone issues
+    const sunday = new Date('2026-06-21T12:00:00'); // Sunday
     const d = new Date(sunday);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
@@ -340,7 +344,8 @@ describe('getMonday helper', () => {
   });
 
   it('should return same day for a Monday', () => {
-    const monday = new Date('2026-06-15'); // Monday
+    // Use explicit time to avoid timezone issues
+    const monday = new Date('2026-06-15T12:00:00'); // Monday
     const d = new Date(monday);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);

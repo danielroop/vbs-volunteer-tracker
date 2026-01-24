@@ -1,4 +1,5 @@
 import React from 'react';
+import Header from '../common/Header';
 import Button from '../common/Button';
 
 /**
@@ -11,9 +12,10 @@ import Button from '../common/Button';
  */
 export default function FormGeneration() {
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Page Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-4">
           <h1 className="text-2xl font-bold text-gray-900">
             Form Generation - {new Date().toLocaleDateString('en-US', {
@@ -26,10 +28,10 @@ export default function FormGeneration() {
 
           <div className="mt-4 space-y-2">
             <div className="text-green-600">
-              ✓ Mon-Thu hours reviewed and approved
+              Mon-Thu hours reviewed and approved
             </div>
             <div className="text-amber-600">
-              ⏳ Friday: <span className="font-bold">--</span> students still checked in
+              Friday: <span className="font-bold">--</span> students still checked in
             </div>
           </div>
         </div>
@@ -108,6 +110,7 @@ export default function FormGeneration() {
               Print All
             </Button>
           </div>
+        </div>
         </div>
       </div>
     </div>

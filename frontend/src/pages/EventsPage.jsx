@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../utils/firebase';
 import { collection, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
+import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
-import { useNavigate, Link } from 'react-router-dom'; // Added Link for navigation
 
 export default function EventsPage() {
-    const navigate = useNavigate();
     const { currentEvent, switchActiveEvent } = useEvent();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -95,23 +94,27 @@ export default function EventsPage() {
         }
     };
 
-    if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
+    if (loading) return (
+        <div className="min-h-screen bg-gray-50">
+            <Header />
+            <div className="p-20 text-center"><Spinner size="lg" /></div>
+        </div>
+    );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
-            {/* NAVIGATION & HEADER */}
-            <div className="mb-8">
-                <Link to="/" className="text-primary-600 font-bold text-sm hover:underline mb-2 block">
-                    ← Back to Dashboard
-                </Link>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Events Management</h1>
-                        <p className="text-gray-500 font-medium">Configure organization details and time buckets.</p>
+        <div className="min-h-screen bg-gray-50">
+            <Header />
+            <div className="p-6 max-w-7xl mx-auto">
+                {/* PAGE HEADER */}
+                <div className="mb-8">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Events Management</h1>
+                            <p className="text-gray-500 font-medium">Configure organization details and time buckets.</p>
+                        </div>
+                        <Button onClick={handleCreateNew} variant="primary">+ Create New Event</Button>
                     </div>
-                    <Button onClick={handleCreateNew} variant="primary">+ Create New Event</Button>
                 </div>
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {events.map(event => {
@@ -290,6 +293,7 @@ export default function EventsPage() {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 }

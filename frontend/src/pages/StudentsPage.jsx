@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../utils/firebase';
 import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
+import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
@@ -160,10 +161,17 @@ export default function StudentsPage() {
     }, 150);
   };
 
-  if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <div className="p-20 text-center"><Spinner size="lg" /></div>
+    </div>
+  );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <div className="p-6 max-w-7xl mx-auto">
       <style>
         {`
           @media print {
@@ -239,28 +247,21 @@ export default function StudentsPage() {
         `}
       </style>
 
-      {/* HEADER SECTION */}
+      {/* PAGE HEADER WITH ACTIONS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 no-print">
         <div>
-          <Link to="/" className="text-primary-600 font-bold text-sm hover:underline mb-2 block">← Back to Dashboard</Link>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Volunteer Roster</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-gray-500 font-medium text-sm">Active Event:</span>
-            <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
-              {currentEvent?.name || 'No Event Selected'}
-            </span>
-          </div>
         </div>
 
-        <div className="flex gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap gap-3 w-full md:w-auto">
           <input
             placeholder="Search volunteers..."
             className="border border-gray-200 rounded-xl px-4 py-2 w-full md:w-64 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Button onClick={handlePrintBadges} variant="secondary">🎫 Print Badges</Button>
-          <Button onClick={handlePrintReports} variant="secondary">📄 Print Reports</Button>
+          <Button onClick={handlePrintBadges} variant="secondary">Print Badges</Button>
+          <Button onClick={handlePrintReports} variant="secondary">Print Reports</Button>
           <Button onClick={() => setIsModalOpen(true)} variant="primary">+ Add Student</Button>
         </div>
       </div>
@@ -476,6 +477,7 @@ export default function StudentsPage() {
             </div>
           ));
         })()}
+      </div>
       </div>
     </div>
   );

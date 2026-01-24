@@ -5,8 +5,7 @@ import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp }
 import { useEvent } from '../contexts/EventContext';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
-import { generateQRData } from '../utils/qrCodeGenerator';
-import { QRCodeSVG } from 'qrcode.react';
+import PrintableBadge from '../components/common/PrintableBadge';
 
 export default function StudentDetailPage() {
     const { studentId } = useParams();
@@ -130,7 +129,8 @@ export default function StudentDetailPage() {
                 name: activity.name,
                 dateDisplay: dateStrings.join(', '),
                 totalHours: totalHours.toFixed(2),
-                totalProjectedHours : totalProjectedHours.toFixed(2)
+                totalProjectedHours : totalProjectedHours.toFixed(2),
+                printableHours: (totalHours + totalProjectedHours).toFixed(2)
             };
         }).filter(Boolean);
     }, [entries, currentEvent]);
@@ -189,11 +189,11 @@ export default function StudentDetailPage() {
             .no-print { display: none !important; }
             #printable-badge { display: ${printMode === 'badge' ? 'flex' : 'none'} !important; }
             #ocps-form { display: ${printMode === 'form' ? 'block' : 'none'} !important; }
-            
+
             body { background: white; margin: 0; padding: 0; }
-            .ocps-form-container { 
-              font-family: Arial, sans-serif; 
-              padding: 0.3in; 
+            .ocps-form-container {
+              font-family: Arial, sans-serif;
+              padding: 0.3in;
               color: black;
               line-height: 1.1;
               font-size: 9pt;
@@ -204,6 +204,47 @@ export default function StudentDetailPage() {
             .reflection-box { border: 1px solid black; height: 210px; width: 100%; margin-top: 4px; display: flex; flex-direction: column; }
             .reflection-line { border-bottom: 1px solid #eee; flex: 1; }
             .ocps-logo { width: 45px; height: 45px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 8pt; text-align: center; }
+
+            /* Badge printing styles */
+            #printable-badge {
+              justify-content: center;
+              align-items: center;
+              padding: 0.5in;
+            }
+            .student-badge {
+              border: 2px solid #000;
+              padding: 0.25in;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              background: white;
+              box-sizing: border-box;
+              text-align: center;
+              width: 3.5in;
+              height: 2.5in;
+            }
+            .badge-name {
+              font-size: 16pt;
+              font-weight: bold;
+              margin-bottom: 4px;
+              color: #000;
+            }
+            .badge-id {
+              font-size: 9pt;
+              color: #666;
+              margin-bottom: 8px;
+            }
+            .badge-qr {
+              margin: 0 auto;
+            }
+            .badge-event {
+              font-size: 8pt;
+              color: #333;
+              margin-top: 8px;
+              text-transform: uppercase;
+              font-weight: bold;
+            }
           }
           #printable-badge, #ocps-form { display: none; }
         `}
@@ -257,12 +298,25 @@ export default function StudentDetailPage() {
                 <div className="lg:col-span-3">
                     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-right">Hours</th></tr></thead>
+                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
                                 {enrichedEntries.map(e => (
                                     <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''}`}>
                                         <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
                                         <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>
+                                        <td className="px-6 py-4 text-center text-gray-600">
+                                            {e.checkInTime.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                        </td>
+                                        <td className={`px-6 py-4 text-center ${e.isProjected ? 'text-amber-600' : 'text-gray-600'}`}>
+                                            {e.isProjected ? (
+                                                <span className="inline-flex items-center gap-1">
+                                                    {e.projectedCheckOut.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                                    <span className="text-[10px] font-medium text-amber-500">(proj)</span>
+                                                </span>
+                                            ) : (
+                                                e.checkOutTime.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                                            )}
+                                        </td>
                                         <td className={`px-6 py-4 text-right font-black ${e.isProjected ? 'text-amber-600' : ''}`}>
                                             {e.isProjected ? (
                                                 <span className="inline-flex items-center gap-1">
@@ -323,7 +377,7 @@ export default function StudentDetailPage() {
                                 <td className="text-center">{act.dateDisplay}</td>
                                 <td>{currentEvent?.contactName || '---'}</td>
                                 <td></td>
-                                <td className="font-bold">{act.totalHours}</td>
+                                <td className="font-bold">{act.printableHours}</td>
                             </tr>
                         ))}
                         {/* Blank placeholder rows to maintain form length */}
@@ -334,7 +388,7 @@ export default function StudentDetailPage() {
                         ))}
                         <tr>
                             <td colSpan="4" className="text-right font-bold uppercase">Total:</td>
-                            <td className="font-bold bg-gray-50">{grandTotal.toFixed(2)}</td>
+                            <td className="font-bold bg-gray-50">{(grandTotal + totalProjectedHours).toFixed(2)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -357,13 +411,14 @@ export default function StudentDetailPage() {
             </div>
 
             <div id="printable-badge">
-                <h1 className="text-xl font-bold">{student?.firstName} {student?.lastName}</h1>
-                <QRCodeSVG
-                    value={generateQRData(studentId, currentEvent?.id)}
-                    size={150}
-                    level="H"
-                />
-                <p className="text-xs mt-2 uppercase">{currentEvent?.name}</p>
+                {student && (
+                    <PrintableBadge
+                        student={student}
+                        eventId={currentEvent?.id}
+                        eventName={currentEvent?.name}
+                        size="large"
+                    />
+                )}
             </div>
         </div>
     );

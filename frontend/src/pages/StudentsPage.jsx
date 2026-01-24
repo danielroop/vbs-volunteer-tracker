@@ -5,8 +5,7 @@ import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'f
 import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
-import { QRCodeSVG } from 'qrcode.react';
-import { generateQRData } from '../utils/qrCodeGenerator';
+import PrintableBadge from '../components/common/PrintableBadge';
 
 export default function StudentsPage() {
   const navigate = useNavigate();
@@ -463,27 +462,13 @@ export default function StudentsPage() {
 
           return pages.map((pageStudents, pageIndex) => (
             <div key={`page-${pageIndex}`} className="badge-page">
-              {pageStudents.map((student) => {
-                const qrData = currentEvent?.id ? generateQRData(student.id, currentEvent.id) : student.id;
-                return (
-                  <div key={student.id} className="student-badge">
-                    <div className="badge-name">
-                      {student.firstName} {student.lastName}
-                    </div>
-                    <div className="badge-id">
-                      ID: {student.id}
-                    </div>
-                    <div className="badge-qr">
-                      <QRCodeSVG
-                        value={qrData}
-                        size={120}
-                        level="M"
-                        includeMargin={false}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+              {pageStudents.map((student) => (
+                <PrintableBadge
+                  key={student.id}
+                  student={student}
+                  eventId={currentEvent?.id}
+                />
+              ))}
               {/* Fill remaining slots with empty badges if needed */}
               {[...Array(Math.max(0, 8 - pageStudents.length))].map((_, i) => (
                 <div key={`empty-${i}`} className="student-badge" style={{ border: 'none' }}></div>

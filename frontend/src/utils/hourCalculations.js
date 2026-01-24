@@ -120,5 +120,5 @@ export function formatDate(date) {
  * @returns {string}
  */
 export function getTodayDateString() {
-  return format(new Date(), 'yyyy-MM-dd');
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
 }

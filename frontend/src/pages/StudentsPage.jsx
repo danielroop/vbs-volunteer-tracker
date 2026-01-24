@@ -99,7 +99,7 @@ export default function StudentsPage() {
 
       // Get unique sorted dates for this activity
       const uniqueDates = [...new Set(activityEntries.map(e =>
-        e.checkInTime.toDate().toISOString().split('T')[0]
+        new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(e.checkInTime.toDate())
       ))].sort();
 
       // Identify consecutive groups

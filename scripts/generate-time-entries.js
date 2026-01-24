@@ -78,9 +78,16 @@ async function generateVBSData() {
         studentId: student.id,
         eventId: EVENT_ID,
         activityId: 'training',
+        date: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(trainIn),
         checkInTime: Timestamp.fromDate(trainIn),
         checkOutTime: Timestamp.fromDate(trainOut),
-        scannedBy: 'script_gen'
+        checkInBy: 'script_gen',
+        checkInMethod: 'script',
+        checkOutBy: 'script_gen',
+        checkOutMethod: 'script',
+        reviewStatus: 'pending',
+        flags: [],
+        createdAt: Timestamp.now()
       });
       entriesCount++;
     }
@@ -115,9 +122,16 @@ async function generateVBSData() {
         studentId: student.id,
         eventId: EVENT_ID,
         activityId: 'work-hours',
+        date: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(checkIn),
         checkInTime: Timestamp.fromDate(checkIn),
         checkOutTime: Timestamp.fromDate(checkOut),
-        scannedBy: 'script_gen'
+        checkInBy: 'script_gen',
+        checkInMethod: 'script',
+        checkOutBy: 'script_gen',
+        checkOutMethod: 'script',
+        reviewStatus: 'pending',
+        flags: [],
+        createdAt: Timestamp.now()
       });
       entriesCount++;
     }

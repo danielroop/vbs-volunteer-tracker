@@ -58,7 +58,7 @@ export default function StudentDetailPage() {
 
             // 1. Get unique sorted dates for this activity
             const uniqueDates = [...new Set(activityEntries.map(e =>
-                e.checkInTime.toDate().toISOString().split('T')[0]
+                new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(e.checkInTime.toDate())
             ))].sort();
 
             // 2. Identify consecutive groups
@@ -84,7 +84,7 @@ export default function StudentDetailPage() {
             const updatedActivityEntries = activityEntries.map(entry => {
                 // Check if checkoutTime is missing, null, or undefined
                 if (!entry.checkOutTime) {
-                    const datePart = entry.checkInTime.toDate().toISOString().split('T')[0];
+                    const datePart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(entry.checkInTime.toDate());
                     const defaultedDateTime = `${datePart}T${activity.endTime}`;
                     const timestampValue = Timestamp.fromDate(new Date(defaultedDateTime));
 
@@ -151,7 +151,7 @@ export default function StudentDetailPage() {
             const activity = currentEvent.activities.find(a => a.id === entry.activityId);
 
             if (!entry.checkOutTime && activity?.endTime) {
-                const datePart = entry.checkInTime.toDate().toISOString().split('T')[0];
+                const datePart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(entry.checkInTime.toDate());
                 const defaultedDateTime = `${datePart}T${activity.endTime}`;
                 const projectedCheckOut = Timestamp.fromDate(new Date(defaultedDateTime));
                 const diff = (projectedCheckOut.seconds - entry.checkInTime.seconds) / 3600;

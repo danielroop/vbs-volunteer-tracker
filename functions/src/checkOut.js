@@ -19,7 +19,7 @@ export const checkOut = onCall(async (request) => {
   }
 
   const db = getFirestore();
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
 
   try {
     // Find today's entry
@@ -80,7 +80,7 @@ export const checkOut = onCall(async (request) => {
     const weekEntriesQuery = await db.collection('timeEntries')
       .where('studentId', '==', studentId)
       .where('eventId', '==', eventId)
-      .where('date', '>=', weekStart.toISOString().split('T')[0])
+      .where('date', '>=', new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(weekStart))
       .where('checkOutTime', '!=', null)
       .get();
 

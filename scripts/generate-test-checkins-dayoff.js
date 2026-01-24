@@ -33,10 +33,15 @@ async function checkInStudentsToday(count = 45) {
         studentId: student.id,
         eventId: EVENT_ID,
         activityId: 'work-hours',
+        date: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now),
         // Check-in time is 'now' with a slight random variance for realism
         checkInTime: Timestamp.fromDate(new Date(now.getTime() - Math.random() * 30 * 60000)),
         checkOutTime: null, // Leaving this null makes them "Currently Checked In"
-        scannedBy: 'live_test_script'
+        checkInBy: 'live_test_script',
+        checkInMethod: 'script',
+        reviewStatus: 'pending',
+        flags: [],
+        createdAt: Timestamp.now()
       });
     });
 

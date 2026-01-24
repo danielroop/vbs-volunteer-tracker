@@ -20,7 +20,7 @@ export const checkIn = onCall(async (request) => {
   }
 
   const db = getFirestore();
-  const today = new Date().toISOString().split('T')[0]; // "2026-06-15"
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()); // "2026-01-24"
 
   try {
     // Check if already checked in today

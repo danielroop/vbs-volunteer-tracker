@@ -1,10 +1,72 @@
 # Product Requirements Document (PRD)
 ## VBS Student Volunteer Hour Tracking System
 
-**Version:** 1.0  
-**Date:** January 19, 2026  
-**Author:** Product Team  
-**Status:** Draft for Review
+**Version:** 2.0
+**Date:** January 24, 2026
+**Author:** Product Team
+**Status:** Implementation In Progress
+
+---
+
+## Implementation Status Summary
+
+> **Last Updated:** January 24, 2026
+
+### Completed Features
+
+| Feature | Section | Notes |
+|---------|---------|-------|
+| QR Code Lanyard Generation | 3.1.1 | Generates `studentId\|eventId\|checksum` format, printable badges (8 per page) |
+| AV Scanner Check-In | 3.2.1 | Unified scanner component handles check-in with visual/audio feedback |
+| AV Scanner Check-Out | 3.3.2 | Same scanner interface, detects check-in state |
+| Hour Calculation & Rounding | 3.4.1 | Rounds to nearest 0.5 hour, stores raw minutes |
+| Early/Late Flagging | 3.4.2 | Auto-flags arrivals >15min early or departures >15min late |
+| Admin Dashboard | 3.5.1 | Real-time stats, activity feed, current attendance |
+| User Role Management | N/A | Admin and Adult Volunteer roles with separate collections |
+| Event Management | N/A | Create/edit events with multiple activities |
+| Student Management | N/A | Add students, view roster, print badges |
+| Authentication | 5.5 | Firebase Auth with Firestore role verification |
+| Protected Routes | 5.5 | AdminRoute, ScannerRoute, ProtectedRoute |
+| Offline Queue | 5.4 | IndexedDB queue for check-ins/outs when offline |
+| PWA Support | 5.1 | Service worker, installable, offline-capable |
+| Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword) |
+| Firestore Security Rules | 5.5 | Role-based access control |
+
+### Partially Implemented
+
+| Feature | Section | Status | Missing |
+|---------|---------|--------|---------|
+| Daily Review | 3.5.2 | Partial | Bulk approve, export CSV/PDF |
+| Hour Adjustment | 3.5.3 | Partial | Full audit trail display, change history |
+| Form Generation | 3.6.2 | Partial | PDF filling not implemented (returns data only) |
+| OCPS Form Printing | 3.6.2 | Partial | Print layout exists but PDF generation incomplete |
+
+### Not Yet Implemented
+
+| Feature | Section | Priority | Description |
+|---------|---------|----------|-------------|
+| Self-Service Checkout Kiosk | 3.3.1 | P0 | Dedicated kiosk mode interface (currently uses unified scanner) |
+| CSV Import from Realm | 3.7.1 | P0 | Bulk student import from church management system |
+| Multi-Form Type Support | 3.6.1 | P0 | NJHS, NHS, Private school, Other form templates |
+| Batch PDF Generation | 3.6.2 | P0 | Generate filled PDFs for all students |
+| Force Check-Out | 3.5.2 | P1 | Force checkout for students who forgot |
+| Friday Hour Estimation | 3.6.3 | P1 | Estimate hours for students not yet checked out |
+| Duplicate Override | 3.2.1 | P2 | Allow override with reason for duplicate check-in |
+| Manual Entry Fallback | 3.2.1 | P2 | Manual entry when QR damaged/unreadable |
+| Student Portal | Phase 4 | Deferred | Students view own hours (no accounts) |
+| Parent Notifications | Phase 4 | Deferred | Email on check-in/out |
+| Multi-Event Support | Phase 4 | Deferred | Track across VBS, mission trips, etc. |
+
+### Deviations from Original PRD
+
+| PRD Specification | Actual Implementation |
+|-------------------|----------------------|
+| QR format: `studentId\|eventId\|studentName\|checksum` | `studentId\|eventId\|checksum` (name not included) |
+| Separate AV Scanner and Self-Checkout pages | Unified Scanner component with action parameter |
+| Student codes like "SJ-0042" | Uses Firestore document IDs |
+| Form types stored per student | Not implemented yet (formType field missing) |
+| Check-in/out methods: av_scan, self_scan, manual | Only av_scan implemented |
+| Geolocation validation | Not implemented |
 
 ---
 

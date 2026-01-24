@@ -58,7 +58,7 @@ export function isLateStay(checkOutTime, typicalEnd) {
 
   // Flag if >15 min late
   const fifteenMinutes = 15 * 60 * 1000;
-  return checkOutTime > (typical + fifteenMinutes);
+  return checkOutTime.getTime() > (typical.getTime() + fifteenMinutes);
 }
 
 /**

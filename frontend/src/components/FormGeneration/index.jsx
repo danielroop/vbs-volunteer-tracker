@@ -111,7 +111,6 @@ export default function FormGeneration() {
             </Button>
           </div>
         </div>
-        </div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../utils/firebase';
-import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
@@ -54,7 +54,7 @@ export default function StudentDetailPage() {
         if (!currentEvent?.activities || entries.length === 0) return [];
 
         return currentEvent.activities.map(activity => {
-            const activityEntries = entries.filter(e => e.activityId === activity.id && e.checkOutTime);
+            const activityEntries = entries.filter(e => e.activityId === activity.id);
             if (activityEntries.length === 0) return null;
 
             // 1. Get unique sorted dates for this activity
@@ -81,7 +81,28 @@ export default function StudentDetailPage() {
                 groups.push(currentGroup);
             }
 
-            // 3. Format strings like "1/1/26 - 1/3/26, 1/5/26"
+            // 3. Default Checkout Times to end of Activity if one is missing
+            const updatedActivityEntries = activityEntries.map(entry => {
+                // Check if checkoutTime is missing, null, or undefined
+                if (!entry.checkOutTime) {
+                    const datePart = entry.checkInTime.toDate().toISOString().split('T')[0];
+                    const defaultedDateTime = `${datePart}T${activity.endTime}`;
+                    const timestampValue = Timestamp.fromDate(new Date(defaultedDateTime));
+
+                    return {
+                        ...entry,
+                        checkOutTime: timestampValue, // Use the activity's default end time
+                        isDefaulted: true
+                    };
+                }
+
+                // If checkoutTime exists, return the entry as-is
+                return entry;
+            });
+
+            console.log(updatedActivityEntries);
+
+            // 4. Format strings like "1/1/26 - 1/3/26, 1/5/26"
             const dateStrings = groups.map(group => {
                 const start = new Date(group[0]);
                 const end = new Date(group[group.length - 1]);
@@ -91,7 +112,18 @@ export default function StudentDetailPage() {
                 return group.length > 1 ? `${startStr} - ${endStr}` : startStr;
             });
 
-            const totalHours = activityEntries.reduce((acc, entry) => {
+            const totalHours = updatedActivityEntries.reduce((acc, entry) => {
+                // Only Count the Hours if not defaulted                 
+                if (entry.isDefaulted) return acc;
+
+                const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
+                return acc + roundTime(diff);
+            }, 0);
+
+            const totalProjectedHours = updatedActivityEntries.reduce((acc, entry) => {
+                // Only Count the Hours if defaulted
+                if (!entry.isDefaulted) return acc;
+
                 const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
                 return acc + roundTime(diff);
             }, 0);
@@ -99,12 +131,15 @@ export default function StudentDetailPage() {
             return {
                 name: activity.name,
                 dateDisplay: dateStrings.join(', '),
-                totalHours: totalHours.toFixed(2)
+                totalHours: totalHours.toFixed(2),
+                totalProjectedHours : totalProjectedHours.toFixed(2)
             };
         }).filter(Boolean);
     }, [entries, currentEvent]);
 
     const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);
+    const totalProjectedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalProjectedHours), 0);
+
     const overrideHours = parseFloat(student?.overrideHours || 0);
     const grandTotal = totalCalculatedHours + overrideHours;
 
@@ -112,6 +147,8 @@ export default function StudentDetailPage() {
         setPrintMode(mode);
         setTimeout(() => { window.print(); setPrintMode(null); }, 150);
     };
+
+    console.log(activityLog);
 
     if (loading) return <div className="p-20 text-center"><Spinner size="lg" /></div>;
 
@@ -168,7 +205,7 @@ export default function StudentDetailPage() {
                         ))}
                         <div className="pt-4 border-t-2 border-dashed flex justify-between items-center">
                             <span className="text-sm font-black text-primary-700 uppercase">Grand Total</span>
-                            <span className="text-2xl font-black text-primary-600">{grandTotal.toFixed(2)}</span>
+                            <span className="text-2xl font-black text-primary-600">{grandTotal.toFixed(2)} + {totalProjectedHours.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>
@@ -178,7 +215,7 @@ export default function StudentDetailPage() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-right">Hours</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
-                                {entries.map(e => (
+                                {events.map(e => (
                                     <tr key={e.id} className="text-sm">
                                         <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
                                         <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>

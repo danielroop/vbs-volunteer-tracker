@@ -6,37 +6,51 @@ service cloud.firestore {
       return request.auth != null &&
              exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
- 
-    // Students: Read-only from client, write only via functions
-    match /students/{studentId} {
-      allow read: if true;  // Allow scanner to read student info
-      allow write: if isAdmin();  // Only admin can modify
-    }
- 
-    // TimeEntries: Scanner can create, admin can read/update
-    match /timeEntries/{entryId} {
-      allow read: if isAdmin();
-      allow create: if true;  // Allow scanner to create entries
-      allow update, delete: if isAdmin();
-    }
- 
-    // Events: Read-only for all, write for admin
-    match /events/{eventId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
- 
-    // Admins collection: Only readable by authenticated admins
-    match /admins/{adminId} {
-      allow read: if request.auth != null && request.auth.uid == adminId;
-      allow write: if false;  // Only via backend setup
+
+    // Helper function to check if user is an authenticated adult volunteer
+    function isAdultVolunteer() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    // Allow users to read and update their own settings
-    match /admins/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
+    // Helper function to check if user can access scanner (admin or adult volunteer)
+    function canAccessScanner() {
+      return isAdmin() || isAdultVolunteer();
     }
- 
+
+    // Students: Read for authenticated users (scanner needs this), write for admin
+    match /students/{studentId} {
+      allow read: if canAccessScanner();
+      allow write: if isAdmin();
+    }
+
+    // TimeEntries: Scanner can create (authenticated users), admin can read/update
+    match /timeEntries/{entryId} {
+      allow read: if isAdmin();
+      allow create: if canAccessScanner();  // Only authenticated scanner users can create
+      allow update, delete: if isAdmin();
+    }
+
+    // Events: Read for authenticated users, write for admin
+    match /events/{eventId} {
+      allow read: if canAccessScanner();
+      allow write: if isAdmin();
+    }
+
+    // Admins collection: Readable by self, writable only via backend
+    match /admins/{adminId} {
+      allow read: if request.auth != null && request.auth.uid == adminId;
+      allow update: if request.auth != null && request.auth.uid == adminId;
+      allow create, delete: if false;  // Only via backend/cloud functions
+    }
+
+    // Users collection (adult volunteers): Readable by self, writable only via backend
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create, delete: if false;  // Only via backend/cloud functions
+    }
+
     // Generated forms: Admin only
     match /generatedForms/{formId} {
       allow read, write: if isAdmin();

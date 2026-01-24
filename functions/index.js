@@ -14,3 +14,6 @@ initializeApp();
 export { checkIn } from './src/checkIn.js';
 export { checkOut } from './src/checkOut.js';
 export { generateForms } from './src/generateForms.js';
+
+// User Management Functions
+export { createUser, updateUser, deleteUser, listUsers, resetUserPassword } from './src/userManagement.js';

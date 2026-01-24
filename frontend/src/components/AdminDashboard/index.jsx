@@ -146,6 +146,9 @@ export default function AdminDashboard() {
           <Link to="/admin/events" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
             Events
           </Link>
+          <Link to="/admin/users" className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900">
+            Users
+          </Link>
         </div>
 
         {/* Today's Overview */}

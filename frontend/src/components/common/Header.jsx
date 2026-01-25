@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEvent } from '../../contexts/EventContext';
@@ -7,6 +7,7 @@ import Button from './Button';
 /**
  * Reusable Header Component for Admin Pages
  * Provides consistent navigation and branding across the application
+ * Features responsive design with hamburger menu on mobile
  *
  * @param {Object} props
  * @param {string} props.title - Optional page title to display (overrides default)
@@ -23,9 +24,19 @@ export default function Header({
   const { user, signOut } = useAuth();
   const { currentEvent } = useEvent();
   const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
+    setMobileMenuOpen(false);
     await signOut();
+  };
+
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
   };
 
   // Navigation tabs configuration
@@ -45,13 +56,39 @@ export default function Header({
     return location.pathname.startsWith(tab.path);
   };
 
+  // Check if scan page is active
+  const isScanActive = location.pathname.startsWith('/scan');
+
   return (
     <header className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Top Row: Title, Event Indicator, User Info */}
         <div className="flex items-center justify-between">
-          {/* Left: App Title */}
-          <div className="flex items-center gap-4">
+          {/* Left: Mobile Hamburger Menu Button + App Title */}
+          <div className="flex items-center gap-3">
+            {/* Hamburger Menu Button - Mobile Only */}
+            {showNavTabs && (
+              <button
+                type="button"
+                className="md:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                onClick={toggleMobileMenu}
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-menu"
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              >
+                {mobileMenuOpen ? (
+                  // X icon for close
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  // Hamburger icon
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
+            )}
             <Link to="/admin" className="text-2xl font-bold text-gray-900 hover:text-primary-600 transition-colors">
               {title || 'VBS Volunteer Tracker'}
             </Link>
@@ -76,11 +113,13 @@ export default function Header({
                 Logout
               </Button>
             </div>
-            {/* Mobile logout */}
+            {/* Mobile logout - only when hamburger menu is not shown */}
             <div className="sm:hidden">
-              <Button variant="secondary" size="sm" onClick={handleSignOut}>
-                Logout
-              </Button>
+              {!showNavTabs && (
+                <Button variant="secondary" size="sm" onClick={handleSignOut}>
+                  Logout
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -96,9 +135,61 @@ export default function Header({
         )}
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Mobile Menu */}
+      {showNavTabs && mobileMenuOpen && (
+        <div
+          id="mobile-menu"
+          className="md:hidden bg-white border-t border-gray-100"
+        >
+          <div className="px-4 py-3 space-y-1">
+            {/* User info in mobile menu */}
+            <div className="px-3 py-2 border-b border-gray-100 mb-2">
+              <span className="text-sm text-gray-600">{user?.email}</span>
+            </div>
+
+            {/* Navigation Links */}
+            {navTabs.map((tab) => (
+              <Link
+                key={tab.path}
+                to={tab.path}
+                onClick={closeMobileMenu}
+                className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                  isTabActive(tab)
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                {tab.label}
+              </Link>
+            ))}
+
+            {/* Scan Link in Mobile Menu */}
+            <Link
+              to="/scan"
+              onClick={closeMobileMenu}
+              className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                isScanActive
+                  ? 'bg-primary-50 text-primary-600'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              Scan
+            </Link>
+
+            {/* Logout in Mobile Menu */}
+            <button
+              onClick={handleSignOut}
+              className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Navigation Tabs */}
       {showNavTabs && (
-        <div className="max-w-7xl mx-auto px-4">
+        <div className="hidden md:block max-w-7xl mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto border-t border-gray-100 pt-2 pb-0 -mb-px">
             {navTabs.map((tab) => (
               <Link
@@ -113,6 +204,17 @@ export default function Header({
                 {tab.label}
               </Link>
             ))}
+            {/* Scan Link in Desktop Nav */}
+            <Link
+              to="/scan"
+              className={`px-4 py-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                isScanActive
+                  ? 'text-primary-600 border-b-2 border-primary-600'
+                  : 'text-gray-600 hover:text-gray-900 border-b-2 border-transparent'
+              }`}
+            >
+              Scan
+            </Link>
           </div>
         </div>
       )}

@@ -281,11 +281,10 @@ export default function StudentsPage() {
             {filteredStudents.map(student => (
               <tr 
                 key={student.id} 
-                className="group hover:bg-primary-50 transition-colors cursor-pointer"
-                onClick={() => navigate(`/students/${student.id}`)} // Row click navigation
+                className="group hover:bg-gray-50 transition-colors"
               >
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-bold text-gray-900 group-hover:text-primary-700">
+                  <div className="text-sm font-bold text-gray-900">
                     {student.lastName}, {student.firstName}
                   </div>
                   <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">
@@ -307,11 +306,8 @@ export default function StudentsPage() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <button 
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevents the row's own onClick from firing twice
-                      navigate(`/admin/students/${student.id}`); // Navigates to your admin path
-                    }}
-                    className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-4 py-1.5 rounded-lg group-hover:bg-primary-600 group-hover:text-white transition-all shadow-sm">
+                    onClick={() => navigate(`/admin/students/${student.id}`)}
+                    className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-4 py-1.5 rounded-lg hover:bg-primary-600 hover:text-white transition-all shadow-sm">
                     View Detail →
                   </button>
                 </td>

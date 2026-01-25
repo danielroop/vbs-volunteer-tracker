@@ -106,13 +106,15 @@ export default function EventsPage() {
             <Header />
             <div className="p-6 max-w-7xl mx-auto">
                 {/* PAGE HEADER */}
-                <div className="mb-8">
-                    <div className="flex justify-between items-center">
+                <div className="mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Events Management</h1>
-                            <p className="text-gray-500 font-medium">Configure organization details and time buckets.</p>
+                            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Events Management</h1>
+                            <p className="text-gray-500 font-medium text-sm sm:text-base">Configure organization details and time buckets.</p>
                         </div>
-                        <Button onClick={handleCreateNew} variant="primary">+ Create New Event</Button>
+                        <Button onClick={handleCreateNew} variant="primary" className="w-full sm:w-auto">
+                            + Create New Event
+                        </Button>
                     </div>
                 </div>
 
@@ -188,8 +190,8 @@ export default function EventsPage() {
 
             {/* Configuration/Detail Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 max-h-[85vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-2 sm:p-4 z-50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-lg w-full p-4 sm:p-8 max-h-[90vh] overflow-y-auto">
                         <h2 className="text-2xl font-black mb-6 text-gray-900">
                             {editingEvent ? 'Event Details' : 'Setup New Event'}
                         </h2>

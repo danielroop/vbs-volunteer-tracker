@@ -14,19 +14,22 @@ export default function FormGeneration() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
         {/* Page Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Form Generation - {new Date().toLocaleDateString('en-US', {
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+            Form Generation
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
               day: 'numeric'
             })}
-          </h1>
+          </p>
 
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 space-y-2 text-sm sm:text-base">
             <div className="text-green-600">
               Mon-Thu hours reviewed and approved
             </div>
@@ -37,13 +40,13 @@ export default function FormGeneration() {
         </div>
 
         {/* Generate All Forms */}
-        <div className="bg-white rounded-lg shadow-md p-8 mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-8 mb-4">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
             Generate Forms for All Students
           </h2>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-blue-900">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+            <p className="text-xs sm:text-sm text-blue-900">
               Students still checked in will have estimated Friday hours (~6 hrs based on averages)
             </p>
           </div>
@@ -54,59 +57,59 @@ export default function FormGeneration() {
         </div>
 
         {/* Generate by Type */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
             OR generate by school/form type:
           </h2>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="secondary">
-              OCPS (-- students)
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <Button variant="secondary" className="text-sm">
+              OCPS (--)
             </Button>
-            <Button variant="secondary">
-              NJHS (-- students)
+            <Button variant="secondary" className="text-sm">
+              NJHS (--)
             </Button>
-            <Button variant="secondary">
-              NHS (-- students)
+            <Button variant="secondary" className="text-sm">
+              NHS (--)
             </Button>
-            <Button variant="secondary">
-              Other (-- students)
+            <Button variant="secondary" className="text-sm">
+              Other (--)
             </Button>
           </div>
 
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               OR search individual:
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 placeholder="Student name..."
                 className="input-field flex-1"
               />
-              <Button variant="primary">🔍 Search</Button>
+              <Button variant="primary" className="w-full sm:w-auto">🔍 Search</Button>
             </div>
           </div>
         </div>
 
         {/* Generated Forms */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
             📥 Generated Forms
           </h2>
 
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-6 sm:py-8 text-gray-500 text-sm sm:text-base">
             No forms generated yet
           </div>
 
-          <div className="mt-4 flex gap-4">
-            <Button variant="primary" disabled>
+          <div className="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-4">
+            <Button variant="primary" disabled className="w-full sm:w-auto">
               Download All as PDF
             </Button>
-            <Button variant="secondary" disabled>
+            <Button variant="secondary" disabled className="w-full sm:w-auto">
               Download as ZIP
             </Button>
-            <Button variant="secondary" disabled>
+            <Button variant="secondary" disabled className="w-full sm:w-auto">
               Print All
             </Button>
           </div>

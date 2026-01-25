@@ -248,26 +248,34 @@ export default function StudentsPage() {
       </style>
 
       {/* PAGE HEADER WITH ACTIONS */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 no-print">
-        <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Volunteer Roster</h1>
+      <div className="flex flex-col gap-4 mb-6 no-print">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Volunteer Roster</h1>
+          <Button onClick={() => setIsModalOpen(true)} variant="primary" className="w-full sm:w-auto">
+            + Add Student
+          </Button>
         </div>
 
-        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             placeholder="Search volunteers..."
-            className="border border-gray-200 rounded-xl px-4 py-2 w-full md:w-64 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
+            className="border border-gray-200 rounded-xl px-4 py-2 w-full sm:flex-1 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Button onClick={handlePrintBadges} variant="secondary">Print Badges</Button>
-          <Button onClick={handlePrintReports} variant="secondary">Print Reports</Button>
-          <Button onClick={() => setIsModalOpen(true)} variant="primary">+ Add Student</Button>
+          <div className="flex gap-2">
+            <Button onClick={handlePrintBadges} variant="secondary" className="flex-1 sm:flex-none text-sm">
+              Print Badges
+            </Button>
+            <Button onClick={handlePrintReports} variant="secondary" className="flex-1 sm:flex-none text-sm">
+              Print Reports
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* DATA TABLE */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden no-print">
+      {/* DATA TABLE - Desktop */}
+      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden no-print">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -279,10 +287,10 @@ export default function StudentsPage() {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {filteredStudents.map(student => (
-              <tr 
-                key={student.id} 
+              <tr
+                key={student.id}
                 className="group hover:bg-primary-50 transition-colors cursor-pointer"
-                onClick={() => navigate(`/students/${student.id}`)} // Row click navigation
+                onClick={() => navigate(`/students/${student.id}`)}
               >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-bold text-gray-900 group-hover:text-primary-700">
@@ -306,10 +314,10 @@ export default function StudentsPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button 
+                  <button
                     onClick={(e) => {
-                      e.stopPropagation(); // Prevents the row's own onClick from firing twice
-                      navigate(`/admin/students/${student.id}`); // Navigates to your admin path
+                      e.stopPropagation();
+                      navigate(`/admin/students/${student.id}`);
                     }}
                     className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-4 py-1.5 rounded-lg group-hover:bg-primary-600 group-hover:text-white transition-all shadow-sm">
                     View Detail →
@@ -319,6 +327,50 @@ export default function StudentsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* MOBILE CARD LIST */}
+      <div className="md:hidden space-y-3 no-print">
+        {filteredStudents.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 text-center text-gray-500">
+            No students found
+          </div>
+        ) : (
+          filteredStudents.map(student => (
+            <div
+              key={student.id}
+              className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 active:bg-primary-50 transition-colors cursor-pointer"
+              onClick={() => navigate(`/admin/students/${student.id}`)}
+            >
+              {/* Row 1: Name and Hours */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900 truncate">
+                    {student.lastName}, {student.firstName}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {student.schoolName || 'No school'} • Grade {student.gradeLevel || '--'}
+                  </div>
+                </div>
+                <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-sm font-black ${
+                  student.eventTotal > 0 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-50 text-gray-400'
+                }`}>
+                  {student.eventTotal.toFixed(1)}h
+                </span>
+              </div>
+
+              {/* Row 2: Grad Year and Action */}
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-[10px] text-gray-400 font-medium uppercase">
+                  Grad: {student.gradYear || '----'}
+                </span>
+                <span className="text-xs text-primary-600 font-medium">
+                  View Detail →
+                </span>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* CREATE STUDENT MODAL */}

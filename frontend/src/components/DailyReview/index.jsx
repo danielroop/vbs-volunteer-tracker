@@ -533,65 +533,65 @@ export default function DailyReview() {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Page Content Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
                 Daily Review
               </h1>
-              <p className="text-gray-600 mt-1">{currentEvent.name}</p>
+              <p className="text-gray-600 text-sm sm:text-base mt-1">{currentEvent.name}</p>
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600">Date:</label>
+              <label className="text-sm font-medium text-gray-600 hidden sm:inline">Date:</label>
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="input-field"
+                className="input-field text-sm flex-1 sm:flex-none"
               />
             </div>
           </div>
 
-          <div className="mt-4 text-lg font-semibold text-gray-800">
+          <div className="mt-3 text-base sm:text-lg font-semibold text-gray-800">
             {formatDate(selectedDate)}
           </div>
 
-          {/* Stats */}
-          <div className="mt-4 flex flex-wrap items-center gap-6">
-            <div className="text-gray-600">
-              <span className="font-bold text-gray-900">{stats.total}</span> total entries
+          {/* Stats - Grid on mobile, flex on desktop */}
+          <div className="mt-3 grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-6">
+            <div className="text-gray-600 text-sm sm:text-base">
+              <span className="font-bold text-gray-900">{stats.total}</span> total
             </div>
             {stats.flagged > 0 && (
-              <div className="text-amber-600">
+              <div className="text-amber-600 text-sm sm:text-base">
                 ⚠️ <span className="font-bold">{stats.flagged}</span> flagged
               </div>
             )}
             {stats.noCheckout > 0 && (
-              <div className="text-red-600">
+              <div className="text-red-600 text-sm sm:text-base">
                 🔴 <span className="font-bold">{stats.noCheckout}</span> no checkout
               </div>
             )}
             {stats.modified > 0 && (
-              <div className="text-blue-600">
+              <div className="text-blue-600 text-sm sm:text-base">
                 ✏️ <span className="font-bold">{stats.modified}</span> modified
               </div>
             )}
           </div>
 
-          {/* Filters */}
-          <div className="mt-4 flex flex-wrap gap-4">
+          {/* Filters - Stack on mobile */}
+          <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:gap-4">
             <input
               type="text"
               placeholder="Search students..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field flex-1 min-w-[200px]"
+              className="input-field w-full sm:flex-1 sm:min-w-[200px]"
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="input-field w-48"
+              className="input-field w-full sm:w-48"
             >
               <option value="all">All Entries</option>
               <option value="flagged">Flagged Only</option>
@@ -601,8 +601,8 @@ export default function DailyReview() {
           </div>
         </div>
 
-        {/* Student List */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        {/* Student List - Desktop Table */}
+        <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
@@ -694,13 +694,94 @@ export default function DailyReview() {
           </table>
         </div>
 
-        {/* Actions */}
-        <div className="mt-4 flex flex-wrap justify-between gap-4">
-          <div className="flex gap-2">
+        {/* Student List - Mobile Card Layout */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+              Loading...
+            </div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+              {searchTerm || statusFilter !== 'all'
+                ? 'No entries match your filters'
+                : 'No entries for this date'}
+            </div>
+          ) : (
+            filteredEntries.map(entry => (
+              <div key={entry.id} className="bg-white rounded-lg shadow-md p-4">
+                {/* Row 1: Name and Status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 truncate">
+                      {entry.student.lastName}, {entry.student.firstName}
+                    </div>
+                    <span className="uppercase font-bold text-[10px] text-blue-600">
+                      {entry.activity?.name || '--'}
+                    </span>
+                  </div>
+                  <span className={`text-xs font-medium whitespace-nowrap ${getStatusClass(entry)}`}>
+                    {getStatusDisplay(entry)}
+                  </span>
+                </div>
+
+                {/* Row 2: Time Details */}
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">In:</span>
+                    <span className="text-gray-900 font-medium">
+                      {entry.checkInTime ? formatTime(entry.checkInTime) : '--'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">Out:</span>
+                    {entry.checkOutTime ? (
+                      <span className="text-gray-900 font-medium">{formatTime(entry.checkOutTime)}</span>
+                    ) : (
+                      <span className="text-red-600 font-medium">Missing</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">Hours:</span>
+                    <span className="text-gray-900 font-bold">
+                      {entry.hoursWorked !== null && entry.hoursWorked !== undefined
+                        ? formatHours(entry.hoursWorked)
+                        : '--'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Row 3: Actions */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => openEditModal(entry)}
+                  >
+                    Edit
+                  </Button>
+                  {!entry.checkOutTime && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => openForceCheckoutModal(entry)}
+                    >
+                      Force Out
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Actions - Stack on mobile */}
+        <div className="mt-4 flex flex-col sm:flex-row sm:justify-between gap-3 sm:gap-4">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               onClick={handleExportCSV}
               disabled={exporting || filteredEntries.length === 0}
+              className="flex-1 sm:flex-none"
             >
               Export CSV
             </Button>
@@ -708,6 +789,7 @@ export default function DailyReview() {
               variant="secondary"
               onClick={handleExportPDF}
               disabled={exporting || filteredEntries.length === 0}
+              className="flex-1 sm:flex-none"
             >
               Export PDF
             </Button>
@@ -716,6 +798,7 @@ export default function DailyReview() {
             <Button
               variant="danger"
               onClick={() => setForceAllModal({ isOpen: true, loading: false, error: null })}
+              className="w-full sm:w-auto"
             >
               Force All Checkout ({stats.noCheckout})
             </Button>

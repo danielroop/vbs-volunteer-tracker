@@ -100,12 +100,13 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-4 sm:py-8">
 
         {/* Today's Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">📊 Overview: {currentEvent?.name} - {new Date().toLocaleDateString()}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">📊 Overview: {currentEvent?.name}</h3>
+            <p className="text-xs text-gray-500 mb-3">{new Date().toLocaleDateString()}</p>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span>🟢 Checked In:</span>
@@ -122,8 +123,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold mb-2">🔔 Recent Activity</h3>
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-semibold mb-2">🔔 Recent Activity</h3>
             {timeEntries.slice(0, 5).map(entry => {
               // Lookup name from the map or fallback to "Student" if not found
               const firstName = studentNameMap[entry.studentId] || 'Student';
@@ -144,8 +145,8 @@ export default function AdminDashboard() {
             })}
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">⚠️ Needs Attention</h3>
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">⚠️ Needs Attention</h3>
             <p className="text-gray-500 text-sm">All clear</p>
           </div>
         </div>

@@ -15,6 +15,7 @@ This system eliminates manual time entry and Excel calculations by using QR code
 - ⏱️ Automatic hour calculation and rounding
 - 🚩 Smart flagging of early arrivals and late stays
 - 📥 Batch PDF form generation
+- 📲 **Mobile-responsive design** with hamburger menu navigation and touch-optimized layouts
 
 ## Tech Stack
 

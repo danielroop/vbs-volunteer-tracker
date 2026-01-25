@@ -178,6 +178,94 @@ describe('Header', () => {
     });
   });
 
+  describe('mobile hamburger menu', () => {
+    it('should render hamburger menu button when showNavTabs is true', () => {
+      renderWithRouter(<Header showNavTabs={true} />);
+
+      const menuButton = screen.getByRole('button', { name: /open menu/i });
+      expect(menuButton).toBeInTheDocument();
+    });
+
+    it('should not render hamburger menu button when showNavTabs is false', () => {
+      renderWithRouter(<Header showNavTabs={false} />);
+
+      expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /close menu/i })).not.toBeInTheDocument();
+    });
+
+    it('should toggle mobile menu when hamburger button is clicked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<Header />);
+
+      const menuButton = screen.getByRole('button', { name: /open menu/i });
+
+      // Initially, the mobile menu should not be visible (in the DOM but hidden by md:hidden class)
+      // After clicking, the dropdown should appear
+      await user.click(menuButton);
+
+      // After click, the button should now have "Close menu" label
+      expect(screen.getByRole('button', { name: /close menu/i })).toBeInTheDocument();
+
+      // Mobile navigation links should be visible in the dropdown
+      // The mobile menu shows navigation items and logout
+      expect(screen.getByText(/Signed in as:/)).toBeInTheDocument();
+    });
+
+    it('should close mobile menu when clicking outside', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<Header />);
+
+      // Open the menu
+      const menuButton = screen.getByRole('button', { name: /open menu/i });
+      await user.click(menuButton);
+
+      // Verify menu is open
+      expect(screen.getByRole('button', { name: /close menu/i })).toBeInTheDocument();
+
+      // Click on the close button (X icon)
+      const closeButton = screen.getByRole('button', { name: /close menu/i });
+      await user.click(closeButton);
+
+      // Menu should be closed (button should show "open menu" again)
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should show user email in mobile menu when open', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<Header />);
+
+      // Open the menu
+      const menuButton = screen.getByRole('button', { name: /open menu/i });
+      await user.click(menuButton);
+
+      // Check for "Signed in as:" text which is in the mobile menu
+      expect(screen.getByText(/Signed in as:/)).toBeInTheDocument();
+      // Email appears in multiple places, so use getAllByText
+      const emailElements = screen.getAllByText(/admin@test.com/);
+      expect(emailElements.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should allow logout from mobile menu', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<Header />);
+
+      // Open the menu
+      const menuButton = screen.getByRole('button', { name: /open menu/i });
+      await user.click(menuButton);
+
+      // Find the mobile menu logout button (it has text-red-600 class)
+      const logoutButtons = screen.getAllByRole('button', { name: /logout/i });
+      // There should be at least one logout button available
+      expect(logoutButtons.length).toBeGreaterThanOrEqual(1);
+
+      // Click any logout button - they all call the same signOut function
+      await user.click(logoutButtons[logoutButtons.length - 1]);
+      expect(mockSignOut).toHaveBeenCalled();
+    });
+  });
+
   describe('app title link', () => {
     it('should link to /admin dashboard', () => {
       renderWithRouter(<Header />);

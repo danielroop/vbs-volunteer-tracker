@@ -225,21 +225,14 @@ export default function UsersPage() {
       <Header />
       <div className="p-6 max-w-7xl mx-auto">
         {/* PAGE HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">User Management</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              Manage admin users and adult volunteers who can access the scanning tool.
-            </p>
-          </div>
-
-          <div className="flex gap-3 w-full md:w-auto">
-            <input
-              placeholder="Search users..."
-              className="border border-gray-200 rounded-xl px-4 py-2 w-full md:w-64 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">User Management</h1>
+              <p className="text-gray-500 text-sm mt-1">
+                Manage admin users and volunteers.
+              </p>
+            </div>
             <Button
               onClick={() => {
                 setFormData({ email: '', password: '', name: '', role: 'adult_volunteer' });
@@ -247,10 +240,18 @@ export default function UsersPage() {
                 setIsCreateModalOpen(true);
               }}
               variant="primary"
+              className="w-full sm:w-auto"
             >
               + Add User
             </Button>
           </div>
+
+          <input
+            placeholder="Search users..."
+            className="border border-gray-200 rounded-xl px-4 py-2 w-full outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
       {/* Global action message */}
@@ -269,8 +270,8 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* DATA TABLE */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* DATA TABLE - Desktop */}
+      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -329,6 +330,55 @@ export default function UsersPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* MOBILE CARD LIST */}
+      <div className="md:hidden space-y-3">
+        {filteredUsers.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 text-center text-gray-500">
+            {searchTerm ? 'No users found matching your search.' : 'No users found. Add your first user!'}
+          </div>
+        ) : (
+          filteredUsers.map(u => (
+            <div key={u.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              {/* Row 1: Name and Badges */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900 truncate">{u.name || 'Unnamed User'}</div>
+                  <div className="text-xs text-gray-500 truncate">{u.email}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  {getRoleBadge(u.role)}
+                  {getStatusBadge(u.isActive)}
+                </div>
+              </div>
+
+              {/* Row 2: Actions */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => openEditModal(u)}
+                  className="flex-1 text-primary-600 font-bold text-xs bg-white border border-primary-200 px-3 py-2 rounded-lg hover:bg-primary-600 hover:text-white transition-all shadow-sm text-center"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => openResetPasswordModal(u)}
+                  className="flex-1 text-orange-600 font-bold text-xs bg-white border border-orange-200 px-3 py-2 rounded-lg hover:bg-orange-600 hover:text-white transition-all shadow-sm text-center"
+                >
+                  Reset PW
+                </button>
+                {u.id !== user?.uid && (
+                  <button
+                    onClick={() => openDeleteModal(u)}
+                    className="flex-1 text-red-600 font-bold text-xs bg-white border border-red-200 px-3 py-2 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm text-center"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* CREATE USER MODAL */}

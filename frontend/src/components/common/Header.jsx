@@ -94,18 +94,21 @@ export default function Header({
             </Link>
           </div>
 
-          {/* Center: Active Event Indicator */}
+          {/* Center: Active Event Indicator + User Email */}
           {showEventIndicator && (
-            <div className="hidden md:flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
-              <span className="text-sm font-medium text-gray-600">
-                Active Event: <span className="text-primary-600">{currentEvent?.name || 'No Event Selected'}</span>
-              </span>
+            <div className="hidden md:flex flex-col items-center">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
+                <span className="text-sm font-medium text-gray-600">
+                  Active Event: <span className="text-primary-600">{currentEvent?.name || 'No Event Selected'}</span>
+                </span>
+              </div>
+              <span className="text-gray-500 text-xs">{user?.email}</span>
             </div>
           )}
 
-          {/* Right: Scan Button, User Info & Actions */}
-          <div className="flex items-center gap-3">
+          {/* Right: Scan Button + Logout Button */}
+          <div className="flex items-center gap-2">
             {actions}
             {/* Scan Button - styled as app switcher */}
             <Link
@@ -118,18 +121,22 @@ export default function Header({
             >
               Scan
             </Link>
-            <div className="hidden sm:flex items-center gap-3">
-              <span className="text-gray-600 text-sm">{user?.email}</span>
-              <Button variant="secondary" size="sm" onClick={handleSignOut}>
-                Logout
-              </Button>
-            </div>
+            {/* Logout Button - same style as Scan but gray */}
+            <button
+              onClick={handleSignOut}
+              className="hidden sm:inline-flex text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Logout
+            </button>
             {/* Mobile logout - only when hamburger menu is not shown */}
             <div className="sm:hidden">
               {!showNavTabs && (
-                <Button variant="secondary" size="sm" onClick={handleSignOut}>
+                <button
+                  onClick={handleSignOut}
+                  className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+                >
                   Logout
-                </Button>
+                </button>
               )}
             </div>
           </div>
@@ -190,16 +197,15 @@ export default function Header({
               Scan
             </Link>
 
-            {/* Divider before logout */}
-            <div className="border-t border-gray-100 my-2"></div>
-
-            {/* Logout in Mobile Menu */}
-            <button
-              onClick={handleSignOut}
-              className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-            >
-              Logout
-            </button>
+            {/* Logout Button in Mobile Menu - styled like Scan but gray */}
+            <div className="mx-3">
+              <button
+                onClick={handleSignOut}
+                className="w-full px-3 py-2 rounded-lg text-center text-base font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       )}

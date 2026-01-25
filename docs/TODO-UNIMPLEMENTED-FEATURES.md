@@ -1,11 +1,25 @@
 # Unimplemented Features - Future Work
 
-> **Last Updated:** January 24, 2026 (Consistent Header components implemented)
+> **Last Updated:** January 25, 2026 (Responsive Header with hamburger menu implemented)
 > This document lists features from the original PRD that are not yet implemented.
 
 ---
 
 ## Recently Completed
+
+### Responsive Header with Hamburger Menu
+**Completed:** January 25, 2026
+
+**What was implemented:**
+- ✅ Hamburger menu button for mobile views (below `md` breakpoint)
+- ✅ Mobile menu slide-down panel with all navigation options
+- ✅ Scan button added to both desktop navigation tabs and mobile menu
+- ✅ User email displayed in mobile menu
+- ✅ Logout option accessible from mobile menu
+- ✅ Proper accessibility attributes (aria-expanded, aria-controls, aria-label)
+- ✅ Active state highlighting for current route in both desktop and mobile views
+- ✅ Automatic menu close when navigation link is clicked
+- ✅ Comprehensive unit tests for all new hamburger menu and Scan link features
 
 ### Consistent Header Components
 **Completed:** January 24, 2026

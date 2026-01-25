@@ -15,6 +15,8 @@ This system eliminates manual time entry and Excel calculations by using QR code
 - ⏱️ Automatic hour calculation and rounding
 - 🚩 Smart flagging of early arrivals and late stays
 - 📥 Batch PDF form generation
+- 📲 Responsive design with mobile hamburger menu
+- 🔗 Quick access to Scanner from admin header
 
 ## Tech Stack
 
@@ -206,6 +208,13 @@ npm run logs
 - Real-time monitoring of check-ins/check-outs
 - Activity feed
 - Quick access to review and form generation
+
+### Responsive Header
+
+- Consistent navigation across all admin pages
+- **Desktop**: Full tab navigation (Dashboard, Daily Review, Students, Events, Users, Scan)
+- **Mobile**: Hamburger menu (three-line icon) in top-left that expands to show all navigation options
+- Quick access to Scanner from any admin page via the "Scan" link
 
 ### Daily Review (`/admin/daily-review`)
 

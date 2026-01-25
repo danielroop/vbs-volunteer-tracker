@@ -104,9 +104,20 @@ export default function Header({
             </div>
           )}
 
-          {/* Right: User Info & Actions */}
-          <div className="flex items-center gap-4">
+          {/* Right: Scan Button, User Info & Actions */}
+          <div className="flex items-center gap-3">
             {actions}
+            {/* Scan Button - styled as app switcher */}
+            <Link
+              to="/scan"
+              className={`hidden sm:inline-flex text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+                isScanActive
+                  ? 'text-white bg-primary-600 hover:bg-primary-700'
+                  : 'text-primary-600 bg-primary-50 hover:bg-primary-100'
+              }`}
+            >
+              Scan
+            </Link>
             <div className="hidden sm:flex items-center gap-3">
               <span className="text-gray-600 text-sm">{user?.email}</span>
               <Button variant="secondary" size="sm" onClick={handleSignOut}>
@@ -163,18 +174,24 @@ export default function Header({
               </Link>
             ))}
 
-            {/* Scan Link in Mobile Menu */}
+            {/* Divider before app switcher */}
+            <div className="border-t border-gray-100 my-2"></div>
+
+            {/* Scan Button in Mobile Menu - styled as app switcher */}
             <Link
               to="/scan"
               onClick={closeMobileMenu}
-              className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+              className={`block mx-3 px-3 py-2 rounded-lg text-center text-base font-bold transition-colors ${
                 isScanActive
-                  ? 'bg-primary-50 text-primary-600'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'text-white bg-primary-600'
+                  : 'text-primary-600 bg-primary-50 hover:bg-primary-100'
               }`}
             >
               Scan
             </Link>
+
+            {/* Divider before logout */}
+            <div className="border-t border-gray-100 my-2"></div>
 
             {/* Logout in Mobile Menu */}
             <button
@@ -204,17 +221,6 @@ export default function Header({
                 {tab.label}
               </Link>
             ))}
-            {/* Scan Link in Desktop Nav */}
-            <Link
-              to="/scan"
-              className={`px-4 py-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                isScanActive
-                  ? 'text-primary-600 border-b-2 border-primary-600'
-                  : 'text-gray-600 hover:text-gray-900 border-b-2 border-transparent'
-              }`}
-            >
-              Scan
-            </Link>
           </div>
         </div>
       )}

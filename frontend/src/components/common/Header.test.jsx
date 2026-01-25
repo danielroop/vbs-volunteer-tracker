@@ -293,8 +293,8 @@ describe('Header', () => {
     });
   });
 
-  describe('scan link', () => {
-    it('should render Scan link in desktop navigation', () => {
+  describe('scan button', () => {
+    it('should render Scan button in header', () => {
       renderWithRouter(<Header />);
 
       const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
@@ -302,7 +302,7 @@ describe('Header', () => {
       expect(scanLinks.some(link => link.getAttribute('href') === '/scan')).toBe(true);
     });
 
-    it('should render Scan link in mobile menu', async () => {
+    it('should render Scan button in mobile menu', async () => {
       const user = userEvent.setup();
       renderWithRouter(<Header />);
 
@@ -310,28 +310,30 @@ describe('Header', () => {
       const menuButton = screen.getByRole('button', { name: /open menu/i });
       await user.click(menuButton);
 
-      // Find Scan link in mobile menu
+      // Find Scan button in mobile menu (styled as button with block and text-center)
       const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      const mobileScanLink = scanLinks.find(link => link.classList.contains('rounded-md'));
-      expect(mobileScanLink).toBeInTheDocument();
-      expect(mobileScanLink).toHaveAttribute('href', '/scan');
+      const mobileScanButton = scanLinks.find(link => link.classList.contains('text-center'));
+      expect(mobileScanButton).toBeInTheDocument();
+      expect(mobileScanButton).toHaveAttribute('href', '/scan');
     });
 
-    it('should highlight Scan link when on /scan route', () => {
+    it('should highlight Scan button when on /scan route', () => {
       renderWithRouter(<Header />, { route: '/scan' });
 
       const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      expect(scanLinks.some(link => link.classList.contains('text-primary-600'))).toBe(true);
+      // Active state uses bg-primary-600 (filled button) instead of text-primary-600
+      expect(scanLinks.some(link => link.classList.contains('bg-primary-600'))).toBe(true);
     });
 
-    it('should highlight Scan link when on /scan/:eventId route', () => {
+    it('should highlight Scan button when on /scan/:eventId route', () => {
       renderWithRouter(<Header />, { route: '/scan/event123' });
 
       const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      expect(scanLinks.some(link => link.classList.contains('text-primary-600'))).toBe(true);
+      // Active state uses bg-primary-600 (filled button)
+      expect(scanLinks.some(link => link.classList.contains('bg-primary-600'))).toBe(true);
     });
 
-    it('should close mobile menu when Scan link is clicked', async () => {
+    it('should close mobile menu when Scan button is clicked', async () => {
       const user = userEvent.setup();
       renderWithRouter(<Header />);
 
@@ -339,10 +341,10 @@ describe('Header', () => {
       const menuButton = screen.getByRole('button', { name: /open menu/i });
       await user.click(menuButton);
 
-      // Click Scan link
+      // Click Scan button (mobile version has text-center class)
       const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      const mobileScanLink = scanLinks.find(link => link.classList.contains('rounded-md'));
-      await user.click(mobileScanLink);
+      const mobileScanButton = scanLinks.find(link => link.classList.contains('text-center'));
+      await user.click(mobileScanButton);
 
       // Menu should close
       await waitFor(() => {

@@ -66,14 +66,18 @@ export function useQRScanner(options = {}) {
 
       // Clean up any existing scanner instance before creating a new one
       if (scannerRef.current) {
-        try {
-          await scannerRef.current.stop();
-          scannerRef.current.clear();
-        } catch (cleanupErr) {
-          // Ignore cleanup errors - scanner might already be stopped
-          console.warn('Cleanup before start:', cleanupErr);
-        }
+        const oldScanner = scannerRef.current;
         scannerRef.current = null;
+        try {
+          await oldScanner.stop();
+        } catch (stopErr) {
+          // Ignore stop errors - scanner might already be stopped
+        }
+        try {
+          oldScanner.clear();
+        } catch (clearErr) {
+          // Ignore clear errors - DOM element might already be removed
+        }
       }
 
       // Initialize scanner
@@ -151,7 +155,12 @@ export function useQRScanner(options = {}) {
       if (state === 2) { // Html5QrcodeScannerState.SCANNING = 2
         await scanner.stop();
       }
-      scanner.clear();
+      // Only call clear() in a try-catch as it can fail if DOM element is gone
+      try {
+        scanner.clear();
+      } catch (clearErr) {
+        // Ignore clear errors - DOM element might already be removed
+      }
       setIsScanning(false);
     } catch (err) {
       console.error('Error stopping scanner:', err);
@@ -176,20 +185,32 @@ export function useQRScanner(options = {}) {
    * Force reset scanner state (useful when switching modes)
    */
   const resetScanner = useCallback(async () => {
+    // Don't reset if already transitioning
+    if (isTransitioning.current) {
+      return;
+    }
+
     isTransitioning.current = true;
 
     try {
       if (scannerRef.current) {
-        try {
-          const state = scannerRef.current.getState();
-          if (state === 2) { // SCANNING state
-            await scannerRef.current.stop();
-          }
-          scannerRef.current.clear();
-        } catch (err) {
-          console.warn('Error during scanner reset:', err);
-        }
+        const scanner = scannerRef.current;
         scannerRef.current = null;
+
+        try {
+          const state = scanner.getState();
+          if (state === 2) { // SCANNING state
+            await scanner.stop();
+          }
+        } catch (stopErr) {
+          // Ignore stop errors
+        }
+
+        try {
+          scanner.clear();
+        } catch (clearErr) {
+          // Ignore clear errors - DOM element might already be removed
+        }
       }
       setIsScanning(false);
       setError(null);
@@ -207,9 +228,13 @@ export function useQRScanner(options = {}) {
         scannerRef.current = null;
         try {
           scanner.stop().catch(() => {});
+        } catch (stopErr) {
+          // Ignore stop errors on unmount
+        }
+        try {
           scanner.clear();
-        } catch (err) {
-          // Ignore cleanup errors on unmount
+        } catch (clearErr) {
+          // Ignore clear errors on unmount - DOM element might already be removed
         }
       }
       isTransitioning.current = false;

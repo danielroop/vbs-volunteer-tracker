@@ -34,6 +34,7 @@
 | Daily Review | 3.5.2 | Full daily review with force checkout, force all checkout, CSV/PDF export, search/filter, override reasons display |
 | Consistent Header | 4.0 | Reusable Header components for admin and scanner pages with consistent navigation |
 | Responsive Header | 4.1 | Hamburger menu for mobile, Scan link in header, accessible navigation on all devices |
+| Scanner Mode Change Fix | 4.2 | Camera properly resets when switching between Check-In and Check-Out modes (Issue #17) |
 
 ### Partially Implemented
 

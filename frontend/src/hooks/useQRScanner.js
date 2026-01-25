@@ -23,6 +23,8 @@ export function useQRScanner(options = {}) {
   const [cameras, setCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState(null);
   const scannerRef = useRef(null);
+  // Track if scanner is in the process of starting or stopping to prevent race conditions
+  const isTransitioning = useRef(false);
 
   /**
    * Get available cameras
@@ -48,15 +50,30 @@ export function useQRScanner(options = {}) {
    * Start scanning
    */
   const startScanning = useCallback(async (elementId) => {
-    if (isScanning) {
-      console.warn('Scanner already running');
+    // Prevent starting if already scanning or in the middle of a transition
+    if (isScanning || isTransitioning.current) {
+      console.warn('Scanner already running or transitioning');
       return;
     }
+
+    isTransitioning.current = true;
 
     try {
       // Get cameras if not already fetched
       if (cameras.length === 0) {
         await getCameras();
+      }
+
+      // Clean up any existing scanner instance before creating a new one
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+          scannerRef.current.clear();
+        } catch (cleanupErr) {
+          // Ignore cleanup errors - scanner might already be stopped
+          console.warn('Cleanup before start:', cleanupErr);
+        }
+        scannerRef.current = null;
       }
 
       // Initialize scanner
@@ -101,6 +118,9 @@ export function useQRScanner(options = {}) {
       console.error('Error starting scanner:', err);
       setError('Failed to start scanner. Please check camera permissions.');
       setIsScanning(false);
+      scannerRef.current = null;
+    } finally {
+      isTransitioning.current = false;
     }
   }, [isScanning, cameras, selectedCamera, fps, qrbox, onSuccess, onError, getCameras]);
 
@@ -108,19 +128,39 @@ export function useQRScanner(options = {}) {
    * Stop scanning
    */
   const stopScanning = useCallback(async () => {
-    if (!isScanning || !scannerRef.current) {
+    // If transitioning, wait a bit and try again
+    if (isTransitioning.current) {
+      console.warn('Scanner is transitioning, waiting to stop...');
       return;
     }
 
+    // Stop even if isScanning state hasn't updated yet (handles race conditions)
+    if (!scannerRef.current) {
+      setIsScanning(false);
+      return;
+    }
+
+    isTransitioning.current = true;
+
     try {
-      await scannerRef.current.stop();
-      scannerRef.current.clear();
+      const scanner = scannerRef.current;
       scannerRef.current = null;
+
+      // Check if scanner is actually running before stopping
+      const state = scanner.getState();
+      if (state === 2) { // Html5QrcodeScannerState.SCANNING = 2
+        await scanner.stop();
+      }
+      scanner.clear();
       setIsScanning(false);
     } catch (err) {
       console.error('Error stopping scanner:', err);
+      // Ensure state is reset even on error
+      setIsScanning(false);
+    } finally {
+      isTransitioning.current = false;
     }
-  }, [isScanning]);
+  }, []);
 
   /**
    * Switch camera
@@ -132,14 +172,49 @@ export function useQRScanner(options = {}) {
     setSelectedCamera(cameraId);
   }, [isScanning, stopScanning]);
 
+  /**
+   * Force reset scanner state (useful when switching modes)
+   */
+  const resetScanner = useCallback(async () => {
+    isTransitioning.current = true;
+
+    try {
+      if (scannerRef.current) {
+        try {
+          const state = scannerRef.current.getState();
+          if (state === 2) { // SCANNING state
+            await scannerRef.current.stop();
+          }
+          scannerRef.current.clear();
+        } catch (err) {
+          console.warn('Error during scanner reset:', err);
+        }
+        scannerRef.current = null;
+      }
+      setIsScanning(false);
+      setError(null);
+    } finally {
+      isTransitioning.current = false;
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (scannerRef.current && isScanning) {
-        scannerRef.current.stop().catch(console.error);
+      // Force cleanup without waiting for state
+      if (scannerRef.current) {
+        const scanner = scannerRef.current;
+        scannerRef.current = null;
+        try {
+          scanner.stop().catch(() => {});
+          scanner.clear();
+        } catch (err) {
+          // Ignore cleanup errors on unmount
+        }
       }
+      isTransitioning.current = false;
     };
-  }, [isScanning]);
+  }, []);
 
   return {
     isScanning,
@@ -150,6 +225,7 @@ export function useQRScanner(options = {}) {
     stopScanning,
     switchCamera,
     getCameras,
+    resetScanner,
   };
 }
 

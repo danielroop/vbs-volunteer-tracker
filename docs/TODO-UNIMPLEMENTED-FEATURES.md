@@ -1,11 +1,35 @@
 # Unimplemented Features - Future Work
 
-> **Last Updated:** January 25, 2026 (Responsive Header with hamburger menu implemented)
+> **Last Updated:** January 25, 2026 (Scanner Mode Change Camera Reset fix - Issue #17)
 > This document lists features from the original PRD that are not yet implemented.
 
 ---
 
 ## Recently Completed
+
+### Scanner Mode Change Camera Reset Fix (Issue #17)
+**Completed:** January 25, 2026
+
+**Problem:** Camera did not reload when switching between Check-In and Check-Out modes in the scanner. Users had to manually refresh the page to restart the camera.
+
+**Root Cause:** Race condition in scanner state management - `isStarting.current` flag was not being reset when navigating away from the scanner view.
+
+**What was implemented:**
+- ✅ Added `isTransitioning` ref to prevent race conditions in `useQRScanner` hook
+- ✅ Added `resetScanner()` function to properly reset scanner state when changing modes
+- ✅ Scanner now properly resets when navigating from scanner view to mode selection
+- ✅ Improved cleanup logic to handle edge cases and concurrent operations
+- ✅ Added proper timeout cleanup to prevent stale timers
+- ✅ Comprehensive unit tests for `useQRScanner` hook (17 tests)
+- ✅ Comprehensive unit tests for Scanner component mode changes (18 tests)
+
+**Files Modified:**
+- `frontend/src/hooks/useQRScanner.js` - Added transition tracking and reset functionality
+- `frontend/src/components/Scanner/index.jsx` - Updated to use resetScanner on mode changes
+- `frontend/src/hooks/useQRScanner.test.js` - New test file
+- `frontend/src/components/Scanner/Scanner.test.jsx` - New test file
+
+---
 
 ### Responsive Header with Hamburger Menu
 **Completed:** January 25, 2026

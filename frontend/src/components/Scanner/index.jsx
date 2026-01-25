@@ -47,7 +47,7 @@ export default function Scanner() {
     }
   }, [loading, localEvent, urlActivityId, urlEventId, urlAction, navigate]);
 
-  const { startScanning, stopScanning } = useQRScanner({
+  const { startScanning, stopScanning, resetScanner } = useQRScanner({
     onSuccess: async (data) => {
       const qrString = typeof data === 'string' ? data : data?.rawData || data?.data;
 
@@ -115,15 +115,35 @@ export default function Scanner() {
   const hasValidActivity = !!currentActivity;
   const hasValidAction = urlAction === 'checkin' || urlAction === 'checkout';
 
+  // Reset scanner state when conditions become invalid (e.g., user navigates to mode selection)
+  // This ensures scanner can restart when user returns to a valid action
+  useEffect(() => {
+    if (!hasValidAction || !hasValidActivity || !hasValidEvent) {
+      isStarting.current = false;
+      // Reset scanner to ensure clean state when navigating away
+      resetScanner();
+    }
+  }, [hasValidAction, hasValidActivity, hasValidEvent, resetScanner]);
+
+  // Start scanner when all conditions are met
+  // Using urlAction as a key dependency ensures restart on mode change
   useEffect(() => {
     if (!loading && hasValidEvent && hasValidActivity && hasValidAction && !isStarting.current) {
       isStarting.current = true;
-      setTimeout(() => {
-        startScanning('qr-reader').catch(() => isStarting.current = false);
+      const timeoutId = setTimeout(() => {
+        startScanning('qr-reader').catch(() => {
+          isStarting.current = false;
+        });
       }, 500);
-      return () => stopScanning();
+
+      return () => {
+        clearTimeout(timeoutId);
+        stopScanning();
+        // Reset flag on cleanup to allow restart on next mount/update
+        isStarting.current = false;
+      };
     }
-  }, [loading, hasValidEvent, hasValidActivity, hasValidAction, startScanning, stopScanning]);
+  }, [loading, hasValidEvent, hasValidActivity, hasValidAction, urlAction, startScanning, stopScanning]);
 
   function showMessage(type, text) {
     setMessage({ type, text });

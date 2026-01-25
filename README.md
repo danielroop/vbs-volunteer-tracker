@@ -195,6 +195,8 @@ npm run logs
 - Scans QR codes to check in students
 - Shows last 5 scans for verification
 - Works offline with automatic sync
+- Supports seamless mode switching between Check-In and Check-Out
+- Camera properly resets when changing modes (no manual refresh required)
 
 ### Self-Checkout Kiosk (`/checkout/:eventId`)
 

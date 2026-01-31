@@ -20,6 +20,7 @@ export default function StudentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [printMode, setPrintMode] = useState(false);
   const [badgePrintMode, setBadgePrintMode] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState(new Set());
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -106,6 +107,43 @@ export default function StudentsPage() {
   const filteredStudents = studentsWithHours.filter(s =>
     `${s.firstName} ${s.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Selection helpers
+  const toggleStudentSelection = (studentId) => {
+    setSelectedStudents(prev => {
+      const next = new Set(prev);
+      if (next.has(studentId)) {
+        next.delete(studentId);
+      } else {
+        next.add(studentId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedStudents(prev => {
+      const next = new Set(prev);
+      filteredStudents.forEach(s => next.add(s.id));
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedStudents(new Set());
+  };
+
+  // Check if all filtered students are selected
+  const allFilteredSelected = filteredStudents.length > 0 &&
+    filteredStudents.every(s => selectedStudents.has(s.id));
+
+  // Get students to print (selected or all if none selected)
+  const getStudentsToPrint = () => {
+    if (selectedStudents.size > 0) {
+      return studentsWithHours.filter(s => selectedStudents.has(s.id));
+    }
+    return studentsWithHours;
+  };
 
   // Calculate activity logs for each student (for printing)
   const getStudentActivityLog = (studentId) => {
@@ -293,7 +331,7 @@ export default function StudentsPage() {
       </style>
 
       {/* PAGE HEADER WITH ACTIONS */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 no-print">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4 no-print">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Volunteer Roster</h1>
         </div>
@@ -305,17 +343,63 @@ export default function StudentsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Button onClick={handlePrintBadges} variant="secondary">Print Badges</Button>
-          <Button onClick={handlePrintReports} variant="secondary">Print Reports</Button>
+          <Button onClick={handlePrintBadges} variant="secondary">
+            {selectedStudents.size > 0 ? `Print Badges (${selectedStudents.size})` : 'Print Badges'}
+          </Button>
+          <Button onClick={handlePrintReports} variant="secondary">
+            {selectedStudents.size > 0 ? `Print Reports (${selectedStudents.size})` : 'Print Reports'}
+          </Button>
           <Button onClick={() => setIsModalOpen(true)} variant="primary">+ Add Student</Button>
         </div>
       </div>
+
+      {/* SELECTION BAR */}
+      {selectedStudents.size > 0 && (
+        <div className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3 no-print">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center justify-center bg-primary-600 text-white text-sm font-bold px-3 py-1 rounded-full">
+              {selectedStudents.size}
+            </span>
+            <span className="text-sm font-medium text-primary-800">
+              {selectedStudents.size === 1 ? 'student selected' : 'students selected'}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={selectAllFiltered} variant="secondary" size="sm">
+              Select All Visible ({filteredStudents.length})
+            </Button>
+            <Button onClick={clearSelection} variant="secondary" size="sm">
+              Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* DATA TABLE */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden no-print">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <th className="px-4 py-4 w-12">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      selectAllFiltered();
+                    } else {
+                      // Deselect only the filtered students
+                      setSelectedStudents(prev => {
+                        const next = new Set(prev);
+                        filteredStudents.forEach(s => next.delete(s.id));
+                        return next;
+                      });
+                    }
+                  }}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                  aria-label={allFilteredSelected ? "Deselect all students" : "Select all students"}
+                />
+              </th>
               <th className="px-6 py-4">Student Name</th>
               <th className="px-6 py-4">School Details</th>
               <th className="px-6 py-4 text-center">Event Hours</th>
@@ -324,10 +408,19 @@ export default function StudentsPage() {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {filteredStudents.map(student => (
-              <tr 
-                key={student.id} 
-                className="group hover:bg-gray-50 transition-colors"
+              <tr
+                key={student.id}
+                className={`group hover:bg-gray-50 transition-colors ${selectedStudents.has(student.id) ? 'bg-primary-50' : ''}`}
               >
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={selectedStudents.has(student.id)}
+                    onChange={() => toggleStudentSelection(student.id)}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                    aria-label={`Select ${student.firstName} ${student.lastName}`}
+                  />
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-bold text-gray-900">
                     {student.lastName}, {student.firstName}
@@ -410,7 +503,7 @@ export default function StudentsPage() {
 
       {/* PRINT ALL FORMS */}
       <div id="print-all-forms">
-        {studentsWithHours.map((student) => {
+        {getStudentsToPrint().map((student) => {
           const activityLog = getStudentActivityLog(student.id);
           const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);
           const overrideHours = parseFloat(student?.overrideHours || 0);
@@ -497,9 +590,10 @@ export default function StudentsPage() {
       <div id="print-all-badges">
         {(() => {
           // Group students into pages of 8
+          const studentsToPrint = getStudentsToPrint();
           const pages = [];
-          for (let i = 0; i < studentsWithHours.length; i += 8) {
-            pages.push(studentsWithHours.slice(i, i + 8));
+          for (let i = 0; i < studentsToPrint.length; i += 8) {
+            pages.push(studentsToPrint.slice(i, i + 8));
           }
 
           return pages.map((pageStudents, pageIndex) => (

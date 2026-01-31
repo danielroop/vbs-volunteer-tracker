@@ -460,31 +460,47 @@ describe('StudentDetailPage Edit Functionality', () => {
 describe('StudentDetailPage Summary Section', () => {
   it('should calculate total hours correctly', () => {
     const activityLog = [
-      { name: 'Morning Session', totalHours: '4.00', totalProjectedHours: '0.00' },
-      { name: 'Afternoon Session', totalHours: '3.50', totalProjectedHours: '1.00' }
+      { name: 'Morning Session', totalHours: '4.00' },
+      { name: 'Afternoon Session', totalHours: '3.50' }
     ];
 
     const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);
-    const totalProjectedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalProjectedHours), 0);
 
     expect(totalCalculatedHours).toBe(7.5);
-    expect(totalProjectedHours).toBe(1);
   });
 });
 
-describe('StudentDetailPage Projected Hours', () => {
-  it('should correctly identify projected entries', () => {
+describe('StudentDetailPage Unchecked Out Entries', () => {
+  it('should correctly identify entries without checkout', () => {
     const entryWithCheckout = {
-      checkOutTime: { toDate: () => new Date(), seconds: 1738328400 },
-      isProjected: false
+      checkOutTime: { toDate: () => new Date(), seconds: 1738328400 }
     };
 
     const entryWithoutCheckout = {
-      checkOutTime: null,
-      isProjected: true
+      checkOutTime: null
     };
 
-    expect(entryWithCheckout.isProjected).toBe(false);
-    expect(entryWithoutCheckout.isProjected).toBe(true);
+    expect(entryWithCheckout.checkOutTime).not.toBeNull();
+    expect(entryWithoutCheckout.checkOutTime).toBeNull();
+  });
+
+  it('should detect when entries are not checked out', () => {
+    const entries = [
+      { checkOutTime: { seconds: 1738328400 } },
+      { checkOutTime: null }
+    ];
+
+    const hasUncheckedOutEntries = entries.some(entry => !entry.checkOutTime);
+    expect(hasUncheckedOutEntries).toBe(true);
+  });
+
+  it('should return false when all entries are checked out', () => {
+    const entries = [
+      { checkOutTime: { seconds: 1738328400 } },
+      { checkOutTime: { seconds: 1738342800 } }
+    ];
+
+    const hasUncheckedOutEntries = entries.some(entry => !entry.checkOutTime);
+    expect(hasUncheckedOutEntries).toBe(false);
   });
 });

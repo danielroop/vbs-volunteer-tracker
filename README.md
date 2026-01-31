@@ -240,7 +240,7 @@ npm run logs
 - Edit time entries directly with same functionality as Daily Review
 - View change history and modification reasons
 - Print service log and badge for individual student
-- Summary of hours by activity with projected hours tracking
+- Summary of hours by activity
 
 ### Form Generation (`/admin/forms`)
 

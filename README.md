@@ -231,7 +231,16 @@ npm run logs
 - Review and approve daily hours
 - Flag early arrivals and late stays
 - Bulk approval and individual adjustments
-- Export daily reports
+- Edit check-in/check-out times with reason tracking and audit trail
+- Export daily reports (CSV and PDF)
+
+### Student Detail (`/admin/students/:studentId`)
+
+- Detailed view of individual student's volunteer hours
+- Edit time entries directly with same functionality as Daily Review
+- View change history and modification reasons
+- Print service log and badge for individual student
+- Summary of hours by activity with projected hours tracking
 
 ### Form Generation (`/admin/forms`)
 

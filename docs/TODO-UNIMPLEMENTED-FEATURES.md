@@ -1,11 +1,30 @@
 # Unimplemented Features - Future Work
 
-> **Last Updated:** January 31, 2026 (Safari print compatibility and comprehensive tests implemented)
+> **Last Updated:** January 31, 2026 (Edit entries on Student Detail page implemented)
 > This document lists features from the original PRD that are not yet implemented.
 
 ---
 
 ## Recently Completed
+
+### Edit Entries on Student Detail Page (GitHub Issue #15)
+**Completed:** January 31, 2026
+
+**What was implemented:**
+- ✅ Edit modal with same functionality as Daily Review page
+- ✅ Edit button on each time entry row in the Student Detail page
+- ✅ Displays original check-in and check-out times (read-only)
+- ✅ Allows editing of both check-in and check-out times via datetime-local inputs
+- ✅ Real-time calculated hours display
+- ✅ Reason for change field (required)
+- ✅ Previous change history display
+- ✅ Full change log tracking with timestamps and descriptions
+- ✅ Firestore updateDoc to persist changes
+- ✅ Comprehensive unit tests for the new feature (23 tests in StudentDetailPage.test.jsx)
+
+**Files Changed:**
+- `frontend/src/pages/StudentDetailPage.jsx` (edit modal state, openEditModal, handleEditSave, Edit button, modal UI)
+- `frontend/src/pages/StudentDetailPage.test.jsx` (new test file)
 
 ### Safari Print Compatibility Fix
 **Completed:** January 31, 2026

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { db } from '../utils/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
@@ -8,7 +9,6 @@ import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import PrintableBadge from '../components/common/PrintableBadge';
-import { safePrint } from '../utils/printUtils';
 
 export default function StudentDetailPage() {
     const { studentId } = useParams();
@@ -20,6 +20,18 @@ export default function StudentDetailPage() {
     const [loading, setLoading] = useState(true);
     const [printMode, setPrintMode] = useState(null);
     const [notesModal, setNotesModal] = useState({ isOpen: false, entry: null });
+
+    // Watch for printMode changes and reset after print dialog closes
+    useEffect(() => {
+        if (printMode === null) return; // Only act when printMode is set
+        
+        // Reset print mode after print dialog closes
+        const timer = setTimeout(() => {
+            setPrintMode(null);
+        }, 3000);
+        
+        return () => clearTimeout(timer);
+    }, [printMode]);
 
     useEffect(() => {
         async function fetchStudent() {
@@ -178,11 +190,52 @@ export default function StudentDetailPage() {
         });
     }, [entries, currentEvent]);
 
-    const handlePrint = async (mode) => {
-        await safePrint({
-            beforePrint: () => setPrintMode(mode),
-            afterPrint: () => setPrintMode(null)
+    // Print helper: render the DOM element into a standalone document and print (Safari-compatible)
+    const PRINT_STYLES = `
+      body { background: white; margin: 0; padding: 0; }
+      .ocps-form-container { font-family: Arial, sans-serif; padding: 0.3in; color: black; line-height: 1.1; font-size: 9pt; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 4px; }
+      th, td { border: 1px solid black; padding: 4px 8px; vertical-align: middle; }
+      .field-box { border-bottom: 1px solid black; display: inline-block; min-width: 120px; padding: 0 5px; font-weight: bold; }
+      .reflection-box { border: 1px solid black; height: 210px; width: 100%; margin-top: 4px; display: flex; flex-direction: column; }
+      .reflection-line { border-bottom: 1px solid #eee; flex: 1; }
+      .ocps-logo { width: 45px; height: 45px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 8pt; text-align: center; }
+
+      .student-badge { border: 2px solid #000; padding: 0.25in; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; box-sizing: border-box; text-align: center; width: 3.5in; height: 2.5in; }
+      .badge-name { font-size: 16pt; font-weight: bold; margin-bottom: 4px; color: #000; }
+      .badge-id { font-size: 9pt; color: #666; margin-bottom: 8px; }
+      .badge-qr { margin: 0 auto; }
+      .badge-event { font-size: 8pt; color: #333; margin-top: 8px; text-transform: uppercase; font-weight: bold; }
+    `;
+
+    const printElementById = (id, title = 'Print') => {
+        const el = document.getElementById(id);
+        if (!el) {
+            alert('Print content not available');
+            return;
+        }
+
+        const html = createPrintDocument({
+            title,
+            styles: PRINT_STYLES,
+            body: el.outerHTML
         });
+
+        printInNewWindow(html, {
+            onComplete: () => setPrintMode(null),
+            onError: () => setPrintMode(null)
+        });
+    };
+
+    const handlePrint = (mode) => {
+        // Keep printMode state only for UX; actual printing happens in a new window
+        setPrintMode(mode);
+
+        if (mode === 'badge') {
+            printElementById('printable-badge', 'Badge');
+        } else {
+            printElementById('ocps-form', 'Service Log');
+        }
     };
 
     if (loading) return (

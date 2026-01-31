@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
+import { formatTime, formatHours } from '../utils/hourCalculations';
 import { db } from '../utils/firebase';
-import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
 import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
@@ -20,6 +21,19 @@ export default function StudentDetailPage() {
     const [loading, setLoading] = useState(true);
     const [printMode, setPrintMode] = useState(null);
     const [notesModal, setNotesModal] = useState({ isOpen: false, entry: null });
+
+    // Edit hours modal state
+    const [editModal, setEditModal] = useState({
+        isOpen: false,
+        entry: null,
+        originalCheckInTime: '',
+        originalCheckOutTime: '',
+        checkInTime: '',
+        checkOutTime: '',
+        reason: '',
+        loading: false,
+        error: null
+    });
 
     // Watch for printMode changes and reset after print dialog closes
     useEffect(() => {
@@ -238,6 +252,115 @@ export default function StudentDetailPage() {
         }
     };
 
+    // Format date for datetime-local input using LOCAL time (not UTC)
+    const formatDateTimeLocal = (date) => {
+        if (!date) return '';
+        const d = date instanceof Date ? date : date.toDate();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
+    // Open edit modal
+    const openEditModal = (entry) => {
+        const originalIn = formatDateTimeLocal(entry.checkInTime);
+        const originalOut = entry.checkOutTime ? formatDateTimeLocal(entry.checkOutTime) : '';
+
+        setEditModal({
+            isOpen: true,
+            entry,
+            originalCheckInTime: originalIn,
+            originalCheckOutTime: originalOut,
+            checkInTime: originalIn,
+            checkOutTime: originalOut,
+            reason: '',
+            loading: false,
+            error: null
+        });
+    };
+
+    // Handle edit save
+    const handleEditSave = async () => {
+        if (!editModal.entry || !editModal.reason) {
+            setEditModal(prev => ({ ...prev, error: 'Reason is required' }));
+            return;
+        }
+
+        setEditModal(prev => ({ ...prev, loading: true, error: null }));
+
+        try {
+            const checkInTime = new Date(editModal.checkInTime);
+            const checkOutTime = editModal.checkOutTime ? new Date(editModal.checkOutTime) : null;
+
+            // Calculate hours if both times exist
+            let hoursWorked = null;
+            let rawMinutes = null;
+            if (checkInTime && checkOutTime) {
+                const minutes = Math.floor((checkOutTime - checkInTime) / 1000 / 60);
+                rawMinutes = minutes;
+                hoursWorked = Math.round((minutes / 60) * 2) / 2; // Round to nearest 0.5
+            }
+
+            // Build change log message
+            const oldIn = editModal.originalCheckInTime ? formatTime(new Date(editModal.originalCheckInTime)) : 'none';
+            const newIn = formatTime(checkInTime);
+            const oldOut = editModal.originalCheckOutTime ? formatTime(new Date(editModal.originalCheckOutTime)) : 'none';
+            const newOut = checkOutTime ? formatTime(checkOutTime) : 'none';
+
+            const changeDescription = `Changed Check-In from ${oldIn} to ${newIn} and Check-Out from ${oldOut} to ${newOut} for "${editModal.reason}"`;
+
+            // Create change log entry
+            const changeLogEntry = {
+                timestamp: new Date().toISOString(),
+                modifiedBy: 'admin',
+                type: 'edit',
+                oldCheckInTime: editModal.originalCheckInTime,
+                newCheckInTime: editModal.checkInTime,
+                oldCheckOutTime: editModal.originalCheckOutTime,
+                newCheckOutTime: editModal.checkOutTime,
+                reason: editModal.reason,
+                description: changeDescription
+            };
+
+            // Get existing change log or create new array
+            const existingChangeLog = editModal.entry.changeLog || [];
+
+            const entryRef = doc(db, 'timeEntries', editModal.entry.id);
+            await updateDoc(entryRef, {
+                checkInTime,
+                checkOutTime,
+                hoursWorked,
+                rawMinutes,
+                modifiedBy: 'admin',
+                modificationReason: changeDescription,
+                modifiedAt: new Date(),
+                changeLog: [...existingChangeLog, changeLogEntry]
+            });
+
+            setEditModal({
+                isOpen: false,
+                entry: null,
+                originalCheckInTime: '',
+                originalCheckOutTime: '',
+                checkInTime: '',
+                checkOutTime: '',
+                reason: '',
+                loading: false,
+                error: null
+            });
+        } catch (error) {
+            console.error('Edit save error:', error);
+            setEditModal(prev => ({
+                ...prev,
+                loading: false,
+                error: error.message || 'Failed to save changes'
+            }));
+        }
+    };
+
     if (loading) return (
         <div className="min-h-screen bg-gray-50">
             <Header />
@@ -363,7 +486,7 @@ export default function StudentDetailPage() {
                 <div className="lg:col-span-3">
                     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th><th className="px-6 py-4 text-center">Status</th></tr></thead>
+                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th><th className="px-6 py-4 text-center">Status</th><th className="px-6 py-4 text-center">Actions</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
                                 {enrichedEntries.map(e => (
                                     <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''} ${e.forcedCheckoutReason || e.modificationReason ? 'bg-blue-50' : ''}`}>
@@ -415,6 +538,15 @@ export default function StudentDetailPage() {
                                                     </button>
                                                 ) : null}
                                             </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={() => openEditModal(e)}
+                                            >
+                                                Edit
+                                            </Button>
                                         </td>
                                     </tr>
                                 ))}
@@ -565,6 +697,151 @@ export default function StudentDetailPage() {
                             </div>
                         ) : (
                             <p className="text-sm text-gray-500 italic">No change history available.</p>
+                        )}
+                    </div>
+                )}
+            </Modal>
+
+            {/* Edit Hours Modal */}
+            <Modal
+                isOpen={editModal.isOpen}
+                onClose={() => setEditModal({ ...editModal, isOpen: false })}
+                title="Edit Hours"
+                size="md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => setEditModal({ ...editModal, isOpen: false })}
+                            disabled={editModal.loading}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={handleEditSave}
+                            loading={editModal.loading}
+                        >
+                            Save Changes
+                        </Button>
+                    </>
+                }
+            >
+                {editModal.entry && (
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-gray-600">
+                                Editing hours for:{' '}
+                                <span className="font-bold text-gray-900">
+                                    {student?.firstName} {student?.lastName}
+                                </span>
+                            </p>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Date: {editModal.entry.checkInTime?.toDate?.()?.toLocaleDateString() || 'N/A'} | Activity: {currentEvent?.activities?.find(a => a.id === editModal.entry.activityId)?.name || 'Unknown'}
+                            </p>
+                        </div>
+
+                        {/* Original Times (Read-Only) */}
+                        <div className="bg-gray-100 p-3 rounded-lg">
+                            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Original Values</p>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span className="text-gray-500">Check-In:</span>{' '}
+                                    <span className="font-medium">
+                                        {editModal.originalCheckInTime ? formatTime(new Date(editModal.originalCheckInTime)) : 'None'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Check-Out:</span>{' '}
+                                    <span className="font-medium">
+                                        {editModal.originalCheckOutTime ? formatTime(new Date(editModal.originalCheckOutTime)) : 'None'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Editable Times */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    New Check-In Time
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    value={editModal.checkInTime}
+                                    onChange={(e) => setEditModal(prev => ({
+                                        ...prev,
+                                        checkInTime: e.target.value
+                                    }))}
+                                    className="input-field w-full"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    New Check-Out Time
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    value={editModal.checkOutTime}
+                                    onChange={(e) => setEditModal(prev => ({
+                                        ...prev,
+                                        checkOutTime: e.target.value
+                                    }))}
+                                    className="input-field w-full"
+                                />
+                            </div>
+                        </div>
+
+                        {editModal.checkInTime && editModal.checkOutTime && (
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                                <p className="text-sm text-gray-600">
+                                    Calculated hours:{' '}
+                                    <span className="font-bold">
+                                        {(() => {
+                                            const checkIn = new Date(editModal.checkInTime);
+                                            const checkOut = new Date(editModal.checkOutTime);
+                                            const minutes = Math.floor((checkOut - checkIn) / 1000 / 60);
+                                            const hours = Math.round((minutes / 60) * 2) / 2;
+                                            return formatHours(hours);
+                                        })()}
+                                    </span>
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Existing Change Log */}
+                        {editModal.entry.changeLog && editModal.entry.changeLog.length > 0 && (
+                            <div className="bg-blue-50 p-3 rounded-lg">
+                                <p className="text-xs font-semibold text-blue-600 uppercase mb-2">Previous Changes</p>
+                                <div className="space-y-2 max-h-32 overflow-y-auto">
+                                    {editModal.entry.changeLog.map((log, idx) => (
+                                        <div key={idx} className="text-xs text-blue-700">
+                                            <span className="text-gray-500">{new Date(log.timestamp).toLocaleString()}:</span> {log.description}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Reason for Change <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                                value={editModal.reason}
+                                onChange={(e) => setEditModal(prev => ({
+                                    ...prev,
+                                    reason: e.target.value
+                                }))}
+                                placeholder="e.g., Helped with setup, adjusted based on supervisor feedback"
+                                className="input-field w-full h-24 resize-none"
+                            />
+                        </div>
+
+                        {editModal.error && (
+                            <div className="text-red-600 text-sm">
+                                {editModal.error}
+                            </div>
                         )}
                     </div>
                 )}

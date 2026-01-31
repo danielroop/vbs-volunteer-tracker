@@ -40,6 +40,8 @@ export default function DailyReview() {
   // Force all modal state
   const [forceAllModal, setForceAllModal] = useState({
     isOpen: false,
+    activityGroups: [], // [{activityId, activityName, endTime, checkOutTime, entries: []}, ...]
+    reason: '',
     loading: false,
     error: null
   });
@@ -187,6 +189,62 @@ export default function DailyReview() {
     });
   };
 
+  // Open force all checkout modal
+  const openForceAllCheckoutModal = () => {
+    // Get all entries without checkout
+    const entriesNeedingCheckout = timeEntries.filter(e => !e.checkOutTime);
+    
+    // Group entries by activity
+    const groupedByActivity = {};
+    entriesNeedingCheckout.forEach(entry => {
+      if (!groupedByActivity[entry.activityId]) {
+        groupedByActivity[entry.activityId] = [];
+      }
+      groupedByActivity[entry.activityId].push(entry);
+    });
+
+    // Create activity groups with default checkout times
+    const activityGroups = Object.entries(groupedByActivity).map(([activityId, entries]) => {
+      const activity = activityMap[activityId];
+      const activityEndTime = activity?.endTime || currentEvent?.typicalEndTime || '15:00';
+      
+      // Create datetime for the activity end time
+      const [hours, mins] = activityEndTime.split(':');
+      const [yr, mo, dy] = selectedDate.split('-').map(Number);
+      const date = new Date(yr, mo - 1, dy);
+      date.setHours(parseInt(hours), parseInt(mins), 0, 0);
+
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mm = String(date.getMinutes()).padStart(2, '0');
+      const localDateTime = `${year}-${month}-${day}T${hh}:${mm}`;
+
+      return {
+        activityId,
+        activityName: activity?.name || 'Unknown',
+        endTime: activityEndTime,
+        checkOutTime: localDateTime,
+        entries: entries.map(e => {
+          const student = studentMap[e.studentId] || { firstName: 'Unknown', lastName: 'Student' };
+          return {
+            id: e.id,
+            studentName: `${student.lastName}, ${student.firstName}`
+          };
+        })
+      };
+    });
+
+    setForceAllModal({
+      isOpen: true,
+      activityGroups: activityGroups.sort((a, b) => a.activityName.localeCompare(b.activityName)),
+      reason: '',
+      loading: false,
+      error: null
+    });
+  };
+
   // Handle force checkout
   const handleForceCheckout = async () => {
     if (!forceCheckoutModal.entry || !forceCheckoutModal.reason) {
@@ -226,19 +284,34 @@ export default function DailyReview() {
 
   // Handle force all checkout
   const handleForceAllCheckout = async () => {
+    if (!forceAllModal.reason) {
+      setForceAllModal(prev => ({ ...prev, error: 'Reason is required' }));
+      return;
+    }
+
     setForceAllModal(prev => ({ ...prev, loading: true, error: null }));
 
     try {
       const forceAllCheckOutFunc = httpsCallable(functions, 'forceAllCheckOut');
+      
+      // Create activity checkout times map
+      const activityCheckOutTimes = {};
+      forceAllModal.activityGroups.forEach(group => {
+        activityCheckOutTimes[group.activityId] = new Date(group.checkOutTime).toISOString();
+      });
+
       const result = await forceAllCheckOutFunc({
         eventId: currentEvent.id,
         date: selectedDate,
-        reason: 'End of day bulk checkout'
+        activityCheckOutTimes, // Now sending per-activity times
+        reason: forceAllModal.reason
       });
 
       if (result.data.success) {
         setForceAllModal({
           isOpen: false,
+          activityGroups: [],
+          reason: '',
           loading: false,
           error: null
         });
@@ -715,7 +788,7 @@ export default function DailyReview() {
           {stats.noCheckout > 0 && (
             <Button
               variant="danger"
-              onClick={() => setForceAllModal({ isOpen: true, loading: false, error: null })}
+              onClick={openForceAllCheckoutModal}
             >
               Force All Checkout ({stats.noCheckout})
             </Button>
@@ -810,14 +883,14 @@ export default function DailyReview() {
       {/* Force All Checkout Modal */}
       <Modal
         isOpen={forceAllModal.isOpen}
-        onClose={() => setForceAllModal({ isOpen: false, loading: false, error: null })}
+        onClose={() => setForceAllModal({ isOpen: false, activityGroups: [], reason: '', loading: false, error: null })}
         title="Force All Checkout"
-        size="md"
+        size="lg"
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setForceAllModal({ isOpen: false, loading: false, error: null })}
+              onClick={() => setForceAllModal({ isOpen: false, activityGroups: [], reason: '', loading: false, error: null })}
               disabled={forceAllModal.loading}
             >
               Cancel
@@ -834,12 +907,65 @@ export default function DailyReview() {
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            This will force checkout <span className="font-bold text-red-600">{stats.noCheckout}</span> students
+            This will force checkout <span className="font-bold text-red-600">{forceAllModal.activityGroups.reduce((sum, g) => sum + g.entries.length, 0)}</span> students
             who haven't checked out yet.
           </p>
-          <p className="text-gray-600">
-            Each student will be checked out at their activity's end time.
-          </p>
+
+          {/* Activity Groups */}
+          <div className="space-y-4 max-h-96 overflow-y-auto border rounded-lg p-4 bg-gray-50">
+            {forceAllModal.activityGroups.map(group => (
+              <div key={group.activityId} className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{group.activityName}</h3>
+                    <p className="text-sm text-gray-600">{group.entries.length} student{group.entries.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <span className="text-sm font-medium text-blue-600">Ends: {group.endTime}</span>
+                </div>
+
+                <div className="mb-3 space-y-1">
+                  {group.entries.map(entry => (
+                    <p key={entry.id} className="text-sm text-gray-600">• {entry.studentName}</p>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Check-Out Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={group.checkOutTime}
+                    onChange={(e) => setForceAllModal(prev => ({
+                      ...prev,
+                      activityGroups: prev.activityGroups.map(g =>
+                        g.activityId === group.activityId
+                          ? { ...g, checkOutTime: e.target.value }
+                          : g
+                      )
+                    }))}
+                    className="input-field w-full"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason for Force Checkout <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={forceAllModal.reason}
+              onChange={(e) => setForceAllModal(prev => ({
+                ...prev,
+                reason: e.target.value
+              }))}
+              placeholder="e.g., End of day, activity completed, event concluded"
+              className="input-field w-full h-24 resize-none"
+            />
+          </div>
+
           <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded">
             This action is typically used at the end of the event day or week to generate reports.
           </p>

@@ -14,11 +14,11 @@ const isProd = process.env.NODE_ENV === 'production';
 if (!isProd) {
   // --- EMULATOR CONFIGURATION ---
   process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
-  
-  initializeApp({ 
-    projectId: 'vbs-volunteer-tracker' 
+
+  initializeApp({
+    projectId: 'vbs-volunteer-tracker'
   });
-  
+
   console.log('🔌 Connected to local FIRESTORE EMULATOR');
 } else {
   // --- PRODUCTION CONFIGURATION ---
@@ -30,13 +30,13 @@ if (!isProd) {
     credential: cert(serviceAccount),
     projectId: 'vbs-volunteer-tracker'
   });
-  
+
   console.log('🚀 Connected to PRODUCTION Firebase instance');
 }
 
 const db = getFirestore();
 
-const EVENT_ID = 'iQXG7crBIG9jMJgmXTNJ';
+const EVENT_ID = 'qyJ9b9SOB0zzIrenV5ev';
 
 // Helper to add random minutes (positive or negative)
 const addRandomMinutes = (date, range = 15) => {
@@ -61,7 +61,7 @@ async function generateVBSData() {
   let entriesCount = 0;
 
   // Configuration
-  const vbsStartDate = new Date('2026-06-08'); // Assuming a Monday start for VBS
+  const vbsStartDate = new Date('2026-01-24'); // Assuming a Monday start for VBS
   const trainingDate = new Date();
   trainingDate.setDate(trainingDate.getDate() + 7);
   trainingDate.setHours(9, 0, 0, 0);
@@ -93,7 +93,6 @@ async function generateVBSData() {
     }
 
     // 2. Work Hours Logic (Daily for 5 days)
-    // Identify 10 students who will miss 1 or 2 days
     const isSkipsDays = index < 10;
     const daysToSkip = isSkipsDays ? [Math.floor(Math.random() * 5), Math.floor(Math.random() * 5)] : [];
 
@@ -103,7 +102,6 @@ async function generateVBSData() {
       const currentDay = new Date(vbsStartDate);
       currentDay.setDate(vbsStartDate.getDate() + day);
 
-      // Rule: Day 1 starts at 8:30, others at 8:45
       const baseStart = new Date(currentDay);
       if (day === 0) {
         baseStart.setHours(8, 30, 0, 0);
@@ -115,7 +113,14 @@ async function generateVBSData() {
       baseEnd.setHours(12, 0, 0, 0);
 
       const checkIn = addRandomMinutes(baseStart, 15);
-      const checkOut = addRandomMinutes(baseEnd, 15);
+
+      // Logic: No one checks out on Day 4 (the 5th day)
+      // Logic: 10% chance a student "forgets" to check out on any other day
+      const isLastDay = day === 4;
+      const forgotCheckOut = Math.random() < 0.10;
+      const shouldSkipCheckOut = isLastDay || forgotCheckOut;
+
+      const checkOut = shouldSkipCheckOut ? null : addRandomMinutes(baseEnd, 15);
 
       const wRef = db.collection('timeEntries').doc();
       batch.set(wRef, {
@@ -124,11 +129,13 @@ async function generateVBSData() {
         activityId: 'work-hours',
         date: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(checkIn),
         checkInTime: Timestamp.fromDate(checkIn),
-        checkOutTime: Timestamp.fromDate(checkOut),
+        // If checkOut is null, we don't call Timestamp.fromDate
+        checkOutTime: checkOut ? Timestamp.fromDate(checkOut) : null,
         checkInBy: 'script_gen',
         checkInMethod: 'script',
-        checkOutBy: 'script_gen',
-        checkOutMethod: 'script',
+        // Set these to null if they didn't check out
+        checkOutBy: checkOut ? 'script_gen' : null,
+        checkOutMethod: checkOut ? 'script' : null,
         reviewStatus: 'pending',
         flags: [],
         createdAt: Timestamp.now()

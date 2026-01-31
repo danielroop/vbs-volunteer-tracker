@@ -137,7 +137,7 @@ export const forceCheckOut = onCall(async (request) => {
  * @param {string} request.data.reason - Reason for bulk forced checkout
  */
 export const forceAllCheckOut = onCall(async (request) => {
-  const { eventId, date, reason } = request.data;
+  const { eventId, date, activityCheckOutTimes, checkOutTime, reason } = request.data;
 
   // Validate required fields
   if (!eventId || !date) {
@@ -191,16 +191,24 @@ export const forceAllCheckOut = onCall(async (request) => {
     for (const doc of entriesQuery.docs) {
       const entry = doc.data();
 
-      // Get end time for this activity
-      const endTime = activityEndTimes[entry.activityId] || defaultEndTime;
-      const [hours, mins] = endTime.split(':');
+      // Use activity-specific checkout time from the map, or fall back to activity end time
+      let checkOutTimestamp;
+      
+      if (activityCheckOutTimes && activityCheckOutTimes[entry.activityId]) {
+        // Use the provided checkout time for this activity
+        checkOutTimestamp = Timestamp.fromDate(new Date(activityCheckOutTimes[entry.activityId]));
+      } else {
+        // Fall back to activity's end time
+        const endTime = activityEndTimes[entry.activityId] || defaultEndTime;
+        const [hours, mins] = endTime.split(':');
 
-      // Create checkout timestamp using the entry date and activity end time
-      // Parse date string as local time (not UTC) by using components
-      const [year, month, day] = date.split('-').map(Number);
-      const checkOutDate = new Date(year, month - 1, day); // month is 0-indexed
-      checkOutDate.setHours(parseInt(hours), parseInt(mins), 0, 0);
-      const checkOutTimestamp = Timestamp.fromDate(checkOutDate);
+        // Create checkout timestamp using the entry date and activity end time
+        // Parse date string as local time (not UTC) by using components
+        const [year, month, day] = date.split('-').map(Number);
+        const checkOutDate = new Date(year, month - 1, day); // month is 0-indexed
+        checkOutDate.setHours(parseInt(hours), parseInt(mins), 0, 0);
+        checkOutTimestamp = Timestamp.fromDate(checkOutDate);
+      }
 
       // Calculate hours
       const checkInMs = entry.checkInTime.toMillis();

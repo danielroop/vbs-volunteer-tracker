@@ -147,62 +147,45 @@ export default function StudentDetailPage() {
                 return acc + roundTime(diff);
             }, 0);
 
-            const totalProjectedHours = updatedActivityEntries.reduce((acc, entry) => {
-                // Only Count the Hours if defaulted
-                if (!entry.isDefaulted) return acc;
-
-                const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
-                return acc + roundTime(diff);
-            }, 0);
-
             return {
                 name: activity.name,
                 dateDisplay: dateStrings.join(', '),
-                totalHours: totalHours.toFixed(2),
-                totalProjectedHours : totalProjectedHours.toFixed(2),
-                printableHours: (totalHours + totalProjectedHours).toFixed(2)
+                totalHours: totalHours.toFixed(2)
             };
         }).filter(Boolean);
     }, [entries, currentEvent]);
 
     const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);
-    const totalProjectedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalProjectedHours), 0);
 
     const overrideHours = parseFloat(student?.overrideHours || 0);
+
+    // Check if there are any entries without checkout times
+    const hasUncheckedOutEntries = entries.some(entry => !entry.checkOutTime);
     const grandTotal = totalCalculatedHours + overrideHours;
 
     /**
-     * Enriched entries with projected checkout times for display in the table
+     * Enriched entries with calculated hours for display in the table
      */
     const enrichedEntries = useMemo(() => {
-        if (!currentEvent?.activities || entries.length === 0) return [];
+        if (entries.length === 0) return [];
 
         return entries.map(entry => {
-            const activity = currentEvent.activities.find(a => a.id === entry.activityId);
-
-            if (!entry.checkOutTime && activity?.endTime) {
-                const datePart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(entry.checkInTime.toDate());
-                const defaultedDateTime = `${datePart}T${activity.endTime}`;
-                const projectedCheckOut = Timestamp.fromDate(new Date(defaultedDateTime));
-                const diff = (projectedCheckOut.seconds - entry.checkInTime.seconds) / 3600;
-
+            if (!entry.checkOutTime) {
+                // No checkout time - hours cannot be calculated
                 return {
                     ...entry,
-                    projectedCheckOut,
-                    projectedHours: roundTime(diff),
-                    isProjected: true
+                    actualHours: null
                 };
             }
 
-            // Real checkout exists
+            // Real checkout exists - calculate hours
             const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
             return {
                 ...entry,
-                actualHours: roundTime(diff),
-                isProjected: false
+                actualHours: roundTime(diff)
             };
         });
-    }, [entries, currentEvent]);
+    }, [entries]);
 
     // Print helper: render the DOM element into a standalone document and print (Safari-compatible)
     const PRINT_STYLES = `
@@ -242,6 +225,11 @@ export default function StudentDetailPage() {
     };
 
     const handlePrint = (mode) => {
+        if (mode === 'form' && hasUncheckedOutEntries) {
+            alert('Cannot print Service Log: This student has time entries that are not checked out. Please ensure all entries have checkout times before printing.');
+            return;
+        }
+
         // Keep printMode state only for UX; actual printing happens in a new window
         setPrintMode(mode);
 
@@ -458,26 +446,16 @@ export default function StudentDetailPage() {
                         {activityLog.map(act => (
                             <div key={act.name} className="flex justify-between items-center">
                                 <span className="text-sm font-semibold text-gray-600">{act.name}</span>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-sm font-black text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">{act.totalHours}</span>
-                                    {parseFloat(act.totalProjectedHours) > 0 && (
-                                        <span className="text-sm font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">+{act.totalProjectedHours}</span>
-                                    )}
-                                </div>
+                                <span className="text-sm font-black text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">{act.totalHours}</span>
                             </div>
                         ))}
                         <div className="pt-4 border-t-2 border-dashed">
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-black text-primary-700 uppercase">Grand Total</span>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-2xl font-black text-primary-600">{grandTotal.toFixed(2)}</span>
-                                    {totalProjectedHours > 0 && (
-                                        <span className="text-lg font-bold text-amber-600">+{totalProjectedHours.toFixed(2)}</span>
-                                    )}
-                                </div>
+                                <span className="text-2xl font-black text-primary-600">{grandTotal.toFixed(2)}</span>
                             </div>
-                            {totalProjectedHours > 0 && (
-                                <p className="text-xs text-amber-600 mt-2 italic">Projected hours based on activity end times</p>
+                            {hasUncheckedOutEntries && (
+                                <p className="text-xs text-red-600 mt-2 italic">Some entries are not checked out</p>
                             )}
                         </div>
                     </div>
@@ -489,31 +467,21 @@ export default function StudentDetailPage() {
                             <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th><th className="px-6 py-4 text-center">Status</th><th className="px-6 py-4 text-center">Actions</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
                                 {enrichedEntries.map(e => (
-                                    <tr key={e.id} className={`text-sm ${e.isProjected ? 'bg-amber-50' : ''} ${e.forcedCheckoutReason || e.modificationReason ? 'bg-blue-50' : ''}`}>
+                                    <tr key={e.id} className={`text-sm ${!e.checkOutTime ? 'bg-red-50' : ''} ${e.forcedCheckoutReason || e.modificationReason ? 'bg-blue-50' : ''}`}>
                                         <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
                                         <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>
                                         <td className="px-6 py-4 text-center text-gray-600">
                                             {e.checkInTime.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                                         </td>
-                                        <td className={`px-6 py-4 text-center ${e.isProjected ? 'text-amber-600' : 'text-gray-600'}`}>
-                                            {e.isProjected ? (
-                                                <span className="inline-flex items-center gap-1">
-                                                    {e.projectedCheckOut.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                                    <span className="text-[10px] font-medium text-amber-500">(proj)</span>
-                                                </span>
-                                            ) : (
+                                        <td className={`px-6 py-4 text-center ${!e.checkOutTime ? 'text-red-600' : 'text-gray-600'}`}>
+                                            {e.checkOutTime ? (
                                                 e.checkOutTime.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                                            ) : (
+                                                <span className="text-[10px] font-medium text-red-500">Not checked out</span>
                                             )}
                                         </td>
-                                        <td className={`px-6 py-4 text-right font-black ${e.isProjected ? 'text-amber-600' : ''}`}>
-                                            {e.isProjected ? (
-                                                <span className="inline-flex items-center gap-1">
-                                                    {e.projectedHours.toFixed(2)}
-                                                    <span className="text-[10px] font-medium text-amber-500">(projected)</span>
-                                                </span>
-                                            ) : (
-                                                e.actualHours.toFixed(2)
-                                            )}
+                                        <td className={`px-6 py-4 text-right font-black ${!e.checkOutTime ? 'text-red-600' : ''}`}>
+                                            {e.checkOutTime ? e.actualHours.toFixed(2) : '--'}
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex items-center justify-center gap-2">
@@ -598,7 +566,7 @@ export default function StudentDetailPage() {
                                 <td className="text-center">{act.dateDisplay}</td>
                                 <td>{currentEvent?.contactName || '---'}</td>
                                 <td></td>
-                                <td className="font-bold">{act.printableHours}</td>
+                                <td className="font-bold">{act.totalHours}</td>
                             </tr>
                         ))}
                         {/* Blank placeholder rows to maintain form length */}
@@ -609,7 +577,7 @@ export default function StudentDetailPage() {
                         ))}
                         <tr>
                             <td colSpan="4" className="text-right font-bold uppercase">Total:</td>
-                            <td className="font-bold bg-gray-50">{(grandTotal + totalProjectedHours).toFixed(2)}</td>
+                            <td className="font-bold bg-gray-50">{grandTotal.toFixed(2)}</td>
                         </tr>
                     </tbody>
                 </table>

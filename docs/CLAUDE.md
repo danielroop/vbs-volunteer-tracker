@@ -272,7 +272,7 @@ const {
 | `/scan/:eventId?/:activityId?/:action?` | Scanner | QR scanner for check-in/out |
 | `/admin` | Admin | Dashboard with real-time stats |
 | `/admin/students` | Admin | Student roster management |
-| `/admin/students/:studentId` | Admin | Individual student detail |
+| `/admin/students/:studentId` | Admin | Individual student detail (print requires all checkouts) |
 | `/admin/events` | Admin | Event management |
 | `/admin/events/new` | Admin | Create new event |
 | `/admin/users` | Admin | User management (admins + AVs) |
@@ -444,6 +444,34 @@ VITE_USE_EMULATOR=true  # Optional: connect to emulators
 | Check-out function | `functions/src/checkOut.js` |
 | User management | `functions/src/userManagement.js` |
 | Security rules | `firestore.rules` |
+| Student detail page | `frontend/src/pages/StudentDetailPage.jsx` |
+
+---
+
+## Student Detail Page Behavior
+
+The Student Detail page (`/admin/students/:studentId`) displays individual student hours and allows printing of service logs and badges.
+
+### Key Features
+- **Hours Summary:** Shows hours by activity (only counts entries with actual checkout times)
+- **Entries Table:** Lists all time entries with check-in/checkout times and calculated hours
+- **Edit Functionality:** Allows editing check-in/checkout times with required reason tracking
+- **Print Badge:** Always available for printing student QR code badges
+- **Print Service Log:** Generates OCPS-format service log for school submission
+
+### Print Service Log Validation
+The system **blocks** printing of the Service Log if any time entries do not have checkout times:
+- An error alert is shown: "Cannot print Service Log: This student has time entries that are not checked out."
+- Entries without checkout times are highlighted in red in the table
+- A warning message appears in the Summary section: "Some entries are not checked out"
+
+This ensures that printed Service Logs only contain verified, actual hours worked.
+
+### Visual Indicators
+- **Red highlighting:** Rows without checkout times
+- **Blue highlighting:** Rows with modifications or forced checkouts
+- **"Not checked out" label:** Displayed in Check Out column for incomplete entries
+- **"--" in Hours column:** Shown when hours cannot be calculated
 
 ---
 
@@ -488,5 +516,5 @@ Ask the human if:
 
 ---
 
-**Last Updated:** 2026-01-24
-**Version:** 2.0
+**Last Updated:** 2026-01-31
+**Version:** 2.1

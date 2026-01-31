@@ -4,6 +4,7 @@ import { collection, onSnapshot, query, where, doc, updateDoc } from 'firebase/f
 import { httpsCallable } from 'firebase/functions';
 import { useEvent } from '../../contexts/EventContext';
 import { formatTime, formatHours, getTodayDateString, formatDate } from '../../utils/hourCalculations';
+import { printInNewWindow, createPrintDocument } from '../../utils/printUtils';
 import Header from '../common/Header';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
@@ -476,89 +477,81 @@ export default function DailyReview() {
   const handleExportPDF = () => {
     setExporting(true);
 
-    try {
-      const printContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Daily Review - ${selectedDate}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { font-size: 18px; margin-bottom: 10px; }
-            h2 { font-size: 14px; margin-bottom: 20px; color: #666; }
-            table { width: 100%; border-collapse: collapse; font-size: 11px; }
-            th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
-            th { background-color: #f5f5f5; font-weight: bold; }
-            .status-no-checkout { color: red; font-weight: bold; }
-            .flags { font-size: 10px; color: #666; }
-            .override { font-size: 9px; color: #0066cc; font-style: italic; }
-            .summary { margin-bottom: 20px; padding: 10px; background: #f9f9f9; border-radius: 4px; }
-            .summary span { margin-right: 20px; }
-            @media print { body { padding: 0; } }
-          </style>
-        </head>
-        <body>
-          <h1>Daily Review Report</h1>
-          <h2>${currentEvent?.name || 'Event'} - ${formatDate(selectedDate)}</h2>
+    const styles = `
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      h1 { font-size: 18px; margin-bottom: 10px; }
+      h2 { font-size: 14px; margin-bottom: 20px; color: #666; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+      th { background-color: #f5f5f5; font-weight: bold; }
+      .status-no-checkout { color: red; font-weight: bold; }
+      .flags { font-size: 10px; color: #666; }
+      .override { font-size: 9px; color: #0066cc; font-style: italic; }
+      .summary { margin-bottom: 20px; padding: 10px; background: #f9f9f9; border-radius: 4px; }
+      .summary span { margin-right: 20px; }
+      @media print { body { padding: 0; } }
+    `;
 
-          <div class="summary">
-            <span><strong>Total:</strong> ${stats.total}</span>
-            <span><strong>Flagged:</strong> ${stats.flagged}</span>
-            <span><strong>No Checkout:</strong> ${stats.noCheckout}</span>
-            <span><strong>Modified:</strong> ${stats.modified}</span>
-          </div>
+    const body = `
+      <h1>Daily Review Report</h1>
+      <h2>${currentEvent?.name || 'Event'} - ${formatDate(selectedDate)}</h2>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Name</th>
-                <th>Activity</th>
-                <th>Check-In</th>
-                <th>Check-Out</th>
-                <th>Hours</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filteredEntries.map(entry => `
-                <tr>
-                  <td>${entry.date}</td>
-                  <td>${entry.student.lastName}, ${entry.student.firstName}</td>
-                  <td>${entry.activity?.name || '--'}</td>
-                  <td>${entry.checkInTime ? formatTime(entry.checkInTime) : '--'}</td>
-                  <td class="${!entry.checkOutTime ? 'status-no-checkout' : ''}">${entry.checkOutTime ? formatTime(entry.checkOutTime) : 'Not checked out'}</td>
-                  <td>${entry.hoursWorked !== null ? entry.hoursWorked : '--'}</td>
-                  <td>
-                    <span class="flags">${(entry.flags || []).map(f => formatFlag(f)).join(', ')}</span>
-                    ${entry.forcedCheckoutReason || entry.modificationReason ? `<div class="override">Override: ${entry.forcedCheckoutReason || entry.modificationReason}</div>` : ''}
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+      <div class="summary">
+        <span><strong>Total:</strong> ${stats.total}</span>
+        <span><strong>Flagged:</strong> ${stats.flagged}</span>
+        <span><strong>No Checkout:</strong> ${stats.noCheckout}</span>
+        <span><strong>Modified:</strong> ${stats.modified}</span>
+      </div>
 
-          <p style="margin-top: 20px; font-size: 10px; color: #999;">
-            Generated on ${new Date().toLocaleString()}
-          </p>
-        </body>
-        </html>
-      `;
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Name</th>
+            <th>Activity</th>
+            <th>Check-In</th>
+            <th>Check-Out</th>
+            <th>Hours</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredEntries.map(entry => `
+            <tr>
+              <td>${entry.date}</td>
+              <td>${entry.student.lastName}, ${entry.student.firstName}</td>
+              <td>${entry.activity?.name || '--'}</td>
+              <td>${entry.checkInTime ? formatTime(entry.checkInTime) : '--'}</td>
+              <td class="${!entry.checkOutTime ? 'status-no-checkout' : ''}">${entry.checkOutTime ? formatTime(entry.checkOutTime) : 'Not checked out'}</td>
+              <td>${entry.hoursWorked !== null ? entry.hoursWorked : '--'}</td>
+              <td>
+                <span class="flags">${(entry.flags || []).map(f => formatFlag(f)).join(', ')}</span>
+                ${entry.forcedCheckoutReason || entry.modificationReason ? `<div class="override">Override: ${entry.forcedCheckoutReason || entry.modificationReason}</div>` : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
 
-      const printWindow = window.open('', '_blank');
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 250);
-    } catch (error) {
-      console.error('PDF export error:', error);
-      alert('Error generating PDF: ' + error.message);
-    } finally {
-      setExporting(false);
-    }
+      <p style="margin-top: 20px; font-size: 10px; color: #999;">
+        Generated on ${new Date().toLocaleString()}
+      </p>
+    `;
+
+    const printContent = createPrintDocument({
+      title: `Daily Review - ${selectedDate}`,
+      styles,
+      body
+    });
+
+    printInNewWindow(printContent, {
+      onComplete: () => setExporting(false),
+      onError: (error) => {
+        console.error('PDF export error:', error);
+        alert('Error generating PDF: ' + error.message);
+        setExporting(false);
+      }
+    });
   };
 
   // Helper functions for display

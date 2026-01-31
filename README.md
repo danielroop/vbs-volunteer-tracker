@@ -17,6 +17,7 @@ This system eliminates manual time entry and Excel calculations by using QR code
 - 📥 Batch PDF form generation
 - 📲 Responsive design with mobile hamburger menu
 - 🔗 Quick access to Scanner from admin header
+- 🖨️ Safari-compatible print functionality (badges, reports, PDF exports)
 
 ## Tech Stack
 
@@ -170,6 +171,15 @@ npm run preview
 
 # Lint code
 npm run lint
+
+# Run tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
 ```
 
 ### Cloud Functions Development

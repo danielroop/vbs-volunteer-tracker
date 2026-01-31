@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { db } from '../utils/firebase';
 import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
@@ -28,7 +29,27 @@ export default function StudentsPage() {
     gradYear: ''
   });
 
+  // Watch for printMode changes and reset after print dialog closes
   useEffect(() => {
+    if (!printMode) return;
+    
+    const timer = setTimeout(() => {
+      setPrintMode(false);
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [printMode]);
+
+  // Watch for badgePrintMode changes and reset after print dialog closes
+  useEffect(() => {
+    if (!badgePrintMode) return;
+    
+    const timer = setTimeout(() => {
+      setBadgePrintMode(false);
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [badgePrintMode]);  useEffect(() => {
     // 1. Listen for all student records
     const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -145,20 +166,44 @@ export default function StudentsPage() {
     }).filter(Boolean);
   };
 
+  const PRINT_STYLES = `
+    body { background: white; margin: 0; padding: 0; }
+    .ocps-form-container { font-family: Arial, sans-serif; padding: 0.25in; color: black; line-height: 1.05; font-size: 8.5pt; page-break-after: always; height: 100vh; box-sizing: border-box; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 2px; }
+    th, td { border: 1px solid black; padding: 2px 6px; vertical-align: middle; }
+    .field-box { border-bottom: 1px solid black; display: inline-block; min-width: 120px; padding: 0 5px; font-weight: bold; }
+    .reflection-box { border: 1px solid black; height: 165px; width: 100%; margin-top: 2px; display: flex; flex-direction: column; }
+    .ocps-logo { width: 40px; height: 40px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 7pt; text-align: center; }
+
+    .badge-page { page-break-after: always; height: 100vh; width: 100vw; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); gap: 0; padding: 0.25in; box-sizing: border-box; }
+    .student-badge { border: 2px solid #000; padding: 0.15in; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; box-sizing: border-box; text-align: center; margin: 2px; }
+    .badge-name { font-size: 14pt; font-weight: bold; margin-bottom: 4px; color: #000; }
+    .badge-id { font-size: 9pt; color: #666; margin-bottom: 8px; }
+  `;
+
+  const printElementById = (id, title = 'Print', setStateReseter) => {
+    const el = document.getElementById(id);
+    if (!el) {
+      alert('Print content not available');
+      return;
+    }
+
+    if (setStateReseter) setStateReseter(true);
+
+    const html = createPrintDocument({ title, styles: PRINT_STYLES, body: el.outerHTML });
+
+    printInNewWindow(html, {
+      onComplete: () => { if (setStateReseter) setStateReseter(false); },
+      onError: () => { if (setStateReseter) setStateReseter(false); }
+    });
+  };
+
   const handlePrintReports = () => {
-    setPrintMode(true);
-    setTimeout(() => {
-      window.print();
-      setPrintMode(false);
-    }, 150);
+    printElementById('print-all-forms', 'Service Logs', setPrintMode);
   };
 
   const handlePrintBadges = () => {
-    setBadgePrintMode(true);
-    setTimeout(() => {
-      window.print();
-      setBadgePrintMode(false);
-    }, 150);
+    printElementById('print-all-badges', 'Badges', setBadgePrintMode);
   };
 
   if (loading) return (

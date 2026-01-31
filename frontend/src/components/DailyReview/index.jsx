@@ -8,6 +8,7 @@ import { printInNewWindow, createPrintDocument } from '../../utils/printUtils';
 import Header from '../common/Header';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
+import TimeEntryCard from './TimeEntryCard';
 
 /**
  * Daily Review Component
@@ -667,19 +668,19 @@ export default function DailyReview() {
           </div>
         </div>
 
-        {/* Student List */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="w-full">
+        {/* Desktop Table View (md and up) */}
+        <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
+          <table className="w-full" role="table" aria-label="Daily time entries">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-In</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-Out</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-In</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-Out</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -704,12 +705,18 @@ export default function DailyReview() {
                       {entry.checkInTime ? new Date(entry.checkInTime).toLocaleDateString() : entry.date}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">
+                      <div
+                        className="font-medium text-gray-900 truncate max-w-[200px]"
+                        title={`${entry.student.lastName}, ${entry.student.firstName}`}
+                      >
                         {entry.student.lastName}, {entry.student.firstName}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="uppercase font-bold text-[10px] text-blue-600">
+                      <span
+                        className="uppercase font-bold text-[10px] text-blue-600 truncate block max-w-[120px]"
+                        title={entry.activity?.name || '--'}
+                      >
                         {entry.activity?.name || '--'}
                       </span>
                     </td>
@@ -739,6 +746,7 @@ export default function DailyReview() {
                           size="sm"
                           variant="secondary"
                           onClick={() => openEditModal(entry)}
+                          aria-label={`Edit time entry for ${entry.student.firstName} ${entry.student.lastName}`}
                         >
                           Edit
                         </Button>
@@ -747,6 +755,7 @@ export default function DailyReview() {
                             size="sm"
                             variant="danger"
                             onClick={() => openForceCheckoutModal(entry)}
+                            aria-label={`Force checkout for ${entry.student.firstName} ${entry.student.lastName}`}
                           >
                             Force Out
                           </Button>
@@ -758,6 +767,36 @@ export default function DailyReview() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View (below md breakpoint) */}
+        <div className="block md:hidden" role="list" aria-label="Daily time entries">
+          {loading ? (
+            <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+              Loading...
+            </div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+              {searchTerm || statusFilter !== 'all'
+                ? 'No entries match your filters'
+                : 'No entries for this date'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredEntries.map(entry => (
+                <TimeEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  formatTime={formatTime}
+                  formatHours={formatHours}
+                  getStatusDisplay={getStatusDisplay}
+                  getStatusClass={getStatusClass}
+                  onEdit={openEditModal}
+                  onForceCheckout={openForceCheckoutModal}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

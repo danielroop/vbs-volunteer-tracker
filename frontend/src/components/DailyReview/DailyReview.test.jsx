@@ -211,7 +211,9 @@ describe('DailyReview', () => {
     it('should display empty state when no entries', () => {
       renderWithRouter(<DailyReview />);
 
-      expect(screen.getByText(/No entries for this date/i)).toBeInTheDocument();
+      // Now there are two empty states (one in table, one in mobile view)
+      const emptyMessages = screen.getAllByText(/No entries for this date/i);
+      expect(emptyMessages.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -295,6 +297,125 @@ describe('DailyReview Export Functions', () => {
       expect(summaryContent).toContain('Flagged: 2');
       expect(summaryContent).toContain('No Checkout: 1');
       expect(summaryContent).toContain('Modified: 3');
+    });
+  });
+});
+
+describe('DailyReview Mobile Responsive Layout', () => {
+  describe('dual-view rendering', () => {
+    it('should render both desktop table and mobile card containers', () => {
+      renderWithRouter(<DailyReview />);
+
+      // Desktop table view should exist (using table role)
+      const table = screen.getByRole('table');
+      expect(table).toBeInTheDocument();
+
+      // Mobile card view should exist (using list role)
+      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      expect(mobileList).toBeInTheDocument();
+    });
+
+    it('should render table with proper role and aria-label', () => {
+      renderWithRouter(<DailyReview />);
+
+      const table = screen.getByRole('table');
+      expect(table).toHaveAttribute('aria-label', 'Daily time entries');
+    });
+
+    it('should render mobile list with proper role and aria-label', () => {
+      renderWithRouter(<DailyReview />);
+
+      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      expect(mobileList).toBeInTheDocument();
+    });
+
+    it('should render table headers with scope attributes', () => {
+      renderWithRouter(<DailyReview />);
+
+      const columnHeaders = screen.getAllByRole('columnheader');
+      columnHeaders.forEach(header => {
+        expect(header).toHaveAttribute('scope', 'col');
+      });
+    });
+  });
+
+  describe('empty state', () => {
+    it('should display empty message in both views when no entries', () => {
+      renderWithRouter(<DailyReview />);
+
+      // Check for empty state messages (one in table, one in mobile view)
+      const emptyMessages = screen.getAllByText(/No entries for this date/i);
+      expect(emptyMessages.length).toBe(2); // One in table, one in mobile view
+    });
+
+    it('should display filter empty message in both views', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<DailyReview />);
+
+      // Type in search box to trigger filter
+      const searchInput = screen.getByPlaceholderText('Search students...');
+      await user.type(searchInput, 'NonexistentStudent');
+
+      // Check for filter empty state messages
+      const emptyMessages = screen.getAllByText(/No entries match your filters/i);
+      expect(emptyMessages.length).toBe(2); // One in table, one in mobile view
+    });
+  });
+
+  describe('CSS class verification', () => {
+    it('should have correct responsive classes on table container', () => {
+      renderWithRouter(<DailyReview />);
+
+      // Verify the table exists and has the expected structure
+      const table = screen.getByRole('table');
+      expect(table).toBeInTheDocument();
+
+      // Verify the table container has responsive hiding class
+      const tableContainer = table.closest('div');
+      expect(tableContainer.className).toContain('hidden');
+      expect(tableContainer.className).toContain('md:block');
+    });
+
+    it('should have correct responsive classes on mobile container', () => {
+      renderWithRouter(<DailyReview />);
+
+      // Verify mobile list exists
+      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      expect(mobileList).toBeInTheDocument();
+
+      // Verify the mobile container has responsive classes
+      expect(mobileList.className).toContain('block');
+      expect(mobileList.className).toContain('md:hidden');
+    });
+  });
+});
+
+describe('DailyReview Accessibility', () => {
+  describe('table accessibility', () => {
+    it('should have table with aria-label', () => {
+      renderWithRouter(<DailyReview />);
+
+      const table = screen.getByRole('table');
+      expect(table).toHaveAttribute('aria-label');
+    });
+
+    it('should have all column headers with scope="col"', () => {
+      renderWithRouter(<DailyReview />);
+
+      const headers = screen.getAllByRole('columnheader');
+      expect(headers).toHaveLength(8); // Date, Name, Activity, Check-In, Check-Out, Hours, Status, Actions
+      headers.forEach(header => {
+        expect(header).toHaveAttribute('scope', 'col');
+      });
+    });
+  });
+
+  describe('mobile view accessibility', () => {
+    it('should have mobile list container with role="list"', () => {
+      renderWithRouter(<DailyReview />);
+
+      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      expect(mobileList).toBeInTheDocument();
     });
   });
 });

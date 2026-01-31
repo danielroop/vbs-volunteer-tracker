@@ -1,11 +1,39 @@
 # Unimplemented Features - Future Work
 
-> **Last Updated:** January 25, 2026 (Responsive Header with hamburger menu implemented)
+> **Last Updated:** January 31, 2026 (Safari print compatibility and comprehensive tests implemented)
 > This document lists features from the original PRD that are not yet implemented.
 
 ---
 
 ## Recently Completed
+
+### Safari Print Compatibility Fix
+**Completed:** January 31, 2026
+
+**What was implemented:**
+- ✅ `printUtils.js` - New utility module for Safari-compatible printing
+- ✅ Browser detection functions (`isSafari`, `isIOSSafari`)
+- ✅ `safePrint` function with proper timing for Safari rendering
+- ✅ `printInNewWindow` function for PDF export with Safari load event handling
+- ✅ `createPrintDocument` helper for generating print-ready HTML
+- ✅ Updated StudentsPage, StudentDetailPage, and DailyReview to use new print utilities
+- ✅ Increased print delay for Safari (500ms vs 150ms for Chrome/Firefox)
+- ✅ Proper afterprint event handling with fallback timeout
+- ✅ Comprehensive unit tests for all print utility functions (29 tests)
+
+**Files Changed:**
+- `frontend/src/utils/printUtils.js` (new)
+- `frontend/src/utils/printUtils.test.js` (new)
+- `frontend/src/pages/StudentDetailPage.jsx`
+- `frontend/src/pages/StudentsPage.jsx`
+- `frontend/src/components/DailyReview/index.jsx`
+
+### New Component Tests Added
+**Completed:** January 31, 2026
+
+**What was implemented:**
+- ✅ `PrintableBadge.test.jsx` - 18 tests covering badge rendering, QR codes, sizes, event names
+- ✅ `DailyReview.test.jsx` - 24 tests covering rendering, stats, filters, table structure, exports
 
 ### Responsive Header with Hamburger Menu
 **Completed:** January 25, 2026

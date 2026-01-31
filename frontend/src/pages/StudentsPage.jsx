@@ -7,6 +7,7 @@ import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
+import { safePrint } from '../utils/printUtils';
 
 export default function StudentsPage() {
   const navigate = useNavigate();
@@ -145,20 +146,18 @@ export default function StudentsPage() {
     }).filter(Boolean);
   };
 
-  const handlePrintReports = () => {
-    setPrintMode(true);
-    setTimeout(() => {
-      window.print();
-      setPrintMode(false);
-    }, 150);
+  const handlePrintReports = async () => {
+    await safePrint({
+      beforePrint: () => setPrintMode(true),
+      afterPrint: () => setPrintMode(false)
+    });
   };
 
-  const handlePrintBadges = () => {
-    setBadgePrintMode(true);
-    setTimeout(() => {
-      window.print();
-      setBadgePrintMode(false);
-    }, 150);
+  const handlePrintBadges = async () => {
+    await safePrint({
+      beforePrint: () => setBadgePrintMode(true),
+      afterPrint: () => setBadgePrintMode(false)
+    });
   };
 
   if (loading) return (

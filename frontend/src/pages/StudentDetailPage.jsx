@@ -8,6 +8,7 @@ import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import PrintableBadge from '../components/common/PrintableBadge';
+import { safePrint } from '../utils/printUtils';
 
 export default function StudentDetailPage() {
     const { studentId } = useParams();
@@ -177,9 +178,11 @@ export default function StudentDetailPage() {
         });
     }, [entries, currentEvent]);
 
-    const handlePrint = (mode) => {
-        setPrintMode(mode);
-        setTimeout(() => { window.print(); setPrintMode(null); }, 150);
+    const handlePrint = async (mode) => {
+        await safePrint({
+            beforePrint: () => setPrintMode(mode),
+            afterPrint: () => setPrintMode(null)
+        });
     };
 
     if (loading) return (

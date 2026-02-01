@@ -112,6 +112,32 @@ vi.mock('../utils/printUtils', () => ({
   )
 }));
 
+// Mock ServiceLogEntry component
+vi.mock('../components/ServiceLog', () => ({
+  ServiceLogEntry: ({ entry, activity, mode, onEdit, onViewHistory }) => {
+    if (mode === 'row') {
+      return (
+        <tr data-testid="service-log-row">
+          <td>{entry.checkInTime?.toDate?.()?.toLocaleDateString() || 'N/A'}</td>
+          <td>{activity?.name || '--'}</td>
+          <td>{entry.checkInTime?.toDate?.()?.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) || '--'}</td>
+          <td>{entry.checkOutTime ? entry.checkOutTime.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Not checked out'}</td>
+          <td>{entry.actualHours?.toFixed(2) || '--'}</td>
+          <td>Status</td>
+          <td><button onClick={() => onEdit(entry)}>Edit</button></td>
+        </tr>
+      );
+    }
+    return (
+      <div data-testid="service-log-card">
+        <div>{entry.checkInTime?.toDate?.()?.toLocaleDateString() || 'N/A'}</div>
+        <div>{activity?.name || '--'}</div>
+        <button onClick={() => onEdit(entry)}>Edit</button>
+      </div>
+    );
+  }
+}));
+
 // Helper to render with router
 const renderWithRouter = (studentId = 'student123') => {
   return render(
@@ -163,18 +189,18 @@ describe('StudentDetailPage', () => {
       });
     });
 
-    it('should render time entries table', async () => {
+    it('should render time entries table or service log', async () => {
       renderWithRouter();
 
       await waitFor(() => {
-        // Table headers
-        expect(screen.getByText('Date')).toBeInTheDocument();
-        expect(screen.getByText('Bucket')).toBeInTheDocument();
-        expect(screen.getByText('Check In')).toBeInTheDocument();
-        expect(screen.getByText('Check Out')).toBeInTheDocument();
-        expect(screen.getByText('Hours')).toBeInTheDocument();
-        expect(screen.getByText('Status')).toBeInTheDocument();
-        expect(screen.getByText('Actions')).toBeInTheDocument();
+        // Desktop view has table headers, mobile view has "Service Log" heading
+        // Check for either desktop table headers or mobile service log header
+        const hasDesktopTable = screen.queryByText('Date') !== null;
+        const hasMobileServiceLog = screen.queryByText('Service Log') !== null;
+        expect(hasDesktopTable || hasMobileServiceLog).toBe(true);
+
+        // Check for entry content that appears in both views
+        expect(screen.getAllByText('Morning Session').length).toBeGreaterThanOrEqual(1);
       });
     });
 

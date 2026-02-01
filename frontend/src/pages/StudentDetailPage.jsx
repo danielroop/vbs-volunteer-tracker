@@ -10,6 +10,7 @@ import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import PrintableBadge from '../components/common/PrintableBadge';
+import { ServiceLogEntry } from '../components/ServiceLog';
 
 export default function StudentDetailPage() {
     const { studentId } = useParams();
@@ -428,14 +429,14 @@ export default function StudentDetailPage() {
             </style>
 
             {/* ADMIN UI (no-print) */}
-            <div className="flex justify-between items-center mb-8 no-print">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 no-print">
                 <div>
-                    <h1 className="text-3xl font-black text-gray-900">{student?.firstName} {student?.lastName}</h1>
-                    <p className="text-gray-500 font-medium">{student?.schoolName} • Grade {student?.gradeLevel}</p>
+                    <h1 className="text-2xl sm:text-3xl font-black text-gray-900">{student?.firstName} {student?.lastName}</h1>
+                    <p className="text-gray-500 font-medium text-sm sm:text-base">{student?.schoolName} • Grade {student?.gradeLevel}</p>
                 </div>
-                <div className="flex gap-3">
-                    <Button onClick={() => handlePrint('form')} variant="secondary">Print Service Log</Button>
-                    <Button onClick={() => handlePrint('badge')} variant="primary">Print Badge</Button>
+                <div className="flex gap-3 flex-wrap sm:flex-nowrap">
+                    <Button onClick={() => handlePrint('form')} variant="secondary" className="flex-1 sm:flex-none min-h-[44px]">Print Service Log</Button>
+                    <Button onClick={() => handlePrint('badge')} variant="primary" className="flex-1 sm:flex-none min-h-[44px]">Print Badge</Button>
                 </div>
             </div>
 
@@ -462,64 +463,65 @@ export default function StudentDetailPage() {
                 </div>
 
                 <div className="lg:col-span-3">
-                    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                    {/* DESKTOP: Table view (hidden on mobile, visible on md+) */}
+                    <div className="hidden md:block bg-white rounded-2xl shadow-sm border overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50"><tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider"><th className="px-6 py-4">Date</th><th className="px-6 py-4">Bucket</th><th className="px-6 py-4 text-center">Check In</th><th className="px-6 py-4 text-center">Check Out</th><th className="px-6 py-4 text-right">Hours</th><th className="px-6 py-4 text-center">Status</th><th className="px-6 py-4 text-center">Actions</th></tr></thead>
+                            <thead className="bg-gray-50">
+                                <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4">Date</th>
+                                    <th className="px-6 py-4">Bucket</th>
+                                    <th className="px-6 py-4 text-center">Check In</th>
+                                    <th className="px-6 py-4 text-center">Check Out</th>
+                                    <th className="px-6 py-4 text-right">Hours</th>
+                                    <th className="px-6 py-4 text-center">Status</th>
+                                    <th className="px-6 py-4 text-center">Actions</th>
+                                </tr>
+                            </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {enrichedEntries.map(e => (
-                                    <tr key={e.id} className={`text-sm ${!e.checkOutTime ? 'bg-red-50' : ''} ${e.forcedCheckoutReason || e.modificationReason ? 'bg-blue-50' : ''}`}>
-                                        <td className="px-6 py-4">{e.checkInTime.toDate().toLocaleDateString()}</td>
-                                        <td className="px-6 py-4 uppercase font-bold text-[10px] text-blue-600">{currentEvent?.activities?.find(a => a.id === e.activityId)?.name}</td>
-                                        <td className="px-6 py-4 text-center text-gray-600">
-                                            {e.checkInTime.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                        </td>
-                                        <td className={`px-6 py-4 text-center ${!e.checkOutTime ? 'text-red-600' : 'text-gray-600'}`}>
-                                            {e.checkOutTime ? (
-                                                e.checkOutTime.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                                            ) : (
-                                                <span className="text-[10px] font-medium text-red-500">Not checked out</span>
-                                            )}
-                                        </td>
-                                        <td className={`px-6 py-4 text-right font-black ${!e.checkOutTime ? 'text-red-600' : ''}`}>
-                                            {e.checkOutTime ? e.actualHours.toFixed(2) : '--'}
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                {e.forcedCheckoutReason && (
-                                                    <span title="Forced checkout" className="text-lg">⚡</span>
-                                                )}
-                                                {e.modificationReason && (
-                                                    <span title="Modified" className="text-lg">✏️</span>
-                                                )}
-                                                {e.flags && e.flags.includes('early_arrival') && (
-                                                    <span title="Early arrival" className="text-lg">🌅</span>
-                                                )}
-                                                {e.flags && e.flags.includes('late_stay') && (
-                                                    <span title="Late stay" className="text-lg">🌙</span>
-                                                )}
-                                                {(e.changeLog && e.changeLog.length > 0) || e.forcedCheckoutReason || e.modificationReason ? (
-                                                    <button
-                                                        onClick={() => setNotesModal({ isOpen: true, entry: e })}
-                                                        className="text-xs text-blue-600 hover:text-blue-800 underline ml-1"
-                                                    >
-                                                        View
-                                                    </button>
-                                                ) : null}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                onClick={() => openEditModal(e)}
-                                            >
-                                                Edit
-                                            </Button>
-                                        </td>
-                                    </tr>
+                                    <ServiceLogEntry
+                                        key={e.id}
+                                        entry={e}
+                                        activity={currentEvent?.activities?.find(a => a.id === e.activityId)}
+                                        mode="row"
+                                        onEdit={openEditModal}
+                                        onViewHistory={(entry) => setNotesModal({ isOpen: true, entry })}
+                                    />
                                 ))}
                             </tbody>
                         </table>
+                        {enrichedEntries.length === 0 && (
+                            <div className="p-8 text-center text-gray-500">
+                                No service log entries found
+                            </div>
+                        )}
+                    </div>
+
+                    {/* MOBILE: Card view (visible on mobile, hidden on md+) */}
+                    <div className="block md:hidden">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Service Log</h3>
+                            <span className="text-xs text-gray-500">{enrichedEntries.length} {enrichedEntries.length === 1 ? 'entry' : 'entries'}</span>
+                        </div>
+                        {enrichedEntries.length > 0 ? (
+                            <ul role="list" className="space-y-3">
+                                {enrichedEntries.map(e => (
+                                    <li key={e.id}>
+                                        <ServiceLogEntry
+                                            entry={e}
+                                            activity={currentEvent?.activities?.find(a => a.id === e.activityId)}
+                                            mode="card"
+                                            onEdit={openEditModal}
+                                            onViewHistory={(entry) => setNotesModal({ isOpen: true, entry })}
+                                        />
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
+                                No service log entries found
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

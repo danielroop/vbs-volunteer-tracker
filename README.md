@@ -237,6 +237,9 @@ npm run logs
 ### Student Detail (`/admin/students/:studentId`)
 
 - Detailed view of individual student's volunteer hours
+- **Responsive design**: Desktop table view and mobile card layout
+  - Desktop (md+): Traditional table with columns for Date, Bucket, Check In/Out, Hours, Status, Actions
+  - Mobile (<md): Card-based layout with touch-friendly buttons (44px min-height)
 - Edit time entries directly with same functionality as Daily Review
 - View change history and modification reasons
 - Print service log and badge for individual student

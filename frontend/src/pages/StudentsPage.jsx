@@ -8,6 +8,7 @@ import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
+import { StudentCard, StudentRow } from '../components/Students';
 
 export default function StudentsPage() {
   const navigate = useNavigate();
@@ -244,6 +245,10 @@ export default function StudentsPage() {
     printElementById('print-all-badges', 'Badges', setBadgePrintMode);
   };
 
+  const handleViewDetail = (studentId) => {
+    navigate(`/admin/students/${studentId}`);
+  };
+
   if (loading) return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -375,8 +380,8 @@ export default function StudentsPage() {
         </div>
       )}
 
-      {/* DATA TABLE */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden no-print">
+      {/* DESKTOP: DATA TABLE (hidden on mobile) */}
+      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden no-print">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -408,51 +413,67 @@ export default function StudentsPage() {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {filteredStudents.map(student => (
-              <tr
+              <StudentRow
                 key={student.id}
-                className={`group hover:bg-gray-50 transition-colors ${selectedStudents.has(student.id) ? 'bg-primary-50' : ''}`}
-              >
-                <td className="px-4 py-4 whitespace-nowrap">
-                  <input
-                    type="checkbox"
-                    checked={selectedStudents.has(student.id)}
-                    onChange={() => toggleStudentSelection(student.id)}
-                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
-                    aria-label={`Select ${student.firstName} ${student.lastName}`}
-                  />
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-bold text-gray-900">
-                    {student.lastName}, {student.firstName}
-                  </div>
-                  <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">
-                    Grad: {student.gradYear || '----'}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-600">{student.schoolName || '---'}</div>
-                  <div className="text-[10px] font-black text-primary-500 uppercase">
-                    Grade {student.gradeLevel || '--'}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-black ${
-                    student.eventTotal > 0 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-50 text-gray-400'
-                  }`}>
-                    {student.eventTotal.toFixed(2)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button 
-                    onClick={() => navigate(`/admin/students/${student.id}`)}
-                    className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-4 py-1.5 rounded-lg hover:bg-primary-600 hover:text-white transition-all shadow-sm">
-                    View Detail →
-                  </button>
-                </td>
-              </tr>
+                student={student}
+                isSelected={selectedStudents.has(student.id)}
+                onToggleSelection={toggleStudentSelection}
+                onViewDetail={handleViewDetail}
+              />
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* MOBILE: CARD LIST (visible only on mobile) */}
+      <div className="block md:hidden no-print">
+        {/* Mobile header with select all checkbox */}
+        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 mb-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  selectAllFiltered();
+                } else {
+                  setSelectedStudents(prev => {
+                    const next = new Set(prev);
+                    filteredStudents.forEach(s => next.delete(s.id));
+                    return next;
+                  });
+                }
+              }}
+              className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              aria-label={allFilteredSelected ? "Deselect all students" : "Select all students"}
+            />
+            <span className="text-sm font-medium text-gray-600">Select All</span>
+          </label>
+          <span className="text-sm text-gray-400">
+            {filteredStudents.length} {filteredStudents.length === 1 ? 'student' : 'students'}
+          </span>
+        </div>
+
+        {/* Card list with semantic HTML */}
+        <ul className="space-y-3" role="list" aria-label="Student list">
+          {filteredStudents.map(student => (
+            <StudentCard
+              key={student.id}
+              student={student}
+              isSelected={selectedStudents.has(student.id)}
+              onToggleSelection={toggleStudentSelection}
+              onViewDetail={handleViewDetail}
+            />
+          ))}
+        </ul>
+
+        {/* Empty state */}
+        {filteredStudents.length === 0 && (
+          <div className="text-center py-12 text-gray-400">
+            <p className="text-lg font-medium">No students found</p>
+            <p className="text-sm mt-1">Try adjusting your search</p>
+          </div>
+        )}
       </div>
 
       {/* CREATE STUDENT MODAL */}

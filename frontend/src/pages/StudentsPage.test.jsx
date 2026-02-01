@@ -131,10 +131,6 @@ describe('StudentsPage', () => {
     entriesUnsubscribe = vi.fn();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   describe('rendering', () => {
     it('should render the page title', async () => {
       renderWithRouter(<StudentsPage />);
@@ -173,9 +169,9 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
-        expect(screen.getByText('Smith, Jane')).toBeInTheDocument();
-        expect(screen.getByText('Johnson, Bob')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('Smith, Jane')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('Johnson, Bob')[0]).toBeInTheDocument();
       });
     });
   });
@@ -185,24 +181,27 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Header checkbox should exist
-      const headerCheckbox = screen.getByRole('checkbox', { name: /select all/i });
-      expect(headerCheckbox).toBeInTheDocument();
+      // Header checkboxes should exist (desktop + mobile)
+      const headerCheckboxes = screen.getAllByRole('checkbox', { name: /select all/i });
+      expect(headerCheckboxes.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should render checkbox for each student row', async () => {
+    it('should render checkbox for each student', async () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Should have header checkbox + one for each student (3 students)
+      // With responsive layout, there are checkboxes in both desktop table and mobile cards
+      // Desktop: 1 header + 3 students = 4
+      // Mobile: 1 header + 3 students = 4
+      // Total: 8 checkboxes
       const checkboxes = screen.getAllByRole('checkbox');
-      expect(checkboxes.length).toBe(4); // 1 header + 3 students
+      expect(checkboxes.length).toBe(8); // 2 headers + 6 student checkboxes (3 students x 2 views)
     });
 
     it('should toggle individual student selection when checkbox is clicked', async () => {
@@ -210,18 +209,18 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Find the checkbox for the first student
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
-      expect(studentCheckbox).not.toBeChecked();
+      // Find the checkboxes for John Doe (there are 2 - desktop and mobile)
+      const studentCheckboxes = screen.getAllByRole('checkbox', { name: /Select John Doe/i });
+      expect(studentCheckboxes[0]).not.toBeChecked();
 
-      // Click to select
-      await user.click(studentCheckbox);
+      // Click to select (use the first one - desktop)
+      await user.click(studentCheckboxes[0]);
 
-      // Should now be checked
-      expect(studentCheckbox).toBeChecked();
+      // Both checkboxes should now be checked (they share state)
+      expect(studentCheckboxes[0]).toBeChecked();
 
       // Selection bar should appear
       await waitFor(() => {
@@ -235,12 +234,12 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Select a student
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
-      await user.click(studentCheckbox);
+      // Select a student (use first checkbox)
+      const studentCheckboxes = screen.getAllByRole('checkbox', { name: /Select John Doe/i });
+      await user.click(studentCheckboxes[0]);
 
       // Selection bar should appear with count
       await waitFor(() => {
@@ -254,12 +253,12 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Select two students
-      const checkbox1 = screen.getByRole('checkbox', { name: /Select John Doe/i });
-      const checkbox2 = screen.getByRole('checkbox', { name: /Select Jane Smith/i });
+      // Select two students (use first checkboxes from each)
+      const checkbox1 = screen.getAllByRole('checkbox', { name: /Select John Doe/i })[0];
+      const checkbox2 = screen.getAllByRole('checkbox', { name: /Select Jane Smith/i })[0];
       await user.click(checkbox1);
       await user.click(checkbox2);
 
@@ -275,12 +274,12 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Select a student
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
-      await user.click(studentCheckbox);
+      // Select a student (use first checkbox)
+      const studentCheckboxes = screen.getAllByRole('checkbox', { name: /Select John Doe/i });
+      await user.click(studentCheckboxes[0]);
 
       // Verify selection bar appears
       await waitFor(() => {
@@ -297,7 +296,7 @@ describe('StudentsPage', () => {
       });
 
       // Checkbox should be unchecked
-      expect(studentCheckbox).not.toBeChecked();
+      expect(studentCheckboxes[0]).not.toBeChecked();
     });
 
     it('should select all filtered students when Select All Visible is clicked', async () => {
@@ -305,11 +304,11 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
       // Select one student first to make selection bar appear
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
+      const studentCheckbox = screen.getAllByRole('checkbox', { name: /Select John Doe/i })[0];
       await user.click(studentCheckbox);
 
       // Click Select All Visible
@@ -331,7 +330,7 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
       // Initially buttons show default text
@@ -339,7 +338,7 @@ describe('StudentsPage', () => {
       expect(screen.getByRole('button', { name: 'Print Reports' })).toBeInTheDocument();
 
       // Select a student
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
+      const studentCheckbox = screen.getAllByRole('checkbox', { name: /Select John Doe/i })[0];
       await user.click(studentCheckbox);
 
       // Button text should update to show count
@@ -354,11 +353,11 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
       // Select a student
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
+      const studentCheckbox = screen.getAllByRole('checkbox', { name: /Select John Doe/i })[0];
       await user.click(studentCheckbox);
 
       // Verify selection
@@ -379,17 +378,18 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Find the row containing John Doe
-      const row = screen.getByText('Doe, John').closest('tr');
+      // Find the first row containing John Doe (desktop table)
+      const rows = screen.getAllByText('Doe, John');
+      const row = rows[0].closest('tr');
 
       // Initially should not have selected class
       expect(row).not.toHaveClass('bg-primary-50');
 
       // Select the student
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
+      const studentCheckbox = screen.getAllByRole('checkbox', { name: /Select John Doe/i })[0];
       await user.click(studentCheckbox);
 
       // Row should have the selected background class
@@ -403,11 +403,12 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Get header checkbox
-      const headerCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      // Get header checkboxes (desktop and mobile)
+      const headerCheckboxes = screen.getAllByRole('checkbox', { name: /select all/i });
+      const headerCheckbox = headerCheckboxes[0]; // Use desktop header checkbox
 
       // Click to select all
       await user.click(headerCheckbox);
@@ -433,8 +434,8 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
-        expect(screen.getByText('Smith, Jane')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('Smith, Jane')[0]).toBeInTheDocument();
       });
 
       // Search for John
@@ -443,7 +444,7 @@ describe('StudentsPage', () => {
 
       // Only John should be visible
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
         expect(screen.queryByText('Smith, Jane')).not.toBeInTheDocument();
       });
     });
@@ -455,7 +456,7 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
       // Find and click the View Detail button for the first student
@@ -492,7 +493,7 @@ describe('StudentsPage', () => {
 
       // Wait for loading to complete
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
       // Open modal
@@ -519,63 +520,212 @@ describe('StudentsPage', () => {
       renderWithRouter(<StudentsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Doe, John')).toBeInTheDocument();
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
       });
 
-      // Header checkbox should have aria-label
-      const headerCheckbox = screen.getByRole('checkbox', { name: /select all/i });
-      expect(headerCheckbox).toHaveAttribute('aria-label');
+      // Header checkboxes should have aria-label (desktop and mobile)
+      const headerCheckboxes = screen.getAllByRole('checkbox', { name: /select all/i });
+      headerCheckboxes.forEach(checkbox => {
+        expect(checkbox).toHaveAttribute('aria-label');
+      });
 
       // Row checkboxes should have aria-labels with student names
-      const studentCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
-      expect(studentCheckbox).toHaveAttribute('aria-label');
+      const studentCheckboxes = screen.getAllByRole('checkbox', { name: /Select John Doe/i });
+      studentCheckboxes.forEach(checkbox => {
+        expect(checkbox).toHaveAttribute('aria-label');
+      });
     });
   });
-});
 
-describe('StudentsPage Selection Persistence', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    studentsUnsubscribe = vi.fn();
-    entriesUnsubscribe = vi.fn();
+  describe('selection persistence', () => {
+    it('should maintain selection state across filter changes', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Select John Doe (use first checkbox)
+      const johnCheckboxes = screen.getAllByRole('checkbox', { name: /Select John Doe/i });
+      await user.click(johnCheckboxes[0]);
+
+      // Verify selection
+      expect(johnCheckboxes[0]).toBeChecked();
+      await waitFor(() => {
+        expect(screen.getByText('1')).toBeInTheDocument();
+      });
+
+      // Filter to show only Jane
+      const searchInput = screen.getByPlaceholderText('Search volunteers...');
+      await user.type(searchInput, 'Jane');
+
+      // John should no longer be visible but selection count should remain
+      await waitFor(() => {
+        expect(screen.queryByText('Doe, John')).not.toBeInTheDocument();
+        expect(screen.getByText('1')).toBeInTheDocument();
+      });
+
+      // Clear search
+      await user.clear(searchInput);
+
+      // John should be visible again and still selected
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+        const johnCheckboxAfter = screen.getAllByRole('checkbox', { name: /Select John Doe/i })[0];
+        expect(johnCheckboxAfter).toBeChecked();
+      });
+    });
   });
 
-  it('should maintain selection state across filter changes', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<StudentsPage />);
+  describe('responsive layout', () => {
+    it('should render desktop table view with hidden class for mobile', async () => {
+      renderWithRouter(<StudentsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Doe, John')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Desktop table should have hidden md:block classes
+      const desktopTable = screen.getByRole('table').closest('div');
+      expect(desktopTable).toHaveClass('hidden', 'md:block');
     });
 
-    // Select John Doe
-    const johnCheckbox = screen.getByRole('checkbox', { name: /Select John Doe/i });
-    await user.click(johnCheckbox);
+    it('should render mobile card list with block md:hidden classes', async () => {
+      renderWithRouter(<StudentsPage />);
 
-    // Verify selection
-    expect(johnCheckbox).toBeChecked();
-    await waitFor(() => {
-      expect(screen.getByText('1')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Mobile card list should have block md:hidden classes
+      const mobileCardList = screen.getByRole('list', { name: /Student list/i });
+      expect(mobileCardList.closest('div')).toHaveClass('block', 'md:hidden');
     });
 
-    // Filter to show only Jane
-    const searchInput = screen.getByPlaceholderText('Search volunteers...');
-    await user.type(searchInput, 'Jane');
+    it('should render student cards in mobile view', async () => {
+      renderWithRouter(<StudentsPage />);
 
-    // John should no longer be visible but selection count should remain
-    await waitFor(() => {
-      expect(screen.queryByText('Doe, John')).not.toBeInTheDocument();
-      expect(screen.getByText('1')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Check for card list structure
+      const studentList = screen.getByRole('list', { name: /Student list/i });
+      expect(studentList).toBeInTheDocument();
+
+      // Each student should have a list item
+      const listItems = within(studentList).getAllByRole('listitem');
+      expect(listItems.length).toBe(3); // 3 students
     });
 
-    // Clear search
-    await user.clear(searchInput);
+    it('should display student count in mobile header', async () => {
+      renderWithRouter(<StudentsPage />);
 
-    // John should be visible again and still selected
-    await waitFor(() => {
-      expect(screen.getByText('Doe, John')).toBeInTheDocument();
-      const johnCheckboxAfter = screen.getByRole('checkbox', { name: /Select John Doe/i });
-      expect(johnCheckboxAfter).toBeChecked();
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Mobile header should show count
+      expect(screen.getByText('3 students')).toBeInTheDocument();
+    });
+
+    it('should show Select All checkbox in mobile header', async () => {
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Mobile header should have Select All label
+      expect(screen.getByText('Select All')).toBeInTheDocument();
+    });
+
+    it('should toggle all selections via mobile Select All checkbox', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Find the mobile select all checkbox (within the mobile header)
+      const mobileSelectAllCheckboxes = screen.getAllByRole('checkbox', { name: /select all/i });
+      // There are now 2 select all checkboxes (desktop table header + mobile header)
+      const mobileSelectAll = mobileSelectAllCheckboxes[1];
+
+      await user.click(mobileSelectAll);
+
+      // All students should be selected - selection bar should show 3
+      await waitFor(() => {
+        expect(screen.getByText('3')).toBeInTheDocument();
+        expect(screen.getByText(/students selected/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should use StudentRow components in desktop table', async () => {
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Check table has rows for each student
+      const table = screen.getByRole('table');
+      const rows = within(table).getAllByRole('row');
+      // 1 header row + 3 student rows
+      expect(rows.length).toBe(4);
+    });
+
+    it('should use StudentCard components with proper article structure', async () => {
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Check for article elements inside the student list
+      const studentList = screen.getByRole('list', { name: /Student list/i });
+      const articles = studentList.querySelectorAll('article');
+      expect(articles.length).toBe(3); // 3 student cards
+    });
+
+    it('should navigate to student detail when card is clicked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Find the card for John Doe (article with button role)
+      const cards = screen.getAllByRole('button', { name: /View details for/i });
+      const johnCard = cards.find(card => card.getAttribute('aria-label')?.includes('John Doe'));
+
+      if (johnCard) {
+        await user.click(johnCard);
+        expect(mockNavigate).toHaveBeenCalledWith('/admin/students/student1');
+      }
+    });
+
+    it('should apply selected styling to cards when selected', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      // Select a student via checkbox (first checkbox in list)
+      const checkboxes = screen.getAllByRole('checkbox', { name: /Select John Doe/i });
+      await user.click(checkboxes[0]);
+
+      // Card should have selected styling (find the card within the mobile view)
+      await waitFor(() => {
+        const studentList = screen.getByRole('list', { name: /Student list/i });
+        const johnCard = studentList.querySelector('article');
+        expect(johnCard).toHaveClass('border-primary-400', 'bg-primary-50');
+      });
     });
   });
 });

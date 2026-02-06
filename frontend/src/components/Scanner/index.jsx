@@ -47,7 +47,7 @@ export default function Scanner() {
     }
   }, [loading, localEvent, urlActivityId, urlEventId, urlAction, navigate]);
 
-  const { startScanning, stopScanning } = useQRScanner({
+  const { startScanning: startScanningFn, stopScanning: stopScanningFn } = useQRScanner({
     onSuccess: async (data) => {
       const qrString = typeof data === 'string' ? data : data?.rawData || data?.data;
 
@@ -110,6 +110,13 @@ export default function Scanner() {
     }
   });
 
+  // Use refs for scanner functions to avoid effect re-triggering when
+  // useQRScanner recreates callbacks (e.g. after getCameras updates state)
+  const startScanningRef = useRef(startScanningFn);
+  const stopScanningRef = useRef(stopScanningFn);
+  startScanningRef.current = startScanningFn;
+  stopScanningRef.current = stopScanningFn;
+
   const hasValidEvent = !!localEvent;
   const currentActivity = localEvent?.activities?.find(a => a.id === urlActivityId);
   const hasValidActivity = !!currentActivity;
@@ -118,12 +125,18 @@ export default function Scanner() {
   useEffect(() => {
     if (!loading && hasValidEvent && hasValidActivity && hasValidAction && !isStarting.current) {
       isStarting.current = true;
-      setTimeout(() => {
-        startScanning('qr-reader').catch(() => isStarting.current = false);
+      const timeoutId = setTimeout(() => {
+        startScanningRef.current('qr-reader').catch(() => {
+          isStarting.current = false;
+        });
       }, 500);
-      return () => stopScanning();
+      return () => {
+        clearTimeout(timeoutId);
+        stopScanningRef.current();
+        isStarting.current = false;
+      };
     }
-  }, [loading, hasValidEvent, hasValidActivity, hasValidAction, startScanning, stopScanning]);
+  }, [loading, hasValidEvent, hasValidActivity, hasValidAction]);
 
   function showMessage(type, text) {
     setMessage({ type, text });

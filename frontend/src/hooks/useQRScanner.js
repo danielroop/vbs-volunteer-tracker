@@ -23,6 +23,7 @@ export function useQRScanner(options = {}) {
   const [cameras, setCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState(null);
   const scannerRef = useRef(null);
+  const isScanningRef = useRef(false);
 
   /**
    * Get available cameras
@@ -48,12 +49,23 @@ export function useQRScanner(options = {}) {
    * Start scanning
    */
   const startScanning = useCallback(async (elementId) => {
-    if (isScanning) {
+    if (isScanningRef.current) {
       console.warn('Scanner already running');
       return;
     }
 
     try {
+      // Stop any existing scanner instance before starting a new one
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+          scannerRef.current.clear();
+        } catch (e) {
+          // Ignore errors from stopping a scanner that's already stopped
+        }
+        scannerRef.current = null;
+      }
+
       // Get cameras if not already fetched
       if (cameras.length === 0) {
         await getCameras();
@@ -95,51 +107,60 @@ export function useQRScanner(options = {}) {
         }
       );
 
+      isScanningRef.current = true;
       setIsScanning(true);
       setError(null);
     } catch (err) {
       console.error('Error starting scanner:', err);
       setError('Failed to start scanner. Please check camera permissions.');
+      isScanningRef.current = false;
       setIsScanning(false);
     }
-  }, [isScanning, cameras, selectedCamera, fps, qrbox, onSuccess, onError, getCameras]);
+  }, [cameras, selectedCamera, fps, qrbox, onSuccess, onError, getCameras]);
 
   /**
    * Stop scanning
    */
   const stopScanning = useCallback(async () => {
-    if (!isScanning || !scannerRef.current) {
+    if (!scannerRef.current || !isScanningRef.current) {
+      scannerRef.current = null;
+      isScanningRef.current = false;
+      setIsScanning(false);
       return;
     }
 
     try {
       await scannerRef.current.stop();
       scannerRef.current.clear();
-      scannerRef.current = null;
-      setIsScanning(false);
     } catch (err) {
       console.error('Error stopping scanner:', err);
+    } finally {
+      scannerRef.current = null;
+      isScanningRef.current = false;
+      setIsScanning(false);
     }
-  }, [isScanning]);
+  }, []);
 
   /**
    * Switch camera
    */
   const switchCamera = useCallback(async (cameraId) => {
-    if (isScanning) {
+    if (isScanningRef.current) {
       await stopScanning();
     }
     setSelectedCamera(cameraId);
-  }, [isScanning, stopScanning]);
+  }, [stopScanning]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (scannerRef.current && isScanning) {
+      if (scannerRef.current) {
         scannerRef.current.stop().catch(console.error);
+        scannerRef.current = null;
+        isScanningRef.current = false;
       }
     };
-  }, [isScanning]);
+  }, []);
 
   return {
     isScanning,

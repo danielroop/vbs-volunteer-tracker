@@ -122,7 +122,8 @@ export function useQRScanner(options = {}) {
    * Stop scanning
    */
   const stopScanning = useCallback(async () => {
-    if (!scannerRef.current) {
+    if (!scannerRef.current || !isScanningRef.current) {
+      scannerRef.current = null;
       isScanningRef.current = false;
       setIsScanning(false);
       return;

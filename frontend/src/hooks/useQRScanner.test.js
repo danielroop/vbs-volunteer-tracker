@@ -181,6 +181,21 @@ describe('useQRScanner', () => {
 
       expect(result.current.isScanning).toBe(false);
     });
+
+    it('should not call scanner.stop() if scanner was never started (avoids "not running" error)', async () => {
+      // This simulates the case where stopScanning is called during cleanup
+      // before startScanning has completed (e.g., effect re-triggered by
+      // getCameras updating state)
+      const { result } = renderHook(() => useQRScanner());
+
+      // stopScanning called without ever starting - should not call .stop()
+      await act(async () => {
+        await result.current.stopScanning();
+      });
+
+      expect(mockStop).not.toHaveBeenCalled();
+      expect(result.current.isScanning).toBe(false);
+    });
   });
 
   describe('restart after stop (mode change scenario)', () => {

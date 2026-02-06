@@ -6,6 +6,8 @@ import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import Modal from '../components/common/Modal';
+import UserCard from '../components/Users/UserCard';
+import UserRow from '../components/Users/UserRow';
 
 export default function UsersPage() {
   const { user } = useAuth();
@@ -269,67 +271,60 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* DATA TABLE */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              <th className="px-6 py-4">User</th>
-              <th className="px-6 py-4">Role</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredUsers.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
-                  {searchTerm ? 'No users found matching your search.' : 'No users found. Add your first user!'}
-                </td>
+      {/* Empty state */}
+      {filteredUsers.length === 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center text-gray-500">
+          {searchTerm ? 'No users found matching your search.' : 'No users found. Add your first user!'}
+        </div>
+      )}
+
+      {/* DESKTOP TABLE VIEW (md and above) */}
+      {filteredUsers.length > 0 && (
+        <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                <th className="px-6 py-4">User</th>
+                <th className="px-6 py-4">Role</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
-            ) : (
-              filteredUsers.map(u => (
-                <tr key={u.id} className="group hover:bg-primary-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-bold text-gray-900">{u.name || 'Unnamed User'}</div>
-                    <div className="text-xs text-gray-500">{u.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getRoleBadge(u.role)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(u.isActive)}
-                  </td>
-                  <td className="px-6 py-4 text-right whitespace-nowrap">
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        onClick={() => openEditModal(u)}
-                        className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-3 py-1.5 rounded-lg hover:bg-primary-600 hover:text-white transition-all shadow-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => openResetPasswordModal(u)}
-                        className="text-orange-600 font-bold text-xs bg-white border border-orange-200 px-3 py-1.5 rounded-lg hover:bg-orange-600 hover:text-white transition-all shadow-sm"
-                      >
-                        Reset Password
-                      </button>
-                      {u.id !== user?.uid && (
-                        <button
-                          onClick={() => openDeleteModal(u)}
-                          className="text-red-600 font-bold text-xs bg-white border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredUsers.map(u => (
+                <UserRow
+                  key={u.id}
+                  userItem={u}
+                  isSelf={u.id === user?.uid}
+                  onEdit={openEditModal}
+                  onResetPassword={openResetPasswordModal}
+                  onDelete={openDeleteModal}
+                  getRoleBadge={getRoleBadge}
+                  getStatusBadge={getStatusBadge}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* MOBILE CARD VIEW (below md) */}
+      {filteredUsers.length > 0 && (
+        <ul className="block md:hidden space-y-3">
+          {filteredUsers.map(u => (
+            <UserCard
+              key={u.id}
+              userItem={u}
+              isSelf={u.id === user?.uid}
+              onEdit={openEditModal}
+              onResetPassword={openResetPasswordModal}
+              onDelete={openDeleteModal}
+              getRoleBadge={getRoleBadge}
+              getStatusBadge={getStatusBadge}
+            />
+          ))}
+        </ul>
+      )}
 
       {/* CREATE USER MODAL */}
       <Modal

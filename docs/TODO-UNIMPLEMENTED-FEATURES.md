@@ -1,11 +1,36 @@
 # Unimplemented Features - Future Work
 
-> **Last Updated:** February 1, 2026 (Responsive Student Detail page implemented)
+> **Last Updated:** February 6, 2026 (Responsive User Management page implemented)
 > This document lists features from the original PRD that are not yet implemented.
 
 ---
 
 ## Recently Completed
+
+### Responsive User Management Page (GitHub Issue #34)
+**Completed:** February 6, 2026
+
+**What was implemented:**
+- ✅ UserCard component for mobile card view (screens < md breakpoint)
+- ✅ UserRow component for desktop table row view (screens >= md breakpoint)
+- ✅ Desktop view (`hidden md:block`): Traditional table layout with User, Role, Status, Actions columns
+- ✅ Mobile view (`block md:hidden`): Card-based layout with vertically stacked name/email, role and status badges, and action buttons
+- ✅ Action buttons (Edit, Reset Password, Delete) accessible in both views
+- ✅ Self-deletion protection: Delete button hidden for current user in both layouts
+- ✅ Search/filter functionality works seamlessly across both views
+- ✅ Shared empty state component for zero-result scenarios
+- ✅ Consistent styling with existing color-coded badges (purple for Admin, blue for Adult Volunteer, green/red for Active/Inactive)
+- ✅ Comprehensive unit tests for UserCard (19 tests) and UserRow (16 tests)
+- ✅ All existing tests continue to pass (455+ total)
+
+**Files Changed:**
+- `frontend/src/components/Users/UserCard.jsx` (new)
+- `frontend/src/components/Users/UserCard.test.jsx` (new)
+- `frontend/src/components/Users/UserRow.jsx` (new)
+- `frontend/src/components/Users/UserRow.test.jsx` (new)
+- `frontend/src/pages/UsersPage.jsx` (updated - responsive layout with UserCard/UserRow)
+
+---
 
 ### Responsive Student Detail Page (GitHub Issue #33)
 **Completed:** February 1, 2026

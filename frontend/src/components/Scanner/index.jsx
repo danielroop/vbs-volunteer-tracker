@@ -118,10 +118,16 @@ export default function Scanner() {
   useEffect(() => {
     if (!loading && hasValidEvent && hasValidActivity && hasValidAction && !isStarting.current) {
       isStarting.current = true;
-      setTimeout(() => {
-        startScanning('qr-reader').catch(() => isStarting.current = false);
+      const timeoutId = setTimeout(() => {
+        startScanning('qr-reader').catch(() => {
+          isStarting.current = false;
+        });
       }, 500);
-      return () => stopScanning();
+      return () => {
+        clearTimeout(timeoutId);
+        stopScanning();
+        isStarting.current = false;
+      };
     }
   }, [loading, hasValidEvent, hasValidActivity, hasValidAction, startScanning, stopScanning]);
 

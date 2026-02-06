@@ -18,6 +18,7 @@ This system eliminates manual time entry and Excel calculations by using QR code
 - 📲 Responsive design with mobile hamburger menu
 - 🔗 Quick access to Scanner from admin header
 - 🖨️ Safari-compatible print functionality (badges, reports, PDF exports)
+- 👥 Responsive User Management with mobile card view
 
 ## Tech Stack
 
@@ -34,7 +35,7 @@ vbs-volunteer-tracker/
 ├── frontend/               # React frontend application
 │   ├── public/            # Static assets
 │   ├── src/
-│   │   ├── components/    # React components
+│   │   ├── components/    # React components (Students/, Users/, common/, etc.)
 │   │   ├── pages/         # Page components
 │   │   ├── hooks/         # Custom React hooks
 │   │   ├── utils/         # Utility functions
@@ -246,6 +247,16 @@ npm run logs
 - Summary of hours by activity
 - Warning indicator when entries are not checked out
 - Service Log printing blocked until all entries have checkout times
+
+### User Management (`/admin/users`)
+
+- Manage admin users and adult volunteers
+- **Responsive design**: Desktop table view and mobile card layout
+  - Desktop (md+): Traditional table with columns for User, Role, Status, Actions
+  - Mobile (<md): Card-based layout with stacked info and action buttons
+- Create, edit, delete users and reset passwords
+- Search/filter works seamlessly across both layouts
+- Self-deletion protection (cannot delete own account)
 
 ### Form Generation (`/admin/forms`)
 

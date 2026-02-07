@@ -86,6 +86,10 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const pages = pdfDoc.getPages();
 
+  // Helvetica ascent ratio: the distance from baseline to top of capital letters
+  // as a fraction of font size. This aligns PDF baseline positioning with CSS top positioning.
+  const ASCENT_RATIO = 0.72;
+
   for (const field of fields) {
     const pageIndex = field.page || 0;
     if (pageIndex >= pages.length) continue;
@@ -102,11 +106,12 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
 
       activities.slice(0, maxRows).forEach((activity, rowIndex) => {
         const rowYPct = startYPct + (rowIndex * rowHeightPct);
-        const y = height - (rowYPct / 100) * height;
 
         (field.columns || []).forEach((col) => {
           const x = (col.xPercent / 100) * width;
           const colFontSize = col.fontSize || 10;
+          // Shift baseline down by ascent so top of text aligns with yPercent
+          const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
           const value = resolveActivityColumnValue(col.key, activity, data.event);
 
           page.drawText(value, {
@@ -122,8 +127,9 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
     } else {
       // Static field
       const x = (field.xPercent / 100) * width;
-      const y = height - (field.yPercent / 100) * height;
       const fontSize = field.fontSize || 12;
+      // Shift baseline down by ascent so top of text aligns with yPercent
+      const y = height - (field.yPercent / 100) * height - (fontSize * ASCENT_RATIO);
       const value = resolveFieldValue(field.fieldKey, data);
 
       page.drawText(value, {

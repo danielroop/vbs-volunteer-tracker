@@ -10,13 +10,17 @@ import Button from '../common/Button';
  * @param {string} mode - 'row' for table row, 'card' for mobile card
  * @param {Function} onEdit - Callback when edit button is clicked
  * @param {Function} onViewHistory - Callback when view history is clicked
+ * @param {Function} [onVoid] - Callback when void button is clicked (optional)
+ * @param {Function} [onRestore] - Callback when restore button is clicked (optional)
  */
 export default function ServiceLogEntry({
   entry,
   activity,
   mode = 'row',
   onEdit,
-  onViewHistory
+  onViewHistory,
+  onVoid,
+  onRestore
 }) {
   const dateDisplay = entry.checkInTime?.toDate?.()?.toLocaleDateString() || 'N/A';
   const activityName = activity?.name || '--';
@@ -94,15 +98,38 @@ export default function ServiceLogEntry({
           </div>
         </td>
         <td className="px-6 py-4 text-center">
-          {!isVoided && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => onEdit(entry)}
-            >
-              Edit
-            </Button>
-          )}
+          <div className="flex items-center justify-center gap-2">
+            {isVoided ? (
+              onRestore && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => onRestore(entry)}
+                >
+                  Restore
+                </Button>
+              )
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => onEdit(entry)}
+                >
+                  Edit
+                </Button>
+                {onVoid && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => onVoid(entry)}
+                  >
+                    Void
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </td>
       </tr>
     );
@@ -182,30 +209,55 @@ export default function ServiceLogEntry({
       </div>
 
       {/* Actions */}
-      {!isVoided && (
-        <div className="flex gap-2 pt-3 border-t border-gray-200">
-          {hasHistory && (
+      <div className="flex gap-2 pt-3 border-t border-gray-200">
+        {isVoided ? (
+          onRestore && (
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => onViewHistory(entry)}
-              aria-label="View change history"
+              onClick={() => onRestore(entry)}
+              aria-label="Restore this entry"
               className="min-h-[44px]"
             >
-              View History
+              Restore
             </Button>
-          )}
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => onEdit(entry)}
-            aria-label="Edit this entry"
-            className="min-h-[44px]"
-          >
-            Edit
-          </Button>
-        </div>
-      )}
+          )
+        ) : (
+          <>
+            {hasHistory && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onViewHistory(entry)}
+                aria-label="View change history"
+                className="min-h-[44px]"
+              >
+                View History
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => onEdit(entry)}
+              aria-label="Edit this entry"
+              className="min-h-[44px]"
+            >
+              Edit
+            </Button>
+            {onVoid && (
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => onVoid(entry)}
+                aria-label="Void this entry"
+                className="min-h-[44px]"
+              >
+                Void
+              </Button>
+            )}
+          </>
+        )}
+      </div>
     </article>
   );
 }

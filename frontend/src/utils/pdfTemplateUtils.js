@@ -100,12 +100,7 @@ export function downloadPdf(pdfBytes, filename) {
 }
 
 /**
- * Renders a PDF page to an image data URL for preview.
- * Uses pdf-lib to extract page dimensions, then renders via canvas
- * with a simple white background (actual rendering would need pdf.js,
- * but for field mapping we just need the dimensions).
- *
- * Returns { width, height } of the first page.
+ * Returns { width, height, pageCount } of the first page using pdf-lib.
  */
 export async function getPdfPageDimensions(pdfBytes) {
   const pdfDoc = await PDFDocument.load(pdfBytes);
@@ -115,4 +110,42 @@ export async function getPdfPageDimensions(pdfBytes) {
   const firstPage = pages[0];
   const { width, height } = firstPage.getSize();
   return { width, height, pageCount: pages.length };
+}
+
+/**
+ * Renders a specific page of a PDF to a data URL image using pdfjs-dist.
+ *
+ * @param {string} pdfUrl - URL of the PDF to render (e.g. Firebase Storage download URL)
+ * @param {number} pageNumber - 1-indexed page number
+ * @param {number} scale - Render scale (default 2 for crisp display)
+ * @returns {Promise<{dataUrl: string, width: number, height: number}>}
+ */
+export async function renderPdfPageToImage(pdfUrl, pageNumber = 1, scale = 2) {
+  const pdfjsLib = await import('pdfjs-dist');
+
+  // Set the worker source to the bundled worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).href;
+
+  const loadingTask = pdfjsLib.getDocument(pdfUrl);
+  const pdf = await loadingTask.promise;
+  const page = await pdf.getPage(pageNumber);
+
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  const context = canvas.getContext('2d');
+  await page.render({ canvasContext: context, viewport }).promise;
+
+  const dataUrl = canvas.toDataURL('image/png');
+  return {
+    dataUrl,
+    width: viewport.width,
+    height: viewport.height,
+    pageCount: pdf.numPages,
+  };
 }

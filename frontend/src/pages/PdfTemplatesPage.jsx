@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db, storage } from '../utils/firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { FIELD_KEY_OPTIONS, getPdfPageDimensions } from '../utils/pdfTemplateUtils';
+import { FIELD_KEY_OPTIONS, getPdfPageDimensions, renderPdfPageToImage } from '../utils/pdfTemplateUtils';
 import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
@@ -215,7 +215,8 @@ function UploadModal({ isOpen, onClose }) {
 
 /**
  * Modal for interactively mapping fields onto the PDF template.
- * Shows the PDF preview as an image and lets users click to place fields.
+ * Renders the actual PDF page as a background image so users can see
+ * exactly where they're placing fields.
  */
 function FieldMapperModal({ isOpen, template, onClose }) {
   const [fields, setFields] = useState(template.fields || []);
@@ -223,7 +224,41 @@ function FieldMapperModal({ isOpen, template, onClose }) {
   const [fontSize, setFontSize] = useState(12);
   const [saving, setSaving] = useState(false);
   const [placingField, setPlacingField] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pdfImage, setPdfImage] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(true);
+  const [pdfError, setPdfError] = useState(null);
+  const [totalPages, setTotalPages] = useState(template.pageCount || 1);
   const previewRef = useRef(null);
+
+  // Load the PDF page as an image whenever the modal opens or page changes
+  useEffect(() => {
+    if (!template.downloadURL) {
+      setPdfLoading(false);
+      setPdfError('No PDF URL available');
+      return;
+    }
+
+    let cancelled = false;
+    setPdfLoading(true);
+    setPdfError(null);
+
+    renderPdfPageToImage(template.downloadURL, currentPage, 2)
+      .then((result) => {
+        if (cancelled) return;
+        setPdfImage(result.dataUrl);
+        setTotalPages(result.pageCount);
+        setPdfLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Failed to render PDF page:', err);
+        setPdfError('Failed to load PDF preview');
+        setPdfLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [template.downloadURL, currentPage]);
 
   const handlePreviewClick = useCallback((e) => {
     if (!placingField) return;
@@ -243,11 +278,11 @@ function FieldMapperModal({ isOpen, template, onClose }) {
         xPercent: Math.round(xPercent * 100) / 100,
         yPercent: Math.round(yPercent * 100) / 100,
         fontSize,
-        page: 0,
+        page: currentPage - 1, // Store 0-indexed
       }
     ]);
     setPlacingField(false);
-  }, [placingField, selectedFieldKey, fontSize]);
+  }, [placingField, selectedFieldKey, fontSize, currentPage]);
 
   const removeField = (fieldId) => {
     setFields(prev => prev.filter(f => f.id !== fieldId));
@@ -264,6 +299,9 @@ function FieldMapperModal({ isOpen, template, onClose }) {
       setSaving(false);
     }
   };
+
+  // Fields for the currently displayed page
+  const fieldsOnCurrentPage = fields.filter(f => (f.page || 0) === currentPage - 1);
 
   return (
     <Modal
@@ -314,10 +352,35 @@ function FieldMapperModal({ isOpen, template, onClose }) {
         </div>
 
         {placingField && (
-          <p className="text-sm text-primary-600 font-medium">Click on the PDF preview below to place the field</p>
+          <p className="text-sm text-primary-600 font-medium">Click on the PDF below to place the field</p>
         )}
 
-        {/* PDF Preview Area */}
+        {/* Page navigation for multi-page PDFs */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => p - 1)}
+            >
+              Previous
+            </Button>
+            <span className="text-sm font-medium text-gray-700">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        )}
+
+        {/* PDF Preview Area with rendered PDF as background */}
         <div
           ref={previewRef}
           className={`relative border-2 rounded-lg bg-white overflow-hidden ${
@@ -326,19 +389,34 @@ function FieldMapperModal({ isOpen, template, onClose }) {
           style={{
             width: '100%',
             aspectRatio: `${template.pageWidth || 612} / ${template.pageHeight || 792}`,
-            minHeight: '400px',
-            maxHeight: '600px',
           }}
           onClick={handlePreviewClick}
           data-testid="pdf-preview-area"
         >
-          {/* Background label */}
-          <div className="absolute inset-0 flex items-center justify-center text-gray-300 text-lg pointer-events-none">
-            PDF Template: {template.fileName}
-          </div>
+          {/* Rendered PDF image */}
+          {pdfLoading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Spinner size="lg" />
+            </div>
+          )}
 
-          {/* Placed field markers */}
-          {fields.map(field => (
+          {pdfError && !pdfLoading && (
+            <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+              {pdfError}
+            </div>
+          )}
+
+          {pdfImage && !pdfLoading && (
+            <img
+              src={pdfImage}
+              alt={`PDF page ${currentPage}`}
+              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+              draggable={false}
+            />
+          )}
+
+          {/* Placed field markers (only for current page) */}
+          {fieldsOnCurrentPage.map(field => (
             <div
               key={field.id}
               className="absolute flex items-center gap-1 group"
@@ -346,10 +424,11 @@ function FieldMapperModal({ isOpen, template, onClose }) {
                 left: `${field.xPercent}%`,
                 top: `${field.yPercent}%`,
                 transform: 'translate(0, -50%)',
+                zIndex: 10,
               }}
             >
               <span
-                className="bg-primary-600 text-white text-xs px-2 py-0.5 rounded shadow-sm whitespace-nowrap"
+                className="bg-primary-600 text-white text-xs px-2 py-0.5 rounded shadow-sm whitespace-nowrap opacity-90"
                 style={{ fontSize: `${Math.max(10, Math.min(field.fontSize, 14))}px` }}
               >
                 {field.label}
@@ -375,7 +454,9 @@ function FieldMapperModal({ isOpen, template, onClose }) {
                   <div>
                     <span className="font-medium text-gray-900">{field.label}</span>
                     <span className="text-gray-400 ml-2">
-                      ({field.xPercent.toFixed(1)}%, {field.yPercent.toFixed(1)}%) size: {field.fontSize}pt
+                      ({field.xPercent.toFixed(1)}%, {field.yPercent.toFixed(1)}%)
+                      size: {field.fontSize}pt
+                      {totalPages > 1 && ` | page ${(field.page || 0) + 1}`}
                     </span>
                   </div>
                   <button

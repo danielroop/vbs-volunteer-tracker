@@ -53,6 +53,7 @@ vi.mock('../utils/pdfTemplateUtils', () => ({
     { key: 'date', label: 'Current Date' },
   ],
   getPdfPageDimensions: vi.fn(() => Promise.resolve({ width: 612, height: 792, pageCount: 1 })),
+  renderPdfPageToImage: vi.fn(() => Promise.resolve({ dataUrl: 'data:image/png;base64,test', width: 1224, height: 1584, pageCount: 1 })),
 }));
 
 const renderPage = () => {

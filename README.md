@@ -15,6 +15,7 @@ This system eliminates manual time entry and Excel calculations by using QR code
 - ⏱️ Automatic hour calculation and rounding
 - 🚩 Smart flagging of early arrivals and late stays
 - 📥 Batch PDF form generation
+- 📋 PDF Template Management with WYSIWYG field mapper
 - 📲 Responsive design with mobile hamburger menu
 - 🔗 Quick access to Scanner from admin header
 - 🖨️ Safari-compatible print functionality (badges, reports, PDF exports)
@@ -25,7 +26,7 @@ This system eliminates manual time entry and Excel calculations by using QR code
 
 - **Frontend**: React 18 + Vite + TailwindCSS
 - **Backend**: Firebase (Firestore, Cloud Functions, Storage, Hosting)
-- **PDF Generation**: pdf-lib
+- **PDF Generation**: pdf-lib + pdfjs-dist (preview rendering)
 - **QR Scanning**: html5-qrcode
 - **Offline Storage**: IndexedDB (via idb)
 
@@ -238,6 +239,23 @@ npm run logs
 - Void and restore time entries with confirmation modal and reason tracking
 - Export daily reports (CSV and PDF)
 
+### PDF Template Management (`/admin/settings/pdf-templates`)
+
+- Upload blank PDF forms as reusable templates
+- **WYSIWYG field mapper** with rendered PDF background (pdfjs-dist)
+- Place static data fields (student name, school, hours, etc.) by clicking on the PDF
+- **Drag-to-move** placed fields for precise positioning
+- **Activity Table** field type for dynamic repeating rows (loops over event activities)
+  - Each column independently draggable to match table cell positions
+  - Configurable row height, max rows, per-column font size and max width
+- Inline property editor (font size, data field, position) visible above the PDF
+- Dynamic font scaling based on container size for accurate WYSIWYG preview
+- Baseline-adjusted coordinate system so preview position matches PDF output
+- Preview text in actual print style (black, Helvetica, real font size)
+- Multi-page PDF support with page navigation
+- Generate filled PDFs from Student Detail page with template selector
+- Firestore `pdfTemplates` collection with admin-only access
+
 ### Student Detail (`/admin/students/:studentId`)
 
 - Detailed view of individual student's volunteer hours
@@ -247,6 +265,7 @@ npm run logs
 - Edit time entries directly with same functionality as Daily Review
 - View change history and modification reasons
 - Print service log and badge for individual student
+- Print hours form using uploaded PDF template with mapped fields
 - Void and restore time entries with reason tracking
 - Voided entries excluded from hour calculations with visual indicators
 - Summary of hours by activity
@@ -278,6 +297,7 @@ npm run logs
 - **timeEntries**: Check-in/check-out records (includes void fields: `isVoided`, `voidReason`, `voidedAt`, `voidedBy`)
 - **events**: VBS event information
 - **generatedForms**: PDF form metadata
+- **pdfTemplates**: PDF template definitions with field mappings
 
 See `docs/CLAUDE.md` for detailed schema definitions.
 

@@ -35,8 +35,9 @@
 | Consistent Header | 4.0 | Reusable Header components for admin and scanner pages with consistent navigation |
 | Responsive Header | 4.1 | Hamburger menu for mobile, Scan link in header, accessible navigation on all devices |
 | Safari Print Compatibility | 4.2 | Print badges, reports, and PDF exports work correctly on Safari browsers |
-| Comprehensive Test Suite | N/A | 494+ unit tests covering components, utilities, and contexts |
+| Comprehensive Test Suite | N/A | 499+ unit tests covering components, utilities, and contexts |
 | Edit Entries on Student Detail Page | 3.5.3 | Edit time entries directly from student detail view with full change log tracking |
+| PDF Template Management | 3.6.1-3.6.2 | Upload PDF forms, WYSIWYG field mapper with drag-to-move, activity table support, WYSIWYG preview with dynamic font scaling, generate filled PDFs from Student Detail page |
 | Responsive Student Detail Page | 4.3 | Mobile-friendly card layout for service log on small screens, desktop table on larger screens |
 | Responsive User Management | 4.4 | Card-based mobile layout for User Management table; desktop table (md+) and mobile cards (<md) with UserCard/UserRow components |
 | Void/Restore Time Entries | 3.5.2, 3.5.3 | Soft-delete time entries with reason tracking, restore capability, audit trail via changeLog, voided entries excluded from hour calculations |
@@ -46,8 +47,8 @@
 | Feature | Section | Status | Missing |
 |---------|---------|--------|---------|
 | Hour Adjustment | 3.5.3 | Partial | Full audit trail display, change history |
-| Form Generation | 3.6.2 | Partial | PDF filling not implemented (returns data only) |
-| OCPS Form Printing | 3.6.2 | Partial | Print layout exists but PDF generation incomplete |
+| Form Generation | 3.6.2 | Partial | Individual PDF filling via templates works; batch generation and ZIP/merge not yet implemented |
+| OCPS Form Printing | 3.6.2 | Partial | Print layout exists; PDF template upload and field mapping implemented; batch printing not yet implemented |
 
 ### Not Yet Implemented
 
@@ -55,8 +56,8 @@
 |---------|---------|----------|-------------|
 | Self-Service Checkout Kiosk | 3.3.1 | P0 | Dedicated kiosk mode interface (currently uses unified scanner) |
 | CSV Import from Realm | 3.7.1 | P0 | Bulk student import from church management system |
-| Multi-Form Type Support | 3.6.1 | P0 | NJHS, NHS, Private school, Other form templates |
-| Batch PDF Generation | 3.6.2 | P0 | Generate filled PDFs for all students |
+| Multi-Form Type Support | 3.6.1 | P0 | Per-student form type assignment; batch filter by type (template upload/mapping now works) |
+| Batch PDF Generation | 3.6.2 | P0 | Generate filled PDFs for all students in bulk (individual generation works via PDF templates) |
 | Friday Hour Estimation | 3.6.3 | P1 | Estimate hours for students not yet checked out |
 | Duplicate Override | 3.2.1 | P2 | Allow override with reason for duplicate check-in |
 | Manual Entry Fallback | 3.2.1 | P2 | Manual entry when QR damaged/unreadable |
@@ -1698,6 +1699,7 @@ $1,000/year
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-01-19 | Product Team | Initial PRD based on customer discovery |
+| 2.4 | 2026-02-07 | Dev Team | Added PDF Template Management feature (upload, WYSIWYG mapper, activity tables, individual PDF generation) |
 
 ---
 

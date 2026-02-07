@@ -23,3 +23,7 @@ export { forceCheckOut, forceAllCheckOut, getDailyReviewSummary } from './src/da
 
 // Void/Restore Functions (Soft Delete)
 export { voidTimeEntry, restoreTimeEntry } from './src/voidEntry.js';
+
+// Manual Entry
+export { createManualTimeEntry } from './src/manualEntry.js';
+

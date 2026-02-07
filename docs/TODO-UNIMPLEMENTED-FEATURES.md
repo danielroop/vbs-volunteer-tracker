@@ -1,11 +1,52 @@
 # Unimplemented Features - Future Work
 
-> **Last Updated:** February 6, 2026 (Responsive User Management page implemented)
+> **Last Updated:** February 7, 2026 (PDF Template Management implemented - GitHub Issue #38)
 > This document lists features from the original PRD that are not yet implemented.
 
 ---
 
 ## Recently Completed
+
+### PDF Template Management (GitHub Issue #38)
+**Completed:** February 7, 2026
+
+**What was implemented:**
+- ✅ `PdfTemplatesPage.jsx` - Admin page at `/admin/settings/pdf-templates` for uploading and managing PDF templates
+- ✅ Upload blank PDF forms to Firebase Storage with metadata stored in Firestore `pdfTemplates` collection
+- ✅ WYSIWYG field mapper with rendered PDF background using `pdfjs-dist` (Mozilla PDF.js)
+- ✅ Static field placement - click on PDF to place data fields (Student Name, School, Graduation Year, Event Name, Total Hours, Current Date)
+- ✅ Drag-to-move for all placed fields (mousedown/mousemove/mouseup on window)
+- ✅ Click-to-select fields with inline property editor shown above the PDF (font size, data field, X/Y position)
+- ✅ Activity Table field type for dynamic repeating rows that loop over event activities
+  - Columns: Organization + Activity, Date(s) of Service, Contact Name, Hours Completed
+  - Each column independently draggable to position at specific X coordinates
+  - Configurable row height (%), max rows, per-column font size and max width (%)
+  - Preview shows 3 sample rows with actual font sizing
+- ✅ WYSIWYG font scaling using ResizeObserver to track container-to-page ratio (`containerPx / pdfPagePoints`)
+- ✅ Baseline-adjusted coordinate system (ascent ratio 0.72) so preview position matches PDF output
+- ✅ Preview text in actual print style (black, Helvetica, real font size) instead of colored badges
+- ✅ Multi-page PDF support with page navigation
+- ✅ Template selector dropdown and "Print Hours Form" button on Student Detail page
+- ✅ `pdfTemplateUtils.js` utility with `generateFilledPdf`, `downloadPdf`, `getPdfPageDimensions`, `renderPdfPageToImage`, `resolveFieldValue`, `resolveActivityColumnValue`
+- ✅ `maxWidth` support for activity table columns (constrains text within cell boundaries in both preview and PDF output)
+- ✅ Firestore security rules: `pdfTemplates` collection with admin-only read/write access
+- ✅ Comprehensive tests: 499+ frontend tests passing, 69 backend tests passing
+- ✅ New dependency: `pdfjs-dist` ^5.4.624 for PDF page rendering
+
+**Files Created:**
+- `frontend/src/pages/PdfTemplatesPage.jsx` (admin page with UploadModal, FieldMapperModal, FieldMarker, SelectedFieldEditor components)
+- `frontend/src/pages/PdfTemplatesPage.test.jsx` (18 tests)
+- `frontend/src/utils/pdfTemplateUtils.js` (PDF generation utilities)
+- `frontend/src/utils/pdfTemplateUtils.test.js` (30 tests)
+
+**Files Modified:**
+- `frontend/src/pages/StudentDetailPage.jsx` (template selector, PDF generation integration)
+- `frontend/src/App.jsx` (added `/admin/settings/pdf-templates` route)
+- `frontend/src/components/common/Header.jsx` (added "PDF Templates" nav tab)
+- `firestore.rules` (added `pdfTemplates` collection rules)
+- `frontend/package.json` (added `pdfjs-dist` dependency)
+
+---
 
 ### Responsive User Management Page (GitHub Issue #34)
 **Completed:** February 6, 2026
@@ -197,64 +238,61 @@
 ### 3. Multi-Form Type Support
 **PRD Section:** 3.6.1
 
-**Current State:** Only OCPS form layout exists. Form type field is not stored on students.
+**Current State:** PDF Template Management now allows uploading any PDF form and mapping fields to it. Multiple templates can be uploaded (e.g., OCPS, NJHS, NHS). Templates can be assigned to students from the Student Detail page. Form type field is not stored on students as a separate field yet.
 
-**What's Missing:**
-- Form type selection during registration/edit
-- Multiple PDF templates (NJHS, NHS, Private, Other)
-- Form type stored on student record
-- Filter/batch generation by form type
+**What's Been Done (via PDF Templates - Issue #38):**
+- ✅ Upload any PDF form as a reusable template
+- ✅ Map data fields (student name, school, hours, etc.) to any position on the PDF
+- ✅ Activity table support for dynamic rows
+- ✅ Assign a template to individual students from Student Detail page
+- ✅ Generate filled PDFs for individual students
 
-**Suggested Tasks:**
+**What's Still Missing:**
+- Form type field stored on student record for automatic template selection
+- Form type selection during student registration/edit
+- Automatic template assignment based on student's form type
+- Filter/batch generation by form type in Forms page
+
+**Suggested Remaining Tasks:**
 ```
 1. Add formType field to student data model
 2. Update student registration/edit forms with formType dropdown
-3. Obtain actual form templates from schools
-4. Create PDF templates for each form type
-5. Update form generation to use correct template per student
-6. Add batch generation by form type in FormGenerationPage
+3. Link formType to a default PDF template
+4. Auto-assign template when student's formType is set
+5. Add batch generation by form type in FormGenerationPage
 ```
-
-**Form Types to Support:**
-- OCPS (Orange County Public Schools) - current
-- NJHS (National Junior Honor Society)
-- NHS (National Honor Society)
-- Private School (generic or per-school)
-- Homeschool/Other
 
 ---
 
-### 4. PDF Form Generation (Complete)
+### 4. PDF Form Generation (Batch)
 **PRD Section:** 3.6.2
 
-**Current State:** `generateForms` Cloud Function returns hours data but doesn't fill PDFs.
+**Current State:** Individual PDF generation works via PDF Templates feature (Issue #38). Admin uploads blank PDF, maps fields with WYSIWYG editor, and can generate filled PDFs from Student Detail page using pdf-lib. The `generateForms` Cloud Function still returns hours data only.
 
-**What's Missing:**
-- PDF template loading
-- Field mapping and filling with pdf-lib
-- Generated PDF storage in Firebase Storage
-- Download URLs returned to client
-- Batch PDF merging for bulk download
+**What's Been Done (via PDF Templates - Issue #38):**
+- ✅ PDF template upload and storage in Firebase Storage
+- ✅ WYSIWYG field mapping (static fields + activity tables)
+- ✅ Client-side PDF filling with pdf-lib (individual student)
+- ✅ Download filled PDF from Student Detail page
+- ✅ Fields auto-filled: Student name, school, graduation year, event name, total hours, current date, activity log (org, dates, contact, hours)
+
+**What's Still Missing:**
+- Batch PDF generation for all students at once
+- Batch PDF merging into single file for bulk download
 - ZIP file generation for individual downloads
+- Server-side generation via Cloud Function (currently client-side only)
+- Progress indicator during batch generation
 
-**Suggested Tasks:**
+**Suggested Remaining Tasks:**
 ```
-1. Create PDF templates with fillable fields
-2. Implement pdfFiller utility in Cloud Functions
-3. Map student data and hours to form fields
-4. Store generated PDFs in Firebase Storage
-5. Return download URLs from generateForms function
-6. Add PDF merge functionality for batch download
-7. Implement ZIP generation for individual files
+1. Update generateForms Cloud Function to use PDF templates
+2. Implement server-side PDF filling with pdf-lib
+3. Add batch generation endpoint (all students or by form type)
+4. Add PDF merge functionality for single-file download
+5. Implement ZIP generation for individual file download
+6. Add progress tracking for batch operations
+7. Update Forms page UI with batch generation buttons
 ```
-
-**Fields to Auto-Fill:**
-- Student name, school, grade, graduation year
-- Organization name, supervisor name
-- Training hours (Monday only)
-- VBS week hours (Tuesday-Friday)
-- Total hours
-- Date ranges
 
 ---
 
@@ -481,8 +519,9 @@ Each feature above represents approximately:
 | Feature | Estimated Effort | Status |
 |---------|-----------------|--------|
 | CSV Import | 4-6 hours | Pending |
-| PDF Form Generation | 6-8 hours | Pending |
-| Multi-Form Type Support | 4-6 hours | Pending |
+| ~~PDF Template Management~~ | ~~6-8 hours~~ | ✅ Done (Issue #38) |
+| PDF Batch Generation | 4-6 hours | Pending (individual gen works) |
+| Multi-Form Type Support | 2-3 hours | Partial (template upload done, need per-student type field) |
 | ~~Force Check-Out~~ | ~~2-3 hours~~ | ✅ Done |
 | Friday Estimation | 3-4 hours | Pending |
 | ~~Daily Review Enhancements~~ | ~~4-6 hours~~ | ✅ Done |
@@ -491,7 +530,7 @@ Each feature above represents approximately:
 | Duplicate Override | 2-3 hours | Pending |
 | Manual Entry | 3-4 hours | Pending |
 
-**Total for P0 features:** ~20-26 hours
+**Total for P0 features:** ~13-19 hours (was ~20-26, reduced by PDF template completion)
 **Total for P1 features:** ~6-8 hours (was ~12-17, reduced by ~6-9 hours)
 **Total for P2 features:** ~8-11 hours
 

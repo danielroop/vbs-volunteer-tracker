@@ -234,6 +234,7 @@ function FieldMapperModal({ isOpen, template, onClose }) {
   const [totalPages, setTotalPages] = useState(template.pageCount || 1);
   const [selectedFieldId, setSelectedFieldId] = useState(null);
   const [dragging, setDragging] = useState(null); // { fieldId, startX, startY, origXPct, origYPct }
+  const [justDragged, setJustDragged] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
 
   // Activity table config state
@@ -245,6 +246,7 @@ function FieldMapperModal({ isOpen, template, onClose }) {
       label: opt.label,
       xPercent: 5 + (i * 23),
       fontSize: 10,
+      maxWidth: 20,
       enabled: true,
     }))
   );
@@ -292,7 +294,10 @@ function FieldMapperModal({ isOpen, template, onClose }) {
   }, []);
 
   const handlePreviewClick = useCallback((e) => {
-    if (dragging) return;
+    if (dragging || justDragged) {
+      setJustDragged(false);
+      return;
+    }
 
     if (placingMode === 'static') {
       const { xPercent, yPercent } = getPercentFromEvent(e);
@@ -336,7 +341,7 @@ function FieldMapperModal({ isOpen, template, onClose }) {
       // Deselect if clicking on empty area
       setSelectedFieldId(null);
     }
-  }, [placingMode, dragging, selectedFieldKey, fontSize, currentPage, getPercentFromEvent, atRowHeight, atMaxRows, atColumns]);
+  }, [placingMode, dragging, justDragged, selectedFieldKey, fontSize, currentPage, getPercentFromEvent, atRowHeight, atMaxRows, atColumns]);
 
   // --- Drag support ---
   const handleFieldMouseDown = useCallback((e, field) => {
@@ -371,6 +376,7 @@ function FieldMapperModal({ isOpen, template, onClose }) {
 
     const handleMouseUp = () => {
       setDragging(null);
+      setJustDragged(true);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -547,6 +553,19 @@ function FieldMapperModal({ isOpen, template, onClose }) {
                       max={24}
                       className="input-field text-sm w-14"
                     />
+                    <label className="text-xs text-gray-500">Width%:</label>
+                    <input
+                      type="number"
+                      value={col.maxWidth || 0}
+                      onChange={(e) => {
+                        const updated = [...atColumns];
+                        updated[idx] = { ...updated[idx], maxWidth: Number(e.target.value) || 0 };
+                        setAtColumns(updated);
+                      }}
+                      min={0}
+                      max={100}
+                      className="input-field text-sm w-14"
+                    />
                   </div>
                 ))}
               </div>
@@ -668,93 +687,131 @@ function FieldMapperModal({ isOpen, template, onClose }) {
 
 /**
  * Renders a draggable field marker on the PDF preview.
+ * Shows text in actual print style (black, real font size) for WYSIWYG accuracy.
  */
 function FieldMarker({ field, isSelected, showPreview, onMouseDown, onRemove, isDragging }) {
   const isTable = field.type === 'activityTable';
-  const previewText = isTable ? null : (showPreview
-    ? (FIELD_KEY_OPTIONS.find(o => o.key === field.fieldKey)?.preview || field.label)
-    : field.label
+  const previewText = isTable ? null : (
+    FIELD_KEY_OPTIONS.find(o => o.key === field.fieldKey)?.preview || field.label
   );
+  const labelText = isTable ? null : field.label;
 
   return (
     <>
       {/* Static field marker */}
       {!isTable && (
         <div
-          className={`absolute flex items-center gap-1 group ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          className={`absolute group ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
             left: `${field.xPercent}%`,
             top: `${field.yPercent}%`,
-            transform: 'translate(0, -50%)',
             zIndex: isSelected ? 20 : 10,
           }}
           onMouseDown={onMouseDown}
         >
-          <span
-            className={`text-white text-xs px-2 py-0.5 rounded shadow-sm whitespace-nowrap ${
-              isSelected ? 'bg-primary-800 ring-2 ring-primary-400' : 'bg-primary-600 opacity-90'
-            }`}
-            style={{ fontSize: `${Math.max(9, Math.min(field.fontSize, 14))}px` }}
+          {/* Label tag above the text */}
+          <div
+            className={`absolute bottom-full left-0 mb-0.5 flex items-center gap-1 ${isSelected ? '' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
           >
-            {previewText}
-          </span>
-          <button
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(); }}
-            className="opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs leading-none transition-opacity"
-            title="Remove field"
-          >
-            x
-          </button>
+            <span className={`text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap ${
+              isSelected ? 'bg-primary-700' : 'bg-primary-500'
+            }`}>
+              {labelText}
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(); }}
+              className="bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px] leading-none"
+              title="Remove field"
+            >
+              x
+            </button>
+          </div>
+          {/* Preview text in actual print style */}
+          {showPreview ? (
+            <span
+              className="whitespace-nowrap pointer-events-none"
+              style={{
+                fontSize: `${field.fontSize * 0.75}px`,
+                color: 'black',
+                lineHeight: 1,
+              }}
+            >
+              {previewText}
+            </span>
+          ) : (
+            <span
+              className={`text-[9px] px-1 py-0.5 rounded whitespace-nowrap ${
+                isSelected ? 'bg-primary-200 text-primary-800 ring-1 ring-primary-400' : 'bg-primary-100 text-primary-700'
+              }`}
+            >
+              {labelText}
+            </span>
+          )}
+          {/* Selection indicator */}
+          {isSelected && (
+            <div className="absolute inset-0 ring-2 ring-primary-400 ring-offset-1 rounded pointer-events-none" />
+          )}
         </div>
       )}
 
-      {/* Activity table marker - shows rows with column preview */}
+      {/* Activity table marker - anchor point with label */}
       {isTable && (
         <div
           className={`absolute group ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
-            left: `${Math.min(...(field.columns || []).map(c => c.xPercent), field.xPercent)}%`,
+            left: `${field.xPercent}%`,
             top: `${field.yPercent}%`,
-            right: '2%',
             zIndex: isSelected ? 20 : 10,
           }}
           onMouseDown={onMouseDown}
         >
-          {/* Table header label */}
-          <div className={`inline-flex items-center gap-1 mb-0.5 ${isSelected ? 'ring-2 ring-green-400 rounded' : ''}`}>
-            <span className="bg-green-600 text-white text-xs px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
+          <div className={`inline-flex items-center gap-1 ${isSelected ? 'ring-2 ring-green-400 rounded' : ''}`}
+            style={{ transform: 'translateY(-100%)' }}
+          >
+            <span className="bg-green-600 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
               Activity Table ({field.maxRows} rows)
             </span>
             <button
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(); }}
-              className="opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs leading-none transition-opacity"
+              className="opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px] leading-none transition-opacity"
               title="Remove table"
             >
               x
             </button>
           </div>
-          {/* Preview rows */}
-          {showPreview && (field.columns || []).length > 0 && (
-            <div className="pointer-events-none" style={{ height: `${field.rowHeight * Math.min(field.maxRows, 3)}%` }}>
-              {Array.from({ length: Math.min(field.maxRows, 3) }).map((_, rowIdx) => (
-                <div key={rowIdx} className="flex absolute w-full" style={{ top: `${rowIdx * field.rowHeight}%` }}>
-                  {(field.columns || []).map(col => (
-                    <span
-                      key={col.key}
-                      className="absolute text-green-700 opacity-60 whitespace-nowrap"
-                      style={{
-                        left: `${col.xPercent}%`,
-                        fontSize: `${Math.max(8, Math.min(col.fontSize, 11))}px`,
-                      }}
-                    >
-                      {ACTIVITY_COLUMN_OPTIONS.find(o => o.key === col.key)?.preview || col.label}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+      )}
+
+      {/* Activity table column previews - positioned absolutely relative to PDF area */}
+      {isTable && showPreview && (field.columns || []).length > 0 && (
+        <>
+          {Array.from({ length: Math.min(field.maxRows, 3) }).map((_, rowIdx) => (
+            (field.columns || []).map(col => (
+              <div
+                key={`${field.id}-r${rowIdx}-${col.key}`}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${col.xPercent}%`,
+                  top: `${field.yPercent + (rowIdx * field.rowHeight)}%`,
+                  maxWidth: col.maxWidth ? `${col.maxWidth}%` : undefined,
+                  overflow: 'hidden',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: `${col.fontSize * 0.75}px`,
+                    color: 'black',
+                    opacity: 0.6,
+                    lineHeight: 1,
+                    whiteSpace: col.maxWidth ? 'nowrap' : 'nowrap',
+                  }}
+                >
+                  {ACTIVITY_COLUMN_OPTIONS.find(o => o.key === col.key)?.preview || col.label}
+                </span>
+              </div>
+            ))
+          ))}
+        </>
       )}
     </>
   );
@@ -838,6 +895,19 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
                 }}
                 min={6}
                 max={24}
+                className="input-field text-sm w-14"
+              />
+              <label className="text-xs text-green-600">Width%:</label>
+              <input
+                type="number"
+                value={col.maxWidth || 0}
+                onChange={(e) => {
+                  const updated = [...field.columns];
+                  updated[idx] = { ...updated[idx], maxWidth: Number(e.target.value) || 0 };
+                  onUpdate({ columns: updated });
+                }}
+                min={0}
+                max={100}
                 className="input-field text-sm w-14"
               />
             </div>

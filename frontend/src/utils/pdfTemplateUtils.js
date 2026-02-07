@@ -111,10 +111,11 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
 
           page.drawText(value, {
             x,
-            y: y - colFontSize,
+            y,
             size: colFontSize,
             font,
             color: rgb(0, 0, 0),
+            maxWidth: col.maxWidth ? (col.maxWidth / 100) * width : undefined,
           });
         });
       });
@@ -127,7 +128,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
 
       page.drawText(value, {
         x,
-        y: y - fontSize,
+        y,
         size: fontSize,
         font,
         color: rgb(0, 0, 0),

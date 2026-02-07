@@ -1,23 +1,33 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 /**
- * Available field keys that can be mapped to PDF coordinates.
- * Each key corresponds to a data source from student/event data.
+ * Available field keys for STATIC fields (placed individually on the PDF).
  */
 export const FIELD_KEY_OPTIONS = [
-  { key: 'studentName', label: 'Student Full Name' },
-  { key: 'firstName', label: 'First Name' },
-  { key: 'lastName', label: 'Last Name' },
-  { key: 'schoolName', label: 'School Name' },
-  { key: 'gradeLevel', label: 'Grade Level' },
-  { key: 'gradYear', label: 'Graduation Year' },
-  { key: 'totalHours', label: 'Total Hours' },
-  { key: 'date', label: 'Current Date' },
-  { key: 'eventName', label: 'Event Name' },
+  { key: 'studentName', label: 'Student Full Name', preview: 'Jane Smith' },
+  { key: 'firstName', label: 'First Name', preview: 'Jane' },
+  { key: 'lastName', label: 'Last Name', preview: 'Smith' },
+  { key: 'schoolName', label: 'School Name', preview: 'West Orange HS' },
+  { key: 'gradeLevel', label: 'Grade Level', preview: '10' },
+  { key: 'gradYear', label: 'Graduation Year', preview: '2028' },
+  { key: 'totalHours', label: 'Total Hours', preview: '25.50' },
+  { key: 'date', label: 'Current Date', preview: '2/7/2026' },
+  { key: 'eventName', label: 'Event Name', preview: 'VBS 2026' },
 ];
 
 /**
- * Resolves a field key to its actual value from student/event data.
+ * Available column keys for ACTIVITY TABLE rows.
+ * Each row represents one activity from the event's activity log.
+ */
+export const ACTIVITY_COLUMN_OPTIONS = [
+  { key: 'activityOrg', label: 'Organization + Activity', preview: 'First Baptist VBS AM' },
+  { key: 'activityDates', label: 'Date(s) of Service', preview: '6/9/26 - 6/13/26' },
+  { key: 'activityContact', label: 'Contact Name', preview: 'Jane Smith' },
+  { key: 'activityHours', label: 'Hours Completed', preview: '12.50' },
+];
+
+/**
+ * Resolves a static field key to its value.
  */
 export function resolveFieldValue(fieldKey, { student, totalHours, eventName }) {
   switch (fieldKey) {
@@ -45,12 +55,30 @@ export function resolveFieldValue(fieldKey, { student, totalHours, eventName }) 
 }
 
 /**
- * Generates a filled PDF by overlaying text at mapped field coordinates
- * on top of a template PDF.
+ * Resolves an activity column key to its value for a single activity row.
+ */
+export function resolveActivityColumnValue(columnKey, activity, event) {
+  switch (columnKey) {
+    case 'activityOrg':
+      return `${event?.organizationName || ''} ${activity.name || ''}`.trim();
+    case 'activityDates':
+      return activity.dateDisplay || '';
+    case 'activityContact':
+      return event?.contactName || '';
+    case 'activityHours':
+      return String(activity.totalHours || '0');
+    default:
+      return '';
+  }
+}
+
+/**
+ * Generates a filled PDF by overlaying text at mapped field coordinates.
+ * Supports both static fields and activity tables with repeating rows.
  *
  * @param {ArrayBuffer} templatePdfBytes - The raw bytes of the template PDF
- * @param {Array} fields - Array of field mappings: { fieldKey, xPercent, yPercent, fontSize, page }
- * @param {Object} data - { student, totalHours, eventName }
+ * @param {Array} fields - Array of field mappings (static fields and activity tables)
+ * @param {Object} data - { student, totalHours, eventName, activityLog, event }
  * @returns {Promise<Uint8Array>} - The generated PDF bytes
  */
 export async function generateFilledPdf(templatePdfBytes, fields, data) {
@@ -65,20 +93,46 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
     const page = pages[pageIndex];
     const { width, height } = page.getSize();
 
-    const x = (field.xPercent / 100) * width;
-    // PDF coordinates are bottom-up, but we store yPercent as top-down
-    const y = height - (field.yPercent / 100) * height;
-    const fontSize = field.fontSize || 12;
+    if (field.type === 'activityTable') {
+      // Render repeating activity rows
+      const activities = data.activityLog || [];
+      const maxRows = field.maxRows || 10;
+      const rowHeightPct = field.rowHeight || 3;
+      const startYPct = field.yPercent;
 
-    const value = resolveFieldValue(field.fieldKey, data);
+      activities.slice(0, maxRows).forEach((activity, rowIndex) => {
+        const rowYPct = startYPct + (rowIndex * rowHeightPct);
+        const y = height - (rowYPct / 100) * height;
 
-    page.drawText(value, {
-      x,
-      y: y - fontSize, // offset down by font size so text baseline aligns
-      size: fontSize,
-      font,
-      color: rgb(0, 0, 0),
-    });
+        (field.columns || []).forEach((col) => {
+          const x = (col.xPercent / 100) * width;
+          const colFontSize = col.fontSize || 10;
+          const value = resolveActivityColumnValue(col.key, activity, data.event);
+
+          page.drawText(value, {
+            x,
+            y: y - colFontSize,
+            size: colFontSize,
+            font,
+            color: rgb(0, 0, 0),
+          });
+        });
+      });
+    } else {
+      // Static field
+      const x = (field.xPercent / 100) * width;
+      const y = height - (field.yPercent / 100) * height;
+      const fontSize = field.fontSize || 12;
+      const value = resolveFieldValue(field.fieldKey, data);
+
+      page.drawText(value, {
+        x,
+        y: y - fontSize,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0),
+      });
+    }
   }
 
   return pdfDoc.save();
@@ -114,16 +168,10 @@ export async function getPdfPageDimensions(pdfBytes) {
 
 /**
  * Renders a specific page of a PDF to a data URL image using pdfjs-dist.
- *
- * @param {string} pdfUrl - URL of the PDF to render (e.g. Firebase Storage download URL)
- * @param {number} pageNumber - 1-indexed page number
- * @param {number} scale - Render scale (default 2 for crisp display)
- * @returns {Promise<{dataUrl: string, width: number, height: number}>}
  */
 export async function renderPdfPageToImage(pdfUrl, pageNumber = 1, scale = 2) {
   const pdfjsLib = await import('pdfjs-dist');
 
-  // Set the worker source to the bundled worker
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.min.mjs',
     import.meta.url

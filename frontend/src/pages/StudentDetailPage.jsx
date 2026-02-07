@@ -283,6 +283,8 @@ export default function StudentDetailPage() {
                 student,
                 totalHours: grandTotal,
                 eventName: currentEvent?.name || '',
+                activityLog,
+                event: currentEvent,
             });
 
             // Download it

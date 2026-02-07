@@ -48,9 +48,15 @@ vi.mock('../contexts/EventContext', () => ({
 
 vi.mock('../utils/pdfTemplateUtils', () => ({
   FIELD_KEY_OPTIONS: [
-    { key: 'studentName', label: 'Student Full Name' },
-    { key: 'totalHours', label: 'Total Hours' },
-    { key: 'date', label: 'Current Date' },
+    { key: 'studentName', label: 'Student Full Name', preview: 'Jane Smith' },
+    { key: 'totalHours', label: 'Total Hours', preview: '25.50' },
+    { key: 'date', label: 'Current Date', preview: '2/7/2026' },
+  ],
+  ACTIVITY_COLUMN_OPTIONS: [
+    { key: 'activityOrg', label: 'Organization + Activity', preview: 'First Baptist VBS AM' },
+    { key: 'activityDates', label: 'Date(s) of Service', preview: '6/9/26 - 6/13/26' },
+    { key: 'activityContact', label: 'Contact Name', preview: 'Jane Smith' },
+    { key: 'activityHours', label: 'Hours Completed', preview: '12.50' },
   ],
   getPdfPageDimensions: vi.fn(() => Promise.resolve({ width: 612, height: 792, pageCount: 1 })),
   renderPdfPageToImage: vi.fn(() => Promise.resolve({ dataUrl: 'data:image/png;base64,test', width: 1224, height: 1584, pageCount: 1 })),
@@ -245,14 +251,15 @@ describe('PdfTemplatesPage', () => {
       });
     });
 
-    it('should show Data Field selector and Place Field button', async () => {
+    it('should show static field selector and Place Field button', async () => {
       const user = userEvent.setup();
       await openFieldMapper(user);
 
       await waitFor(() => {
-        expect(screen.getByText('Data Field')).toBeInTheDocument();
-        expect(screen.getByText('Font Size')).toBeInTheDocument();
+        expect(screen.getByText('Static Field')).toBeInTheDocument();
+        expect(screen.getByText('Size')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Place Field/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Place Activity Table/i })).toBeInTheDocument();
       });
     });
 

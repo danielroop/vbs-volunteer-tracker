@@ -1208,6 +1208,7 @@ export default function StudentDetailPage() {
                                 </label>
                                 <input
                                     type="time"
+                                    aria-label="Start Time"
                                     value={manualModal.startTime}
                                     onChange={(e) => setManualModal(prev => ({ ...prev, startTime: e.target.value }))}
                                     className="input-field w-full"
@@ -1219,6 +1220,7 @@ export default function StudentDetailPage() {
                                 </label>
                                 <input
                                     type="time"
+                                    aria-label="End Time"
                                     value={manualModal.endTime}
                                     onChange={(e) => setManualModal(prev => ({ ...prev, endTime: e.target.value }))}
                                     className="input-field w-full"

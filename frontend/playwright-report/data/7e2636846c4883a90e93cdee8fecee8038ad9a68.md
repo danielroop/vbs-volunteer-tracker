@@ -1,0 +1,78 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e6]:
+        - link "VBS Volunteer Tracker" [ref=e8] [cursor=pointer]:
+          - /url: /admin
+        - generic [ref=e9]:
+          - generic [ref=e12]: "Active Event: E2E Test Event 1770500578940"
+          - generic [ref=e13]: admin@vbstrack.local
+        - generic [ref=e14]:
+          - link "Scan" [ref=e15] [cursor=pointer]:
+            - /url: /scan
+          - button "Logout" [ref=e16] [cursor=pointer]
+      - generic [ref=e18]:
+        - link "Dashboard" [ref=e19] [cursor=pointer]:
+          - /url: /admin
+        - link "Daily Review" [ref=e20] [cursor=pointer]:
+          - /url: /admin/daily-review
+        - link "Students" [ref=e21] [cursor=pointer]:
+          - /url: /admin/students
+        - link "Events" [ref=e22] [cursor=pointer]:
+          - /url: /admin/events
+        - link "Users" [ref=e23] [cursor=pointer]:
+          - /url: /admin/users
+        - link "PDF Templates" [ref=e24] [cursor=pointer]:
+          - /url: /admin/settings/pdf-templates
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - heading "Kevin Adams" [level=1] [ref=e28]
+          - paragraph [ref=e29]: Winter Garden Christian Academy • Grade 9
+        - generic [ref=e30]:
+          - button "Print Service Log" [ref=e31] [cursor=pointer]
+          - button "Print Badge" [ref=e32] [cursor=pointer]
+      - generic [ref=e33]:
+        - generic [ref=e34]:
+          - heading "Summary" [level=3] [ref=e35]
+          - generic [ref=e36]:
+            - generic [ref=e37]:
+              - generic [ref=e38]: Afternoon Shift
+              - generic [ref=e39]: "2.00"
+            - generic [ref=e41]:
+              - generic [ref=e42]: Grand Total
+              - generic [ref=e43]: "2.00"
+        - generic [ref=e44]:
+          - generic [ref=e45]:
+            - heading "Service Log" [level=3] [ref=e46]
+            - button "+ Add Time Entry" [ref=e47] [cursor=pointer]
+          - table [ref=e49]:
+            - rowgroup [ref=e50]:
+              - row "Date Bucket Check In Check Out Hours Status Actions" [ref=e51]:
+                - columnheader "Date" [ref=e52]
+                - columnheader "Bucket" [ref=e53]
+                - columnheader "Check In" [ref=e54]
+                - columnheader "Check Out" [ref=e55]
+                - columnheader "Hours" [ref=e56]
+                - columnheader "Status" [ref=e57]
+                - columnheader "Actions" [ref=e58]
+            - rowgroup [ref=e59]:
+              - row "2/7/2026 Afternoon Shift 1:00 PM 3:00 PM 2.00 ✏️ View Edit Void" [ref=e60]:
+                - cell "2/7/2026" [ref=e61]
+                - cell "Afternoon Shift" [ref=e62]
+                - cell "1:00 PM" [ref=e63]
+                - cell "3:00 PM" [ref=e64]
+                - cell "2.00" [ref=e65]
+                - cell "✏️ View" [ref=e66]:
+                  - generic [ref=e67]:
+                    - generic "Modified" [ref=e68]: ✏️
+                    - button "View" [ref=e69] [cursor=pointer]
+                - cell "Edit Void" [ref=e70]:
+                  - generic [ref=e71]:
+                    - button "Edit" [ref=e72] [cursor=pointer]
+                    - button "Void" [ref=e73] [cursor=pointer]
+  - paragraph [ref=e74]: Running in emulator mode. Do not use with production credentials.
+```

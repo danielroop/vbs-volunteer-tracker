@@ -10,9 +10,11 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@playwright/test": "^1.58.2",
     "date-fns": "^3.0.0",
     "firebase": "^10.7.0",
     "html5-qrcode": "^2.3.8",

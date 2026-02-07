@@ -46,6 +46,7 @@ export default function Header({
     { path: '/admin/students', label: 'Students' },
     { path: '/admin/events', label: 'Events' },
     { path: '/admin/users', label: 'Users' },
+    { path: '/admin/settings/pdf-templates', label: 'PDF Templates' },
   ];
 
   // Check if a tab is active

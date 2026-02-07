@@ -55,5 +55,10 @@ service cloud.firestore {
     match /generatedForms/{formId} {
       allow read, write: if isAdmin();
     }
+
+    // PDF Templates: Admin only
+    match /pdfTemplates/{templateId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

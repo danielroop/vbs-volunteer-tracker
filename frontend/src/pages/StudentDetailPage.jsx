@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { formatTime, formatHours } from '../utils/hourCalculations';
-import { db } from '../utils/firebase';
+import { db, storage } from '../utils/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { ref, getDownloadURL } from 'firebase/storage';
 import { useEvent } from '../contexts/EventContext';
+import { generateFilledPdf, downloadPdf } from '../utils/pdfTemplateUtils';
 import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
@@ -22,6 +24,11 @@ export default function StudentDetailPage() {
     const [loading, setLoading] = useState(true);
     const [printMode, setPrintMode] = useState(null);
     const [notesModal, setNotesModal] = useState({ isOpen: false, entry: null });
+
+    // PDF template state
+    const [pdfTemplates, setPdfTemplates] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState(null);
+    const [generatingPdf, setGeneratingPdf] = useState(false);
 
     // Edit hours modal state
     const [editModal, setEditModal] = useState({
@@ -52,10 +59,22 @@ export default function StudentDetailPage() {
         async function fetchStudent() {
             const docRef = doc(db, 'students', studentId);
             const snap = await getDoc(docRef);
-            if (snap.exists()) setStudent({ id: snap.id, ...snap.data() });
+            if (snap.exists()) {
+                const data = { id: snap.id, ...snap.data() };
+                setStudent(data);
+                if (data.pdfTemplateId) setSelectedTemplateId(data.pdfTemplateId);
+            }
         }
         if (studentId) fetchStudent();
     }, [studentId]);
+
+    // Fetch PDF templates
+    useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, 'pdfTemplates'), (snapshot) => {
+            setPdfTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsubscribe();
+    }, []);
 
     useEffect(() => {
         if (!studentId || !currentEvent?.id) return;
@@ -223,6 +242,58 @@ export default function StudentDetailPage() {
             onComplete: () => setPrintMode(null),
             onError: () => setPrintMode(null)
         });
+    };
+
+    // Handle template assignment change
+    const handleTemplateChange = async (templateId) => {
+        setSelectedTemplateId(templateId || null);
+        if (studentId) {
+            try {
+                await updateDoc(doc(db, 'students', studentId), {
+                    pdfTemplateId: templateId || null
+                });
+            } catch (err) {
+                console.error('Failed to save template assignment:', err);
+            }
+        }
+    };
+
+    // Generate and download filled PDF from template
+    const handleGeneratePdf = async () => {
+        const template = pdfTemplates.find(t => t.id === selectedTemplateId);
+        if (!template) {
+            alert('Please select a PDF template first.');
+            return;
+        }
+        if (!template.fields || template.fields.length === 0) {
+            alert('This template has no mapped fields. Please map fields in Settings > PDF Templates first.');
+            return;
+        }
+
+        setGeneratingPdf(true);
+        try {
+            // Fetch the template PDF from storage
+            const storageRef = ref(storage, template.storagePath);
+            const url = await getDownloadURL(storageRef);
+            const response = await fetch(url);
+            const templateBytes = await response.arrayBuffer();
+
+            // Generate the filled PDF
+            const pdfBytes = await generateFilledPdf(templateBytes, template.fields, {
+                student,
+                totalHours: grandTotal,
+                eventName: currentEvent?.name || '',
+            });
+
+            // Download it
+            const filename = `${student.firstName}_${student.lastName}_${template.name.replace(/\s+/g, '_')}.pdf`;
+            downloadPdf(pdfBytes, filename);
+        } catch (err) {
+            console.error('PDF generation failed:', err);
+            alert('Failed to generate PDF: ' + err.message);
+        } finally {
+            setGeneratingPdf(false);
+        }
     };
 
     const handlePrint = (mode) => {
@@ -434,9 +505,33 @@ export default function StudentDetailPage() {
                     <h1 className="text-2xl sm:text-3xl font-black text-gray-900">{student?.firstName} {student?.lastName}</h1>
                     <p className="text-gray-500 font-medium text-sm sm:text-base">{student?.schoolName} • Grade {student?.gradeLevel}</p>
                 </div>
-                <div className="flex gap-3 flex-wrap sm:flex-nowrap">
+                <div className="flex gap-3 flex-wrap sm:flex-nowrap items-center">
                     <Button onClick={() => handlePrint('form')} variant="secondary" className="flex-1 sm:flex-none min-h-[44px]">Print Service Log</Button>
                     <Button onClick={() => handlePrint('badge')} variant="primary" className="flex-1 sm:flex-none min-h-[44px]">Print Badge</Button>
+                    {pdfTemplates.length > 0 && (
+                        <>
+                            <select
+                                value={selectedTemplateId || ''}
+                                onChange={(e) => handleTemplateChange(e.target.value)}
+                                className="input-field text-sm min-h-[44px]"
+                                aria-label="PDF Template"
+                            >
+                                <option value="">Select Template...</option>
+                                {pdfTemplates.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </select>
+                            <Button
+                                onClick={handleGeneratePdf}
+                                variant="success"
+                                disabled={!selectedTemplateId || generatingPdf}
+                                loading={generatingPdf}
+                                className="flex-1 sm:flex-none min-h-[44px]"
+                            >
+                                Print Hours Form
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 

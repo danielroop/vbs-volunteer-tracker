@@ -14,6 +14,7 @@ import EventsPage from './pages/EventsPage';
 import CreateEventPage from './pages/CreateEventPage';
 import StudentDetailPage from './pages/StudentDetailPage';
 import UsersPage from './pages/UsersPage';
+import PdfTemplatesPage from './pages/PdfTemplatesPage';
 
 // Loading Spinner Component
 function LoadingSpinner() {
@@ -171,6 +172,14 @@ function App() {
               element={
                 <AdminRoute>
                   <UsersPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/settings/pdf-templates"
+              element={
+                <AdminRoute>
+                  <PdfTemplatesPage />
                 </AdminRoute>
               }
             />

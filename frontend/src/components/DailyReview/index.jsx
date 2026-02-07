@@ -61,6 +61,15 @@ export default function DailyReview() {
     error: null
   });
 
+  // Void entry modal state
+  const [voidModal, setVoidModal] = useState({
+    isOpen: false,
+    entry: null,
+    reason: '',
+    loading: false,
+    error: null
+  });
+
   // Load students
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'students'), (snapshot) => {
@@ -141,6 +150,8 @@ export default function DailyReview() {
         if (statusFilter === 'flagged' && (!entry.flags || entry.flags.length === 0)) return false;
         if (statusFilter === 'no-checkout' && entry.checkOutTime) return false;
         if (statusFilter === 'modified' && !entry.modificationReason && !entry.forcedCheckoutReason) return false;
+        if (statusFilter === 'voided' && !entry.isVoided) return false;
+        if (statusFilter === 'active' && entry.isVoided) return false;
 
         return true;
       })
@@ -149,11 +160,13 @@ export default function DailyReview() {
 
   // Calculate summary stats
   const stats = useMemo(() => {
+    const activeEntries = timeEntries.filter(e => !e.isVoided);
     return {
       total: timeEntries.length,
-      flagged: timeEntries.filter(e => e.flags && e.flags.length > 0).length,
-      noCheckout: timeEntries.filter(e => !e.checkOutTime).length,
-      modified: timeEntries.filter(e => e.modificationReason || e.forcedCheckoutReason).length
+      flagged: activeEntries.filter(e => e.flags && e.flags.length > 0).length,
+      noCheckout: activeEntries.filter(e => !e.checkOutTime).length,
+      modified: activeEntries.filter(e => e.modificationReason || e.forcedCheckoutReason).length,
+      voided: timeEntries.filter(e => e.isVoided).length
     };
   }, [timeEntries]);
 
@@ -438,6 +451,67 @@ export default function DailyReview() {
     }
   };
 
+  // Open void modal
+  const openVoidModal = (entry) => {
+    setVoidModal({
+      isOpen: true,
+      entry,
+      reason: '',
+      loading: false,
+      error: null
+    });
+  };
+
+  // Handle void entry
+  const handleVoidEntry = async () => {
+    if (!voidModal.entry || !voidModal.reason || voidModal.reason.trim().length < 5) {
+      setVoidModal(prev => ({ ...prev, error: 'Void reason must be at least 5 characters' }));
+      return;
+    }
+
+    setVoidModal(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const voidTimeEntryFunc = httpsCallable(functions, 'voidTimeEntry');
+      const result = await voidTimeEntryFunc({
+        entryId: voidModal.entry.id,
+        voidReason: voidModal.reason.trim()
+      });
+
+      if (result.data.success) {
+        setVoidModal({
+          isOpen: false,
+          entry: null,
+          reason: '',
+          loading: false,
+          error: null
+        });
+      }
+    } catch (error) {
+      console.error('Void entry error:', error);
+      setVoidModal(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message || 'Failed to void entry'
+      }));
+    }
+  };
+
+  // Handle restore entry
+  const handleRestoreEntry = async (entry) => {
+    if (!confirm(`Are you sure you want to restore this voided entry for ${entry.student?.firstName} ${entry.student?.lastName}?`)) {
+      return;
+    }
+
+    try {
+      const restoreTimeEntryFunc = httpsCallable(functions, 'restoreTimeEntry');
+      await restoreTimeEntryFunc({ entryId: entry.id });
+    } catch (error) {
+      console.error('Restore entry error:', error);
+      alert('Failed to restore entry: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   // Export to CSV
   const handleExportCSV = () => {
     setExporting(true);
@@ -557,6 +631,7 @@ export default function DailyReview() {
 
   // Helper functions for display
   const getStatusDisplay = (entry) => {
+    if (entry.isVoided) return 'VOIDED';
     if (!entry.checkOutTime) return '🔴 No Checkout';
     if (entry.forcedCheckoutReason) return '⚡ Forced';
     if (entry.modificationReason) return '✏️ Modified';
@@ -565,6 +640,7 @@ export default function DailyReview() {
   };
 
   const getStatusClass = (entry) => {
+    if (entry.isVoided) return 'text-gray-400';
     if (!entry.checkOutTime) return 'text-red-600';
     if (entry.forcedCheckoutReason || entry.modificationReason) return 'text-blue-600';
     if (entry.flags && entry.flags.length > 0) return 'text-amber-600';
@@ -644,6 +720,11 @@ export default function DailyReview() {
                 ✏️ <span className="font-bold">{stats.modified}</span> modified
               </div>
             )}
+            {stats.voided > 0 && (
+              <div className="text-gray-400">
+                <span className="font-bold">{stats.voided}</span> voided
+              </div>
+            )}
           </div>
 
           {/* Filters */}
@@ -661,9 +742,11 @@ export default function DailyReview() {
               className="input-field w-48"
             >
               <option value="all">All Entries</option>
+              <option value="active">Active Only</option>
               <option value="flagged">Flagged Only</option>
               <option value="no-checkout">No Checkout</option>
               <option value="modified">Modified Only</option>
+              <option value="voided">Voided Only</option>
             </select>
           </div>
         </div>
@@ -700,13 +783,17 @@ export default function DailyReview() {
                 </tr>
               ) : (
                 filteredEntries.map(entry => (
-                  <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">
+                  <tr
+                    key={entry.id}
+                    className={`${entry.isVoided ? 'opacity-50 bg-gray-100' : 'hover:bg-gray-50'}`}
+                    title={entry.isVoided ? `Voided: ${entry.voidReason}` : undefined}
+                  >
+                    <td className={`px-4 py-3 text-sm text-gray-900 ${entry.isVoided ? 'line-through' : ''}`}>
                       {entry.checkInTime ? new Date(entry.checkInTime).toLocaleDateString() : entry.date}
                     </td>
                     <td className="px-4 py-3">
                       <div
-                        className="font-medium text-gray-900 truncate max-w-[200px]"
+                        className={`font-medium text-gray-900 truncate max-w-[200px] ${entry.isVoided ? 'line-through' : ''}`}
                         title={`${entry.student.lastName}, ${entry.student.firstName}`}
                       >
                         {entry.student.lastName}, {entry.student.firstName}
@@ -714,51 +801,79 @@ export default function DailyReview() {
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className="uppercase font-bold text-[10px] text-blue-600 truncate block max-w-[120px]"
+                        className={`uppercase font-bold text-[10px] text-blue-600 truncate block max-w-[120px] ${entry.isVoided ? 'line-through' : ''}`}
                         title={entry.activity?.name || '--'}
                       >
                         {entry.activity?.name || '--'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
+                    <td className={`px-4 py-3 text-sm text-gray-600 ${entry.isVoided ? 'line-through' : ''}`}>
                       {entry.checkInTime ? formatTime(entry.checkInTime) : '--'}
                     </td>
-                    <td className="px-4 py-3 text-sm">
+                    <td className={`px-4 py-3 text-sm ${entry.isVoided ? 'line-through' : ''}`}>
                       {entry.checkOutTime ? (
                         <span className="text-gray-600">{formatTime(entry.checkOutTime)}</span>
                       ) : (
-                        <span className="text-red-600 font-medium">Not checked out</span>
+                        <span className={`font-medium ${entry.isVoided ? 'text-gray-400' : 'text-red-600'}`}>Not checked out</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
+                    <td className={`px-4 py-3 text-sm text-gray-600 ${entry.isVoided ? 'line-through' : ''}`}>
                       {entry.hoursWorked !== null && entry.hoursWorked !== undefined
                         ? formatHours(entry.hoursWorked)
                         : '--'}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-sm font-medium ${getStatusClass(entry)}`}>
-                        {getStatusDisplay(entry)}
-                      </span>
+                      <div>
+                        <span className={`text-sm font-medium ${getStatusClass(entry)}`}>
+                          {getStatusDisplay(entry)}
+                        </span>
+                        {entry.isVoided && entry.voidReason && (
+                          <p className="text-xs text-gray-400 mt-1 truncate max-w-[150px]" title={entry.voidReason}>
+                            {entry.voidReason}
+                          </p>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => openEditModal(entry)}
-                          aria-label={`Edit time entry for ${entry.student.firstName} ${entry.student.lastName}`}
-                        >
-                          Edit
-                        </Button>
-                        {!entry.checkOutTime && (
+                        {entry.isVoided ? (
                           <Button
                             size="sm"
-                            variant="danger"
-                            onClick={() => openForceCheckoutModal(entry)}
-                            aria-label={`Force checkout for ${entry.student.firstName} ${entry.student.lastName}`}
+                            variant="secondary"
+                            onClick={() => handleRestoreEntry(entry)}
+                            aria-label={`Restore voided entry for ${entry.student.firstName} ${entry.student.lastName}`}
                           >
-                            Force Out
+                            Restore
                           </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => openEditModal(entry)}
+                              aria-label={`Edit time entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => openVoidModal(entry)}
+                              aria-label={`Void time entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                            >
+                              Void
+                            </Button>
+                            {!entry.checkOutTime && (
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => openForceCheckoutModal(entry)}
+                                aria-label={`Force checkout for ${entry.student.firstName} ${entry.student.lastName}`}
+                              >
+                                Force Out
+                              </Button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -793,6 +908,8 @@ export default function DailyReview() {
                   getStatusClass={getStatusClass}
                   onEdit={openEditModal}
                   onForceCheckout={openForceCheckoutModal}
+                  onVoid={openVoidModal}
+                  onRestore={handleRestoreEntry}
                 />
               ))}
             </div>
@@ -1149,6 +1266,92 @@ export default function DailyReview() {
             {editModal.error && (
               <div className="text-red-600 text-sm">
                 {editModal.error}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Void Entry Modal */}
+      <Modal
+        isOpen={voidModal.isOpen}
+        onClose={() => setVoidModal({ ...voidModal, isOpen: false })}
+        title="Void Time Entry"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setVoidModal({ ...voidModal, isOpen: false })}
+              disabled={voidModal.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleVoidEntry}
+              loading={voidModal.loading}
+              disabled={!voidModal.reason || voidModal.reason.trim().length < 5}
+            >
+              Void Entry
+            </Button>
+          </>
+        }
+      >
+        {voidModal.entry && (
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+              <p className="text-sm text-amber-800 font-medium">
+                This will void the time entry, excluding it from all hour calculations.
+                The entry will be preserved for audit purposes.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-gray-600">
+                Voiding entry for:{' '}
+                <span className="font-bold text-gray-900">
+                  {voidModal.entry.student?.firstName} {voidModal.entry.student?.lastName}
+                </span>
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Activity: {voidModal.entry.activity?.name || 'Unknown'}
+              </p>
+              <p className="text-sm text-gray-500">
+                Check-in: {voidModal.entry.checkInTime ? formatTime(voidModal.entry.checkInTime) : '--'}
+                {' | '}
+                Check-out: {voidModal.entry.checkOutTime ? formatTime(voidModal.entry.checkOutTime) : 'Not checked out'}
+              </p>
+              {voidModal.entry.hoursWorked != null && (
+                <p className="text-sm text-gray-500">
+                  Hours: {formatHours(voidModal.entry.hoursWorked)}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason for Voiding <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={voidModal.reason}
+                onChange={(e) => setVoidModal(prev => ({
+                  ...prev,
+                  reason: e.target.value
+                }))}
+                placeholder="e.g., Duplicate entry, scanned wrong student, data entry error"
+                className="input-field w-full h-24 resize-none"
+              />
+              {voidModal.reason && voidModal.reason.trim().length < 5 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Minimum 5 characters required ({5 - voidModal.reason.trim().length} more needed)
+                </p>
+              )}
+            </div>
+
+            {voidModal.error && (
+              <div className="text-red-600 text-sm">
+                {voidModal.error}
               </div>
             )}
           </div>

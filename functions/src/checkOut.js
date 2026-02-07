@@ -85,7 +85,10 @@ export const checkOut = onCall(async (request) => {
       .get();
 
     const weekTotal = weekEntriesQuery.docs.reduce((sum, doc) => {
-      return sum + (doc.data().hoursWorked || 0);
+      const data = doc.data();
+      // Skip voided entries from week total
+      if (data.isVoided) return sum;
+      return sum + (data.hoursWorked || 0);
     }, 0);
 
     return {

@@ -84,7 +84,7 @@ export default function StudentDetailPage() {
         if (!currentEvent?.activities || entries.length === 0) return [];
 
         return currentEvent.activities.map(activity => {
-            const activityEntries = entries.filter(e => e.activityId === activity.id);
+            const activityEntries = entries.filter(e => e.activityId === activity.id && !e.isVoided);
             if (activityEntries.length === 0) return null;
 
             // 1. Get unique sorted dates for this activity
@@ -160,8 +160,8 @@ export default function StudentDetailPage() {
 
     const overrideHours = parseFloat(student?.overrideHours || 0);
 
-    // Check if there are any entries without checkout times
-    const hasUncheckedOutEntries = entries.some(entry => !entry.checkOutTime);
+    // Check if there are any non-voided entries without checkout times
+    const hasUncheckedOutEntries = entries.some(entry => !entry.isVoided && !entry.checkOutTime);
     const grandTotal = totalCalculatedHours + overrideHours;
 
     /**

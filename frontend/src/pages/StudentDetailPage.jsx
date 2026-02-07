@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { formatTime, formatHours } from '../utils/hourCalculations';
-import { db } from '../utils/firebase';
+import { db, functions } from '../utils/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { useEvent } from '../contexts/EventContext';
 import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
@@ -31,6 +32,15 @@ export default function StudentDetailPage() {
         originalCheckOutTime: '',
         checkInTime: '',
         checkOutTime: '',
+        reason: '',
+        loading: false,
+        error: null
+    });
+
+    // Void entry modal state
+    const [voidModal, setVoidModal] = useState({
+        isOpen: false,
+        entry: null,
         reason: '',
         loading: false,
         error: null
@@ -84,7 +94,7 @@ export default function StudentDetailPage() {
         if (!currentEvent?.activities || entries.length === 0) return [];
 
         return currentEvent.activities.map(activity => {
-            const activityEntries = entries.filter(e => e.activityId === activity.id);
+            const activityEntries = entries.filter(e => e.activityId === activity.id && !e.isVoided);
             if (activityEntries.length === 0) return null;
 
             // 1. Get unique sorted dates for this activity
@@ -160,8 +170,8 @@ export default function StudentDetailPage() {
 
     const overrideHours = parseFloat(student?.overrideHours || 0);
 
-    // Check if there are any entries without checkout times
-    const hasUncheckedOutEntries = entries.some(entry => !entry.checkOutTime);
+    // Check if there are any non-voided entries without checkout times
+    const hasUncheckedOutEntries = entries.some(entry => !entry.isVoided && !entry.checkOutTime);
     const grandTotal = totalCalculatedHours + overrideHours;
 
     /**
@@ -350,6 +360,67 @@ export default function StudentDetailPage() {
         }
     };
 
+    // Open void modal
+    const openVoidModal = (entry) => {
+        setVoidModal({
+            isOpen: true,
+            entry,
+            reason: '',
+            loading: false,
+            error: null
+        });
+    };
+
+    // Handle void entry
+    const handleVoidEntry = async () => {
+        if (!voidModal.entry || !voidModal.reason || voidModal.reason.trim().length < 5) {
+            setVoidModal(prev => ({ ...prev, error: 'Void reason must be at least 5 characters' }));
+            return;
+        }
+
+        setVoidModal(prev => ({ ...prev, loading: true, error: null }));
+
+        try {
+            const voidTimeEntryFunc = httpsCallable(functions, 'voidTimeEntry');
+            const result = await voidTimeEntryFunc({
+                entryId: voidModal.entry.id,
+                voidReason: voidModal.reason.trim()
+            });
+
+            if (result.data.success) {
+                setVoidModal({
+                    isOpen: false,
+                    entry: null,
+                    reason: '',
+                    loading: false,
+                    error: null
+                });
+            }
+        } catch (error) {
+            console.error('Void entry error:', error);
+            setVoidModal(prev => ({
+                ...prev,
+                loading: false,
+                error: error.message || 'Failed to void entry'
+            }));
+        }
+    };
+
+    // Handle restore entry
+    const handleRestoreEntry = async (entry) => {
+        if (!confirm(`Are you sure you want to restore this voided entry?`)) {
+            return;
+        }
+
+        try {
+            const restoreTimeEntryFunc = httpsCallable(functions, 'restoreTimeEntry');
+            await restoreTimeEntryFunc({ entryId: entry.id });
+        } catch (error) {
+            console.error('Restore entry error:', error);
+            alert('Failed to restore entry: ' + (error.message || 'Unknown error'));
+        }
+    };
+
     if (loading) return (
         <div className="min-h-screen bg-gray-50">
             <Header />
@@ -486,6 +557,8 @@ export default function StudentDetailPage() {
                                         mode="row"
                                         onEdit={openEditModal}
                                         onViewHistory={(entry) => setNotesModal({ isOpen: true, entry })}
+                                        onVoid={openVoidModal}
+                                        onRestore={handleRestoreEntry}
                                     />
                                 ))}
                             </tbody>
@@ -513,6 +586,8 @@ export default function StudentDetailPage() {
                                             mode="card"
                                             onEdit={openEditModal}
                                             onViewHistory={(entry) => setNotesModal({ isOpen: true, entry })}
+                                            onVoid={openVoidModal}
+                                            onRestore={handleRestoreEntry}
                                         />
                                     </li>
                                 ))}
@@ -811,6 +886,84 @@ export default function StudentDetailPage() {
                         {editModal.error && (
                             <div className="text-red-600 text-sm">
                                 {editModal.error}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
+
+            {/* Void Entry Modal */}
+            <Modal
+                isOpen={voidModal.isOpen}
+                onClose={() => setVoidModal({ ...voidModal, isOpen: false })}
+                title="Void Time Entry"
+                size="md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => setVoidModal({ ...voidModal, isOpen: false })}
+                            disabled={voidModal.loading}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="danger"
+                            onClick={handleVoidEntry}
+                            loading={voidModal.loading}
+                            disabled={!voidModal.reason || voidModal.reason.trim().length < 5}
+                        >
+                            Void Entry
+                        </Button>
+                    </>
+                }
+            >
+                {voidModal.entry && (
+                    <div className="space-y-4">
+                        <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                            <p className="text-sm text-amber-800 font-medium">
+                                This will void the time entry, excluding it from all hour calculations.
+                                The entry will be preserved for audit purposes.
+                            </p>
+                        </div>
+
+                        <div>
+                            <p className="text-gray-600">
+                                Voiding entry for:{' '}
+                                <span className="font-bold text-gray-900">
+                                    {student?.firstName} {student?.lastName}
+                                </span>
+                            </p>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Date: {voidModal.entry.checkInTime?.toDate?.()?.toLocaleDateString() || 'N/A'}
+                                {' | '}
+                                Activity: {currentEvent?.activities?.find(a => a.id === voidModal.entry.activityId)?.name || 'Unknown'}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Reason for Voiding <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                                value={voidModal.reason}
+                                onChange={(e) => setVoidModal(prev => ({
+                                    ...prev,
+                                    reason: e.target.value
+                                }))}
+                                placeholder="e.g., Duplicate entry, scanned wrong student, data entry error"
+                                className="input-field w-full h-24 resize-none"
+                            />
+                            {voidModal.reason && voidModal.reason.trim().length < 5 && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Minimum 5 characters required ({5 - voidModal.reason.trim().length} more needed)
+                                </p>
+                            )}
+                        </div>
+
+                        {voidModal.error && (
+                            <div className="text-red-600 text-sm">
+                                {voidModal.error}
                             </div>
                         )}
                     </div>

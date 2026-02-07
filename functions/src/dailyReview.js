@@ -300,11 +300,16 @@ export const getDailyReviewSummary = onCall(async (request) => {
       total: entriesQuery.docs.length,
       flagged: 0,
       noCheckout: 0,
-      modified: 0
+      modified: 0,
+      voided: 0
     };
 
     entriesQuery.docs.forEach(doc => {
       const data = doc.data();
+
+      if (data.isVoided) {
+        summary.voided++;
+      }
 
       if (!data.checkOutTime) {
         summary.noCheckout++;

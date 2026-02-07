@@ -19,6 +19,7 @@ This system eliminates manual time entry and Excel calculations by using QR code
 - 🔗 Quick access to Scanner from admin header
 - 🖨️ Safari-compatible print functionality (badges, reports, PDF exports)
 - 👥 Responsive User Management with mobile card view
+- 🚫 Void/Restore time entries with audit trail
 
 ## Tech Stack
 
@@ -48,6 +49,7 @@ vbs-volunteer-tracker/
 │   ├── src/
 │   │   ├── checkIn.js     # Check-in function
 │   │   ├── checkOut.js    # Check-out function
+│   │   ├── voidEntry.js   # Void/restore time entries
 │   │   └── generateForms.js # Form generation
 │   ├── index.js
 │   └── package.json
@@ -233,6 +235,7 @@ npm run logs
 - Flag early arrivals and late stays
 - Bulk approval and individual adjustments
 - Edit check-in/check-out times with reason tracking and audit trail
+- Void and restore time entries with confirmation modal and reason tracking
 - Export daily reports (CSV and PDF)
 
 ### Student Detail (`/admin/students/:studentId`)
@@ -244,6 +247,8 @@ npm run logs
 - Edit time entries directly with same functionality as Daily Review
 - View change history and modification reasons
 - Print service log and badge for individual student
+- Void and restore time entries with reason tracking
+- Voided entries excluded from hour calculations with visual indicators
 - Summary of hours by activity
 - Warning indicator when entries are not checked out
 - Service Log printing blocked until all entries have checkout times
@@ -270,7 +275,7 @@ npm run logs
 ### Collections
 
 - **students**: Student registration data
-- **timeEntries**: Check-in/check-out records
+- **timeEntries**: Check-in/check-out records (includes void fields: `isVoided`, `voidReason`, `voidedAt`, `voidedBy`)
 - **events**: VBS event information
 - **generatedForms**: PDF form metadata
 

@@ -1,50 +1,42 @@
 # Unimplemented Features - Future Work
 
-> **Last Updated:** February 7, 2026 (PDF Template Management implemented - GitHub Issue #38)
+> **Last Updated:** February 7, 2026 (Void/Restore time entries implemented)
 > This document lists features from the original PRD that are not yet implemented.
 
 ---
 
 ## Recently Completed
 
-### PDF Template Management (GitHub Issue #38)
+### Void/Restore Time Entries (GitHub Issue #26)
 **Completed:** February 7, 2026
 
 **What was implemented:**
-- ✅ `PdfTemplatesPage.jsx` - Admin page at `/admin/settings/pdf-templates` for uploading and managing PDF templates
-- ✅ Upload blank PDF forms to Firebase Storage with metadata stored in Firestore `pdfTemplates` collection
-- ✅ WYSIWYG field mapper with rendered PDF background using `pdfjs-dist` (Mozilla PDF.js)
-- ✅ Static field placement - click on PDF to place data fields (Student Name, School, Graduation Year, Event Name, Total Hours, Current Date)
-- ✅ Drag-to-move for all placed fields (mousedown/mousemove/mouseup on window)
-- ✅ Click-to-select fields with inline property editor shown above the PDF (font size, data field, X/Y position)
-- ✅ Activity Table field type for dynamic repeating rows that loop over event activities
-  - Columns: Organization + Activity, Date(s) of Service, Contact Name, Hours Completed
-  - Each column independently draggable to position at specific X coordinates
-  - Configurable row height (%), max rows, per-column font size and max width (%)
-  - Preview shows 3 sample rows with actual font sizing
-- ✅ WYSIWYG font scaling using ResizeObserver to track container-to-page ratio (`containerPx / pdfPagePoints`)
-- ✅ Baseline-adjusted coordinate system (ascent ratio 0.72) so preview position matches PDF output
-- ✅ Preview text in actual print style (black, Helvetica, real font size) instead of colored badges
-- ✅ Multi-page PDF support with page navigation
-- ✅ Template selector dropdown and "Print Hours Form" button on Student Detail page
-- ✅ `pdfTemplateUtils.js` utility with `generateFilledPdf`, `downloadPdf`, `getPdfPageDimensions`, `renderPdfPageToImage`, `resolveFieldValue`, `resolveActivityColumnValue`
-- ✅ `maxWidth` support for activity table columns (constrains text within cell boundaries in both preview and PDF output)
-- ✅ Firestore security rules: `pdfTemplates` collection with admin-only read/write access
-- ✅ Comprehensive tests: 499+ frontend tests passing, 69 backend tests passing
-- ✅ New dependency: `pdfjs-dist` ^5.4.624 for PDF page rendering
+- Soft-delete (void) time entries with reason tracking and audit trail
+- Restore previously voided entries back to active state
+- `voidTimeEntry` Cloud Function: validates entryId, voidReason (min 5 chars), auth; sets `isVoided`, `voidReason`, `voidedAt`, `voidedBy`; appends to changeLog
+- `restoreTimeEntry` Cloud Function: validates entryId, auth; resets void fields to null/false; appends restore entry to changeLog
+- Check-in function initializes new entries with `isVoided: false`
+- Check-out function skips voided entries when calculating week totals
+- Daily Review summary includes voided entry count
+- **Daily Review page**: Void/Restore buttons on each entry, confirmation modal with reason input, voided entry styling (opacity-50, line-through, bg-gray-100), filter options for active/voided entries, voided count in stats
+- **Student Detail page**: Void/Restore buttons on ServiceLogEntry (both desktop table rows and mobile cards), confirmation modal, voided entries excluded from hour calculations and activity summaries
+- **ServiceLogEntry component**: Optional `onVoid`/`onRestore` props for backward compatibility, voided visual indicators in both row and card modes
+- Comprehensive test coverage: 20+ backend tests (voidEntry.test.js), frontend tests for TimeEntryCard and ServiceLogEntry void/restore behavior
+- All 494 frontend tests passing, all 87 backend tests passing
 
-**Files Created:**
-- `frontend/src/pages/PdfTemplatesPage.jsx` (admin page with UploadModal, FieldMapperModal, FieldMarker, SelectedFieldEditor components)
-- `frontend/src/pages/PdfTemplatesPage.test.jsx` (18 tests)
-- `frontend/src/utils/pdfTemplateUtils.js` (PDF generation utilities)
-- `frontend/src/utils/pdfTemplateUtils.test.js` (30 tests)
-
-**Files Modified:**
-- `frontend/src/pages/StudentDetailPage.jsx` (template selector, PDF generation integration)
-- `frontend/src/App.jsx` (added `/admin/settings/pdf-templates` route)
-- `frontend/src/components/common/Header.jsx` (added "PDF Templates" nav tab)
-- `firestore.rules` (added `pdfTemplates` collection rules)
-- `frontend/package.json` (added `pdfjs-dist` dependency)
+**Files Changed:**
+- `functions/src/voidEntry.js` (new - voidTimeEntry and restoreTimeEntry Cloud Functions)
+- `functions/index.js` (updated - exports new functions)
+- `functions/src/checkIn.js` (updated - adds isVoided: false to new entries)
+- `functions/src/checkOut.js` (updated - skips voided entries in week total)
+- `functions/src/dailyReview.js` (updated - voided count in summary)
+- `functions/test/voidEntry.test.js` (new - 20+ tests)
+- `frontend/src/components/DailyReview/index.jsx` (updated - void/restore UI)
+- `frontend/src/components/DailyReview/TimeEntryCard.jsx` (updated - void/restore support)
+- `frontend/src/components/DailyReview/VoidRestore.test.jsx` (new - void/restore tests)
+- `frontend/src/components/ServiceLog/ServiceLogEntry.jsx` (updated - optional onVoid/onRestore)
+- `frontend/src/components/ServiceLog/VoidedEntry.test.jsx` (new - voided entry tests)
+- `frontend/src/pages/StudentDetailPage.jsx` (updated - void/restore modal and handlers)
 
 ---
 
@@ -62,7 +54,7 @@
 - ✅ Shared empty state component for zero-result scenarios
 - ✅ Consistent styling with existing color-coded badges (purple for Admin, blue for Adult Volunteer, green/red for Active/Inactive)
 - ✅ Comprehensive unit tests for UserCard (19 tests) and UserRow (16 tests)
-- ✅ All existing tests continue to pass (455+ total)
+- ✅ All existing tests continue to pass (494+ total)
 
 **Files Changed:**
 - `frontend/src/components/Users/UserCard.jsx` (new)

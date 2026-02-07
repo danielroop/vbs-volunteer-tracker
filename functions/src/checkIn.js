@@ -77,6 +77,9 @@ export const checkIn = onCall(async (request) => {
       flags,
       modifiedBy: null,
       modificationReason: null,
+      isVoided: false,
+      voidReason: null,
+      voidedAt: null,
       createdAt: Timestamp.now()
     };
 

@@ -29,7 +29,7 @@
 | Protected Routes | 5.5 | AdminRoute, ScannerRoute, ProtectedRoute |
 | Offline Queue | 5.4 | IndexedDB queue for check-ins/outs when offline |
 | PWA Support | 5.1 | Service worker, installable, offline-capable |
-| Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword), forceCheckOut, forceAllCheckOut, getDailyReviewSummary |
+| Cloud Functions | 5.2 | checkIn, checkOut, userManagement (create/update/delete/list/resetPassword), forceCheckOut, forceAllCheckOut, getDailyReviewSummary, voidTimeEntry, restoreTimeEntry |
 | Firestore Security Rules | 5.5 | Role-based access control |
 | Daily Review | 3.5.2 | Full daily review with force checkout, force all checkout, CSV/PDF export, search/filter, override reasons display |
 | Consistent Header | 4.0 | Reusable Header components for admin and scanner pages with consistent navigation |
@@ -40,6 +40,7 @@
 | PDF Template Management | 3.6.1-3.6.2 | Upload PDF forms, WYSIWYG field mapper with drag-to-move, activity table support, WYSIWYG preview with dynamic font scaling, generate filled PDFs from Student Detail page |
 | Responsive Student Detail Page | 4.3 | Mobile-friendly card layout for service log on small screens, desktop table on larger screens |
 | Responsive User Management | 4.4 | Card-based mobile layout for User Management table; desktop table (md+) and mobile cards (<md) with UserCard/UserRow components |
+| Void/Restore Time Entries | 3.5.2, 3.5.3 | Soft-delete time entries with reason tracking, restore capability, audit trail via changeLog, voided entries excluded from hour calculations |
 
 ### Partially Implemented
 
@@ -576,6 +577,15 @@ Reason for Change (required):
   modifiedAt: "2026-06-15T20:30:00Z",
   modificationReason: "Helped with setup, verified by staff",
   
+  // Void/Restore (soft delete)
+  isVoided: false,                 // Soft-delete flag
+  voidReason: null,                // Reason for voiding (min 5 chars)
+  voidedAt: null,                  // Timestamp when voided
+  voidedBy: null,                  // User ID who voided
+
+  // Change Log (audit trail for edits, voids, restores)
+  changeLog: [],                   // Array of { timestamp, modifiedBy, type, reason, description }
+
   // Audit
   createdAt: "2026-06-15T09:02:00Z",
   updatedAt: "2026-06-15T20:30:00Z"

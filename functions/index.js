@@ -20,3 +20,6 @@ export { createUser, updateUser, deleteUser, listUsers, resetUserPassword } from
 
 // Daily Review Functions (PRD Section 3.5.2)
 export { forceCheckOut, forceAllCheckOut, getDailyReviewSummary } from './src/dailyReview.js';
+
+// Void/Restore Functions (Soft Delete)
+export { voidTimeEntry, restoreTimeEntry } from './src/voidEntry.js';

@@ -104,6 +104,7 @@ vbs-volunteer-tracker/
 │   │   ├── checkIn.js           # Check-in cloud function
 │   │   ├── checkOut.js          # Check-out cloud function
 │   │   ├── userManagement.js    # User CRUD operations
+│   │   ├── voidEntry.js         # Void/restore time entries
 │   │   └── generateForms.js     # Form generation (partial)
 │   ├── index.js                 # Function exports
 │   └── package.json
@@ -208,6 +209,18 @@ const {
   flags: string[],               // ["early_arrival", "late_stay"]
   modifiedBy: string | null,
   modificationReason: string | null,
+  // Void/Restore
+  isVoided: boolean,               // false by default, true when voided
+  voidReason: string | null,       // Reason for voiding (min 5 chars)
+  voidedAt: timestamp | null,      // When voided
+  voidedBy: string | null,         // User ID who voided
+  changeLog: Array<{              // Audit trail for edits, voids, restores
+    timestamp: string,             // ISO date string
+    modifiedBy: string,            // User ID
+    type: string,                  // 'edit' | 'void' | 'restore'
+    reason: string,
+    description: string
+  }>,
   createdAt: timestamp
 }
 ```
@@ -296,6 +309,22 @@ const {
 // Endpoint: checkOut
 // Input: { studentId, eventId, activityId }
 // Returns: { success, studentName, hoursToday, weekTotal, checkOutTime, flags }
+```
+
+### voidTimeEntry
+```javascript
+// Endpoint: voidTimeEntry
+// Input: { entryId, voidReason }
+// Validates: auth, entryId exists, not already voided, reason >= 5 chars
+// Returns: { success, studentName, message }
+```
+
+### restoreTimeEntry
+```javascript
+// Endpoint: restoreTimeEntry
+// Input: { entryId }
+// Validates: auth, entryId exists, is currently voided
+// Returns: { success, studentName, message }
 ```
 
 ### User Management Functions
@@ -442,6 +471,7 @@ VITE_USE_EMULATOR=true  # Optional: connect to emulators
 | QR code utils | `frontend/src/utils/qrCodeGenerator.js` |
 | Check-in function | `functions/src/checkIn.js` |
 | Check-out function | `functions/src/checkOut.js` |
+| Void/restore functions | `functions/src/voidEntry.js` |
 | User management | `functions/src/userManagement.js` |
 | Security rules | `firestore.rules` |
 | Student detail page | `frontend/src/pages/StudentDetailPage.jsx` |
@@ -459,6 +489,14 @@ The Student Detail page (`/admin/students/:studentId`) displays individual stude
 - **Print Badge:** Always available for printing student QR code badges
 - **Print Service Log:** Generates OCPS-format service log for school submission
 
+### Void/Restore Time Entries
+- **Void:** Soft-deletes a time entry by setting `isVoided: true` with reason, timestamp, and user tracking
+- **Restore:** Reverses a void by resetting void fields to null/false
+- Voided entries are excluded from hour calculations and activity summaries
+- Both Daily Review and Student Detail pages support void/restore via confirmation modal
+- ServiceLogEntry accepts optional `onVoid`/`onRestore` props (buttons only render when callbacks provided)
+- Visual indicators for voided entries: `opacity-50`, `bg-gray-100`, `line-through`, "VOIDED" label
+
 ### Print Service Log Validation
 The system **blocks** printing of the Service Log if any time entries do not have checkout times:
 - An error alert is shown: "Cannot print Service Log: This student has time entries that are not checked out."
@@ -470,6 +508,8 @@ This ensures that printed Service Logs only contain verified, actual hours worke
 ### Visual Indicators
 - **Red highlighting:** Rows without checkout times
 - **Blue highlighting:** Rows with modifications or forced checkouts
+- **Gray with opacity + line-through:** Voided entries
+- **"VOIDED" label:** Displayed for voided entries with void reason on hover
 - **"Not checked out" label:** Displayed in Check Out column for incomplete entries
 - **"--" in Hours column:** Shown when hours cannot be calculated
 
@@ -516,5 +556,5 @@ Ask the human if:
 
 ---
 
-**Last Updated:** 2026-01-31
-**Version:** 2.1
+**Last Updated:** 2026-02-07
+**Version:** 2.2

@@ -10,6 +10,7 @@ import { httpsCallable } from 'firebase/functions';
 
 import { useEvent } from '../contexts/EventContext';
 import { generateFilledPdf, downloadPdf } from '../utils/pdfTemplateUtils';
+import { buildEditChangeDescription } from '../utils/changeDescriptions';
 import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
@@ -395,13 +396,21 @@ export default function StudentDetailPage() {
                 hoursWorked = Math.round((minutes / 60) * 2) / 2; // Round to nearest 0.5
             }
 
-            // Build change log message
-            const oldIn = editModal.originalCheckInTime ? formatTime(new Date(editModal.originalCheckInTime)) : 'none';
-            const newIn = formatTime(checkInTime);
-            const oldOut = editModal.originalCheckOutTime ? formatTime(new Date(editModal.originalCheckOutTime)) : 'none';
-            const newOut = checkOutTime ? formatTime(checkOutTime) : 'none';
+            // Build smart change description (only includes fields that actually changed)
+            const changeDescription = buildEditChangeDescription({
+                originalCheckInTime: editModal.originalCheckInTime,
+                newCheckInTime: editModal.checkInTime,
+                originalCheckOutTime: editModal.originalCheckOutTime,
+                newCheckOutTime: editModal.checkOutTime,
+                reason: editModal.reason
+            });
 
-            const changeDescription = `Changed Check-In from ${oldIn} to ${newIn} and Check-Out from ${oldOut} to ${newOut} for "${editModal.reason}"`;
+            // Skip saving if no actual changes were made
+            if (!changeDescription) {
+                setEditModal(prev => ({ ...prev, error: 'No changes detected. Modify check-in or check-out times before saving.' }));
+                setEditModal(prev => ({ ...prev, loading: false }));
+                return;
+            }
 
             // Create change log entry
             const changeLogEntry = {
@@ -880,23 +889,6 @@ export default function StudentDetailPage() {
                                     <span className="font-semibold">Activity:</span> {currentEvent?.activities?.find(a => a.id === notesModal.entry.activityId)?.name || 'Unknown'}
                                 </p>
                             </div>
-
-                            {/* Current Override Info */}
-                            {(notesModal.entry.forcedCheckoutReason || notesModal.entry.modificationReason) && (
-                                <div className="bg-blue-50 p-3 rounded-lg">
-                                    <p className="text-xs font-semibold text-blue-600 uppercase mb-2">Current Override</p>
-                                    {notesModal.entry.forcedCheckoutReason && (
-                                        <p className="text-sm text-blue-700">
-                                            <span className="text-lg mr-1">⚡</span> {notesModal.entry.forcedCheckoutReason}
-                                        </p>
-                                    )}
-                                    {notesModal.entry.modificationReason && (
-                                        <p className="text-sm text-blue-700">
-                                            <span className="text-lg mr-1">✏️</span> {notesModal.entry.modificationReason}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
 
                             {/* Change Log History */}
                             {notesModal.entry.changeLog && notesModal.entry.changeLog.length > 0 ? (

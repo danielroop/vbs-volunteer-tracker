@@ -52,7 +52,7 @@ export const voidTimeEntry = onCall(async (request) => {
       modifiedBy: userId,
       type: 'void',
       reason: voidReason.trim(),
-      description: `Entry voided: "${voidReason.trim()}"`
+      description: `Entry voided. Reason: ${voidReason.trim()}`
     };
 
     const existingChangeLog = entry.changeLog || [];

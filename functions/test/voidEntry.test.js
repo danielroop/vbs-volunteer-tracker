@@ -343,7 +343,7 @@ describe('restoreTimeEntry Cloud Function', () => {
                 modifiedBy: 'admin456',
                 type: 'void',
                 reason: 'Duplicate entry',
-                description: 'Entry voided: "Duplicate entry"',
+                description: 'Entry voided. Reason: Duplicate entry',
               },
             ],
           }),

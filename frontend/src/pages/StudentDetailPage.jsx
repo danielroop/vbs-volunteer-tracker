@@ -4,7 +4,7 @@ import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { formatTime, formatHours } from '../utils/hourCalculations';
 
 import { db, functions, storage } from '../utils/firebase';
-import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { doc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 
@@ -56,6 +56,14 @@ export default function StudentDetailPage() {
         error: null
     });
 
+    // Edit student modal state
+    const [editStudentModal, setEditStudentModal] = useState({
+        isOpen: false,
+        formData: { firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '' },
+        loading: false,
+        error: null
+    });
+
     // Manual entry modal state
     const [manualModal, setManualModal] = useState({
         isOpen: false,
@@ -80,16 +88,16 @@ export default function StudentDetailPage() {
     }, [printMode]);
 
     useEffect(() => {
-        async function fetchStudent() {
-            const docRef = doc(db, 'students', studentId);
-            const snap = await getDoc(docRef);
+        if (!studentId) return;
+        const docRef = doc(db, 'students', studentId);
+        const unsubscribe = onSnapshot(docRef, (snap) => {
             if (snap.exists()) {
                 const data = { id: snap.id, ...snap.data() };
                 setStudent(data);
                 if (data.pdfTemplateId) setSelectedTemplateId(data.pdfTemplateId);
             }
-        }
-        if (studentId) fetchStudent();
+        });
+        return () => unsubscribe();
     }, [studentId]);
 
     // Fetch PDF templates
@@ -325,6 +333,53 @@ export default function StudentDetailPage() {
             alert('Failed to generate PDF: ' + err.message);
         } finally {
             setGeneratingPdf(false);
+        }
+    };
+
+    // Open edit student modal
+    const openEditStudentModal = () => {
+        if (!student) return;
+        setEditStudentModal({
+            isOpen: true,
+            formData: {
+                firstName: student.firstName || '',
+                lastName: student.lastName || '',
+                schoolName: student.schoolName || '',
+                gradeLevel: student.gradeLevel || '',
+                gradYear: student.gradYear || ''
+            },
+            loading: false,
+            error: null
+        });
+    };
+
+    // Handle edit student save
+    const handleEditStudentSave = async () => {
+        const { formData } = editStudentModal;
+        if (!formData.firstName || !formData.lastName) {
+            setEditStudentModal(prev => ({ ...prev, error: 'First name and last name are required' }));
+            return;
+        }
+
+        setEditStudentModal(prev => ({ ...prev, loading: true, error: null }));
+
+        try {
+            await updateDoc(doc(db, 'students', studentId), {
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                schoolName: formData.schoolName,
+                gradeLevel: formData.gradeLevel,
+                gradYear: formData.gradYear
+            });
+
+            setEditStudentModal(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+            console.error('Edit student error:', error);
+            setEditStudentModal(prev => ({
+                ...prev,
+                loading: false,
+                error: error.message || 'Failed to save changes'
+            }));
         }
     };
 
@@ -659,6 +714,7 @@ export default function StudentDetailPage() {
                         <p className="text-gray-500 font-medium text-sm sm:text-base">{student?.schoolName} • Grade {student?.gradeLevel}</p>
                     </div>
                     <div className="flex gap-3 flex-wrap sm:flex-nowrap items-center">
+                        <Button onClick={openEditStudentModal} variant="secondary" className="flex-1 sm:flex-none min-h-[44px]">Edit Student</Button>
                         <Button onClick={() => handlePrint('form')} variant="secondary" className="flex-1 sm:flex-none min-h-[44px]">Print Service Log</Button>
                         <Button onClick={() => handlePrint('badge')} variant="primary" className="flex-1 sm:flex-none min-h-[44px]">Print Badge</Button>
                         {pdfTemplates.length > 0 && (
@@ -1229,6 +1285,123 @@ export default function StudentDetailPage() {
                         {manualModal.error && (
                             <div className="text-red-600 text-sm">
                                 {manualModal.error}
+                            </div>
+                        )}
+                    </div>
+                </Modal>
+
+                {/* Edit Student Modal */}
+                <Modal
+                    isOpen={editStudentModal.isOpen}
+                    onClose={() => setEditStudentModal(prev => ({ ...prev, isOpen: false }))}
+                    title="Edit Student"
+                    size="md"
+                    footer={
+                        <>
+                            <Button
+                                variant="secondary"
+                                onClick={() => setEditStudentModal(prev => ({ ...prev, isOpen: false }))}
+                                disabled={editStudentModal.loading}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="primary"
+                                onClick={handleEditStudentSave}
+                                loading={editStudentModal.loading}
+                            >
+                                Save Changes
+                            </Button>
+                        </>
+                    }
+                >
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">First Name</label>
+                                <input
+                                    required
+                                    className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                                    value={editStudentModal.formData.firstName}
+                                    onChange={e => setEditStudentModal(prev => ({
+                                        ...prev,
+                                        formData: { ...prev.formData, firstName: e.target.value }
+                                    }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Last Name</label>
+                                <input
+                                    required
+                                    className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                                    value={editStudentModal.formData.lastName}
+                                    onChange={e => setEditStudentModal(prev => ({
+                                        ...prev,
+                                        formData: { ...prev.formData, lastName: e.target.value }
+                                    }))}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">School Name</label>
+                            <input
+                                className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                                value={editStudentModal.formData.schoolName}
+                                onChange={e => setEditStudentModal(prev => ({
+                                    ...prev,
+                                    formData: { ...prev.formData, schoolName: e.target.value }
+                                }))}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grade</label>
+                                <select
+                                    className="w-full border border-gray-200 rounded-xl p-3 outline-none"
+                                    value={editStudentModal.formData.gradeLevel}
+                                    onChange={e => setEditStudentModal(prev => ({
+                                        ...prev,
+                                        formData: { ...prev.formData, gradeLevel: e.target.value }
+                                    }))}
+                                >
+                                    <option value="">Select...</option>
+                                    {[9, 10, 11, 12].map(g => <option key={g} value={g}>{g}th Grade</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grad Year</label>
+                                <input
+                                    placeholder="2027"
+                                    className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                                    value={editStudentModal.formData.gradYear}
+                                    onChange={e => setEditStudentModal(prev => ({
+                                        ...prev,
+                                        formData: { ...prev.formData, gradYear: e.target.value }
+                                    }))}
+                                />
+                            </div>
+                        </div>
+
+                        {pdfTemplates.length > 0 && (
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Volunteer Form Template</label>
+                                <select
+                                    value={selectedTemplateId || ''}
+                                    onChange={(e) => handleTemplateChange(e.target.value)}
+                                    className="w-full border border-gray-200 rounded-xl p-3 outline-none"
+                                    aria-label="Volunteer Form Template"
+                                >
+                                    <option value="">Select Template...</option>
+                                    {pdfTemplates.map(t => (
+                                        <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {editStudentModal.error && (
+                            <div className="text-red-600 text-sm">
+                                {editStudentModal.error}
                             </div>
                         )}
                     </div>

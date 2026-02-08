@@ -9,60 +9,90 @@ vi.mock('../utils/firebase', () => ({
   db: {}
 }));
 
+// Track onSnapshot call count to distinguish between student doc, pdfTemplates, and timeEntries
+let onSnapshotCallCount = 0;
+
 // Mock Firestore functions
 vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(),
-  doc: vi.fn(() => ({ id: 'entry123' })),
-  getDoc: vi.fn(() => Promise.resolve({
-    exists: () => true,
-    id: 'student123',
-    data: () => ({
-      firstName: 'John',
-      lastName: 'Doe',
-      schoolName: 'Test High School',
-      gradeLevel: '10',
-      gradYear: '2028'
-    })
-  })),
-  onSnapshot: vi.fn((query, callback) => {
-    // Simulate time entries data
-    callback({
-      docs: [
-        {
-          id: 'entry1',
+  collection: vi.fn((db, path) => ({ _collectionPath: path })),
+  doc: vi.fn((dbOrRef, pathOrId, ...rest) => {
+    // doc(db, 'students', studentId) => returns a doc ref marker
+    if (pathOrId === 'students') {
+      return { _isDocRef: true, _collection: 'students', _docId: rest[0] || 'student123', id: rest[0] || 'student123' };
+    }
+    // doc(db, 'timeEntries', entryId) for updateDoc calls
+    return { _isDocRef: true, _collection: pathOrId, id: 'entry123' };
+  }),
+  onSnapshot: vi.fn((queryOrRef, callback) => {
+    onSnapshotCallCount++;
+    const callNum = onSnapshotCallCount;
+
+    // Student document snapshot (first call, doc ref)
+    if (queryOrRef?._isDocRef && queryOrRef._collection === 'students') {
+      queueMicrotask(() => {
+        callback({
+          exists: () => true,
+          id: 'student123',
           data: () => ({
-            studentId: 'student123',
-            activityId: 'activity1',
-            checkInTime: { toDate: () => new Date('2026-01-31T08:00:00'), seconds: 1738314000 },
-            checkOutTime: { toDate: () => new Date('2026-01-31T12:00:00'), seconds: 1738328400 },
-            hoursWorked: 4,
-            flags: [],
-            changeLog: []
+            firstName: 'John',
+            lastName: 'Doe',
+            schoolName: 'Test High School',
+            gradeLevel: '10',
+            gradYear: '2028'
           })
-        },
-        {
-          id: 'entry2',
-          data: () => ({
-            studentId: 'student123',
-            activityId: 'activity1',
-            checkInTime: { toDate: () => new Date('2026-01-30T08:30:00'), seconds: 1738229400 },
-            checkOutTime: null,
-            hoursWorked: null,
-            flags: ['early_arrival'],
-            changeLog: []
-          })
-        }
-      ]
+        });
+      });
+      return vi.fn();
+    }
+
+    // PDF templates collection (second call)
+    if (queryOrRef?._collectionPath === 'pdfTemplates') {
+      queueMicrotask(() => {
+        callback({ docs: [] });
+      });
+      return vi.fn();
+    }
+
+    // Time entries (third call)
+    queueMicrotask(() => {
+      callback({
+        docs: [
+          {
+            id: 'entry1',
+            data: () => ({
+              studentId: 'student123',
+              activityId: 'activity1',
+              checkInTime: { toDate: () => new Date('2026-01-31T08:00:00'), seconds: 1738314000 },
+              checkOutTime: { toDate: () => new Date('2026-01-31T12:00:00'), seconds: 1738328400 },
+              hoursWorked: 4,
+              flags: [],
+              changeLog: []
+            })
+          },
+          {
+            id: 'entry2',
+            data: () => ({
+              studentId: 'student123',
+              activityId: 'activity1',
+              checkInTime: { toDate: () => new Date('2026-01-30T08:30:00'), seconds: 1738229400 },
+              checkOutTime: null,
+              hoursWorked: null,
+              flags: ['early_arrival'],
+              changeLog: []
+            })
+          }
+        ]
+      });
     });
     return vi.fn(); // unsubscribe function
   }),
-  query: vi.fn(),
+  query: vi.fn((ref) => ({ ...ref, _query: ref })),
   where: vi.fn(),
   orderBy: vi.fn(),
   Timestamp: {
     fromDate: (date) => ({ toDate: () => date, seconds: Math.floor(date.getTime() / 1000) })
   },
-  updateDoc: vi.fn()
+  updateDoc: vi.fn().mockResolvedValue()
 }));
 
 // Mock AuthContext
@@ -152,6 +182,7 @@ const renderWithRouter = (studentId = 'student123') => {
 describe('StudentDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    onSnapshotCallCount = 0;
   });
 
   afterEach(() => {
@@ -193,11 +224,9 @@ describe('StudentDetailPage', () => {
       renderWithRouter();
 
       await waitFor(() => {
-        // Desktop view has table headers, mobile view has "Service Log" heading
-        // Check for either desktop table headers or mobile service log header
-        const hasDesktopTable = screen.queryByText('Date') !== null;
-        const hasMobileServiceLog = screen.queryByText('Service Log') !== null;
-        expect(hasDesktopTable || hasMobileServiceLog).toBe(true);
+        // Desktop and mobile views both show "Service Log" headings
+        const serviceLogElements = screen.getAllByText('Service Log');
+        expect(serviceLogElements.length).toBeGreaterThanOrEqual(1);
 
         // Check for entry content that appears in both views
         expect(screen.getAllByText('Morning Session').length).toBeGreaterThanOrEqual(1);
@@ -495,6 +524,195 @@ describe('StudentDetailPage Summary Section', () => {
     const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);
 
     expect(totalCalculatedHours).toBe(7.5);
+  });
+});
+
+describe('StudentDetailPage Edit Student', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    onSnapshotCallCount = 0;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should render Edit Student button', async () => {
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+  });
+
+  it('should open edit student modal when Edit Student button is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+    await waitFor(() => {
+      // Button + modal title = at least 2 instances
+      const editStudentTexts = screen.getAllByText('Edit Student');
+      expect(editStudentTexts.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('should populate form with current student data', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+    await waitFor(() => {
+      // Check that the form fields are populated with the student's data
+      const firstNameInput = screen.getAllByDisplayValue('John')[0];
+      expect(firstNameInput).toBeInTheDocument();
+      const lastNameInput = screen.getAllByDisplayValue('Doe')[0];
+      expect(lastNameInput).toBeInTheDocument();
+      const schoolInput = screen.getAllByDisplayValue('Test High School')[0];
+      expect(schoolInput).toBeInTheDocument();
+    });
+  });
+
+  it('should close modal when Cancel is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+    await waitFor(() => {
+      // Button + modal title
+      const editStudentTexts = screen.getAllByText('Edit Student');
+      expect(editStudentTexts.length).toBeGreaterThanOrEqual(2);
+    });
+
+    // Find the Cancel button in the modal footer
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel' });
+    await user.click(cancelButtons[cancelButtons.length - 1]);
+
+    await waitFor(() => {
+      // After close, only the button text remains
+      const editStudentTexts = screen.getAllByText('Edit Student');
+      expect(editStudentTexts.length).toBe(1);
+    });
+  });
+
+  it('should allow editing first name field', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByDisplayValue('John')[0]).toBeInTheDocument();
+    });
+
+    const firstNameInput = screen.getAllByDisplayValue('John')[0];
+    await user.clear(firstNameInput);
+    await user.type(firstNameInput, 'Jane');
+
+    expect(firstNameInput).toHaveValue('Jane');
+  });
+
+  it('should call updateDoc when Save Changes is clicked with valid data', async () => {
+    const { updateDoc } = await import('firebase/firestore');
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByDisplayValue('John')[0]).toBeInTheDocument();
+    });
+
+    // Modify the first name
+    const firstNameInput = screen.getAllByDisplayValue('John')[0];
+    await user.clear(firstNameInput);
+    await user.type(firstNameInput, 'Jane');
+
+    // Click Save Changes
+    const saveButtons = screen.getAllByRole('button', { name: 'Save Changes' });
+    await user.click(saveButtons[saveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          firstName: 'Jane',
+          lastName: 'Doe',
+          schoolName: 'Test High School'
+        })
+      );
+    });
+  });
+
+  it('should show error when first name is empty', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByDisplayValue('John')[0]).toBeInTheDocument();
+    });
+
+    // Clear the first name
+    const firstNameInput = screen.getAllByDisplayValue('John')[0];
+    await user.clear(firstNameInput);
+
+    // Also clear last name
+    const lastNameInput = screen.getAllByDisplayValue('Doe')[0];
+    await user.clear(lastNameInput);
+
+    // Click Save Changes
+    const saveButtons = screen.getAllByRole('button', { name: 'Save Changes' });
+    await user.click(saveButtons[saveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(screen.getByText('First name and last name are required')).toBeInTheDocument();
+    });
+  });
+
+  it('should display Save Changes and Cancel buttons in edit student modal', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+    await waitFor(() => {
+      // Multiple Cancel/Save buttons may exist from other modals, but at least one pair should be present
+      expect(screen.getAllByRole('button', { name: 'Cancel' }).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByRole('button', { name: 'Save Changes' }).length).toBeGreaterThanOrEqual(1);
+    });
   });
 });
 

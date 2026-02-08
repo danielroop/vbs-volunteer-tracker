@@ -12,24 +12,38 @@ vi.mock('../utils/firebase', () => ({
 
 // Mock Firestore functions
 vi.mock('firebase/firestore', () => ({
-    collection: vi.fn(),
-    doc: vi.fn(() => ({ id: 'entry123' })),
-    getDoc: vi.fn(() => Promise.resolve({
-        exists: () => true,
-        id: 'student123',
-        data: () => ({
-            firstName: 'John',
-            lastName: 'Doe',
-            schoolName: 'Test High School',
-            gradeLevel: '10',
-            gradYear: '2028'
-        })
-    })),
-    onSnapshot: vi.fn((query, callback) => {
-        callback({ docs: [] }); // Start with empty entries
+    collection: vi.fn((db, path) => ({ _collectionPath: path })),
+    doc: vi.fn((dbOrRef, pathOrId, ...rest) => {
+        if (pathOrId === 'students') {
+            return { _isDocRef: true, _collection: 'students', _docId: rest[0] || 'student123', id: rest[0] || 'student123' };
+        }
+        return { _isDocRef: true, _collection: pathOrId, id: 'entry123' };
+    }),
+    onSnapshot: vi.fn((queryOrRef, callback) => {
+        // Student document snapshot
+        if (queryOrRef?._isDocRef && queryOrRef._collection === 'students') {
+            queueMicrotask(() => {
+                callback({
+                    exists: () => true,
+                    id: 'student123',
+                    data: () => ({
+                        firstName: 'John',
+                        lastName: 'Doe',
+                        schoolName: 'Test High School',
+                        gradeLevel: '10',
+                        gradYear: '2028'
+                    })
+                });
+            });
+            return vi.fn();
+        }
+        // All other collections return empty docs
+        queueMicrotask(() => {
+            callback({ docs: [] });
+        });
         return vi.fn();
     }),
-    query: vi.fn(),
+    query: vi.fn((ref) => ({ ...ref, _query: ref })),
     where: vi.fn(),
     orderBy: vi.fn(),
     Timestamp: {

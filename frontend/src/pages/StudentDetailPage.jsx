@@ -308,6 +308,7 @@ export default function StudentDetailPage() {
                 eventName: currentEvent?.name || '',
                 activityLog,
                 event: currentEvent,
+                timeEntries: entries.filter(e => !e.isVoided),
             });
 
             // Download it

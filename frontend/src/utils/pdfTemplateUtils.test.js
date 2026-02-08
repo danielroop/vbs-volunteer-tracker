@@ -92,6 +92,7 @@ describe('pdfTemplateUtils', () => {
       expect(keys).toContain('detailEndTime');
       expect(keys).toContain('detailHours');
       expect(keys).toContain('detailActivity');
+      expect(keys).toContain('detailContact');
     });
   });
 
@@ -180,6 +181,13 @@ describe('pdfTemplateUtils', () => {
       expect(resolveFieldValue('unknownKey', mockData)).toBe('');
     });
 
+    it('should coerce numeric gradeLevel to string', () => {
+      const dataWithNumericGrade = { ...mockData, student: { ...mockData.student, gradeLevel: 10 } };
+      const result = resolveFieldValue('gradeLevel', dataWithNumericGrade);
+      expect(result).toBe('10');
+      expect(typeof result).toBe('string');
+    });
+
     it('should handle missing student data gracefully', () => {
       const emptyData = { student: {}, totalHours: 0, eventName: '' };
       expect(resolveFieldValue('studentName', emptyData)).toBe('');
@@ -232,14 +240,16 @@ describe('pdfTemplateUtils', () => {
 
   describe('resolveDetailColumnValue', () => {
     const mockEntry = {
-      date: '2026-06-09',
       checkInTime: '2026-06-09T08:00:00',
       checkOutTime: '2026-06-09T12:00:00',
       hoursWorked: 4,
       activityName: 'VBS Morning Session',
     };
+    const mockEvent = {
+      contactName: 'Jane Smith',
+    };
 
-    it('should resolve detailDate', () => {
+    it('should resolve detailDate from checkInTime', () => {
       const result = resolveDetailColumnValue('detailDate', mockEntry);
       expect(result).toBeTruthy();
       expect(typeof result).toBe('string');
@@ -265,6 +275,15 @@ describe('pdfTemplateUtils', () => {
       expect(resolveDetailColumnValue('detailActivity', mockEntry)).toBe('VBS Morning Session');
     });
 
+    it('should resolve detailContact from event data', () => {
+      expect(resolveDetailColumnValue('detailContact', mockEntry, mockEvent)).toBe('Jane Smith');
+    });
+
+    it('should handle missing event for detailContact', () => {
+      expect(resolveDetailColumnValue('detailContact', mockEntry, null)).toBe('');
+      expect(resolveDetailColumnValue('detailContact', mockEntry)).toBe('');
+    });
+
     it('should return empty string for unknown column keys', () => {
       expect(resolveDetailColumnValue('unknown', mockEntry)).toBe('');
     });
@@ -279,7 +298,6 @@ describe('pdfTemplateUtils', () => {
 
     it('should handle Date objects for timestamps', () => {
       const entryWithDates = {
-        date: new Date('2026-06-09'),
         checkInTime: new Date('2026-06-09T08:00:00'),
         checkOutTime: new Date('2026-06-09T12:00:00'),
         hoursWorked: 4,
@@ -287,6 +305,20 @@ describe('pdfTemplateUtils', () => {
       expect(resolveDetailColumnValue('detailDate', entryWithDates)).toBeTruthy();
       expect(resolveDetailColumnValue('detailStartTime', entryWithDates)).toBeTruthy();
       expect(resolveDetailColumnValue('detailEndTime', entryWithDates)).toBeTruthy();
+    });
+
+    it('should handle Firestore Timestamp objects with toDate()', () => {
+      const mockTimestamp = (dateStr) => ({
+        toDate: () => new Date(dateStr),
+      });
+      const entryWithTimestamps = {
+        checkInTime: mockTimestamp('2026-06-09T08:00:00'),
+        checkOutTime: mockTimestamp('2026-06-09T12:00:00'),
+        hoursWorked: 4,
+      };
+      expect(resolveDetailColumnValue('detailDate', entryWithTimestamps)).toBeTruthy();
+      expect(resolveDetailColumnValue('detailStartTime', entryWithTimestamps)).toBeTruthy();
+      expect(resolveDetailColumnValue('detailEndTime', entryWithTimestamps)).toBeTruthy();
     });
   });
 

@@ -40,6 +40,7 @@ export const DETAIL_COLUMN_OPTIONS = [
   { key: 'detailEndTime', label: 'End Time', preview: '12:00 PM' },
   { key: 'detailHours', label: 'Hours', preview: '4.00' },
   { key: 'detailActivity', label: 'Activity Name', preview: 'VBS Morning Session' },
+  { key: 'detailContact', label: 'Contact Name', preview: 'Jane Smith' },
 ];
 
 /**
@@ -56,7 +57,7 @@ export function resolveFieldValue(fieldKey, { student, totalHours, eventName, ev
     case 'schoolName':
       return student.schoolName || '';
     case 'gradeLevel':
-      return student.gradeLevel || '';
+      return String(student.gradeLevel ?? '');
     case 'gradYear':
       return String(student.gradYear || '');
     case 'totalHours':
@@ -99,30 +100,31 @@ export function resolveActivityColumnValue(columnKey, activity, event) {
 /**
  * Resolves a detail column key to its value for a single time entry row.
  */
-export function resolveDetailColumnValue(columnKey, entry) {
+export function resolveDetailColumnValue(columnKey, entry, event) {
   switch (columnKey) {
-    case 'detailDate':
-      if (entry.date) {
-        const d = entry.date instanceof Date ? entry.date : new Date(entry.date);
-        return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
-      }
-      return '';
-    case 'detailStartTime':
-      if (entry.checkInTime) {
-        const d = entry.checkInTime instanceof Date ? entry.checkInTime : new Date(entry.checkInTime);
-        return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      }
-      return '';
-    case 'detailEndTime':
-      if (entry.checkOutTime) {
-        const d = entry.checkOutTime instanceof Date ? entry.checkOutTime : new Date(entry.checkOutTime);
-        return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      }
-      return '';
+    case 'detailDate': {
+      // Support Firestore Timestamps (with toDate()) and regular Date/string values
+      const raw = entry.checkInTime || entry.date;
+      if (!raw) return '';
+      const d = raw.toDate ? raw.toDate() : (raw instanceof Date ? raw : new Date(raw));
+      return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+    }
+    case 'detailStartTime': {
+      if (!entry.checkInTime) return '';
+      const d = entry.checkInTime.toDate ? entry.checkInTime.toDate() : (entry.checkInTime instanceof Date ? entry.checkInTime : new Date(entry.checkInTime));
+      return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    case 'detailEndTime': {
+      if (!entry.checkOutTime) return '';
+      const d = entry.checkOutTime.toDate ? entry.checkOutTime.toDate() : (entry.checkOutTime instanceof Date ? entry.checkOutTime : new Date(entry.checkOutTime));
+      return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
     case 'detailHours':
       return typeof entry.hoursWorked === 'number' ? entry.hoursWorked.toFixed(2) : String(entry.hoursWorked || '0');
     case 'detailActivity':
       return entry.activityName || '';
+    case 'detailContact':
+      return event?.contactName || '';
     default:
       return '';
   }
@@ -168,7 +170,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
           const colFontSize = col.fontSize || 10;
           // Shift baseline down by ascent so top of text aligns with yPercent
           const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
-          const value = resolveActivityColumnValue(col.key, activity, data.event);
+          const value = String(resolveActivityColumnValue(col.key, activity, data.event));
 
           page.drawText(value, {
             x,
@@ -194,7 +196,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
           const x = (col.xPercent / 100) * width;
           const colFontSize = col.fontSize || 10;
           const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
-          const value = resolveDetailColumnValue(col.key, entry);
+          const value = String(resolveDetailColumnValue(col.key, entry, data.event));
 
           page.drawText(value, {
             x,
@@ -211,7 +213,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
       const x = (field.xPercent / 100) * width;
       const fontSize = field.fontSize || 12;
       const y = height - (field.yPercent / 100) * height - (fontSize * ASCENT_RATIO);
-      const value = field.customValue || '';
+      const value = String(field.customValue || '');
 
       page.drawText(value, {
         x,
@@ -226,7 +228,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
       const fontSize = field.fontSize || 12;
       // Shift baseline down by ascent so top of text aligns with yPercent
       const y = height - (field.yPercent / 100) * height - (fontSize * ASCENT_RATIO);
-      const value = resolveFieldValue(field.fieldKey, data);
+      const value = String(resolveFieldValue(field.fieldKey, data));
 
       page.drawText(value, {
         x,

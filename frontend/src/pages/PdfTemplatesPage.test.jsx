@@ -68,6 +68,7 @@ vi.mock('../utils/pdfTemplateUtils', () => ({
     { key: 'detailEndTime', label: 'End Time', preview: '12:00 PM' },
     { key: 'detailHours', label: 'Hours', preview: '4.00' },
     { key: 'detailActivity', label: 'Activity Name', preview: 'VBS Morning Session' },
+    { key: 'detailContact', label: 'Contact Name', preview: 'Jane Smith' },
   ],
   getPdfPageDimensions: vi.fn(() => Promise.resolve({ width: 612, height: 792, pageCount: 1 })),
   renderPdfPageToImage: vi.fn(() => Promise.resolve({ dataUrl: 'data:image/png;base64,test', width: 1224, height: 1584, pageCount: 1 })),

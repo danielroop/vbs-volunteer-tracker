@@ -119,8 +119,26 @@ export function resolveDetailColumnValue(columnKey, entry, event) {
       const d = entry.checkOutTime.toDate ? entry.checkOutTime.toDate() : (entry.checkOutTime instanceof Date ? entry.checkOutTime : new Date(entry.checkOutTime));
       return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
-    case 'detailHours':
-      return typeof entry.hoursWorked === 'number' ? entry.hoursWorked.toFixed(2) : String(entry.hoursWorked || '0');
+    case 'detailHours': {
+      // Use stored hoursWorked if available, otherwise calculate from timestamps
+      if (typeof entry.hoursWorked === 'number' && entry.hoursWorked > 0) {
+        return entry.hoursWorked.toFixed(2);
+      }
+      // Fallback: calculate from checkIn/checkOut timestamps (supports Firestore Timestamps with .seconds)
+      if (entry.checkInTime && entry.checkOutTime) {
+        const inSec = entry.checkInTime.seconds != null ? entry.checkInTime.seconds
+          : (entry.checkInTime.toDate ? entry.checkInTime.toDate().getTime() / 1000
+          : new Date(entry.checkInTime).getTime() / 1000);
+        const outSec = entry.checkOutTime.seconds != null ? entry.checkOutTime.seconds
+          : (entry.checkOutTime.toDate ? entry.checkOutTime.toDate().getTime() / 1000
+          : new Date(entry.checkOutTime).getTime() / 1000);
+        if (!isNaN(inSec) && !isNaN(outSec) && outSec > inSec) {
+          const hours = Math.round(((outSec - inSec) / 3600) * 4) / 4; // Round to nearest 0.25
+          return hours.toFixed(2);
+        }
+      }
+      return '0';
+    }
     case 'detailActivity':
       return entry.activityName || '';
     case 'detailContact':

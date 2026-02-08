@@ -268,7 +268,26 @@ describe('pdfTemplateUtils', () => {
     });
 
     it('should resolve detailHours with 2 decimal places', () => {
-      expect(resolveDetailColumnValue('detailHours', mockEntry)).toBe('4.00');
+      expect(resolveDetailColumnValue('detailHours', { ...mockEntry, hoursWorked: 4 })).toBe('4.00');
+    });
+
+    it('should calculate detailHours from timestamps when hoursWorked is null', () => {
+      const entry = {
+        checkInTime: new Date('2026-06-09T08:00:00'),
+        checkOutTime: new Date('2026-06-09T12:00:00'),
+        hoursWorked: null,
+      };
+      expect(resolveDetailColumnValue('detailHours', entry)).toBe('4.00');
+    });
+
+    it('should calculate detailHours from Firestore Timestamp seconds', () => {
+      const entry = {
+        checkInTime: { seconds: 1000000, toDate: () => new Date(1000000000) },
+        checkOutTime: { seconds: 1014400, toDate: () => new Date(1014400000) },
+        hoursWorked: 0,
+      };
+      // 14400 seconds = 4 hours
+      expect(resolveDetailColumnValue('detailHours', entry)).toBe('4.00');
     });
 
     it('should resolve detailActivity', () => {

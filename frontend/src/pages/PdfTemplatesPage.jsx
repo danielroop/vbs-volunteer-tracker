@@ -252,9 +252,9 @@ function FieldMapperModal({ isOpen, template, onClose }) {
     DETAIL_COLUMN_OPTIONS.map((opt, i) => ({
       key: opt.key,
       label: opt.label,
-      xPercent: 5 + (i * 19),
+      xPercent: 3 + (i * 16),
       fontSize: 10,
-      maxWidth: 18,
+      maxWidth: 15,
       enabled: true,
     }))
   );
@@ -1047,7 +1047,7 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
         onMouseDown={(e) => onMouseDown(e, null)}
       >
         <div className={`inline-flex items-center gap-1 ${isSelected ? `ring-2 ${tableRingColor} rounded` : ''}`}
-          style={{ transform: 'translateY(-100%)' }}
+          style={{ transform: 'translateY(calc(-100% - 14px))' }}
         >
           <span className={`${tableBgColor} text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap`}>
             {tableLabel} ({field.maxRows} rows)

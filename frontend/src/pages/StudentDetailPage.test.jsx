@@ -463,7 +463,7 @@ describe('StudentDetailPage Edit Functionality', () => {
   });
 
   describe('change log entry format', () => {
-    it('should create correct change log entry structure', () => {
+    it('should create correct change log entry structure with new format', () => {
       const changeLogEntry = {
         timestamp: new Date().toISOString(),
         modifiedBy: 'admin',
@@ -473,12 +473,14 @@ describe('StudentDetailPage Edit Functionality', () => {
         oldCheckOutTime: '2026-01-31T12:00',
         newCheckOutTime: '2026-01-31T12:30',
         reason: 'Adjusted based on supervisor feedback',
-        description: 'Changed Check-In from 8:00 AM to 7:30 AM and Check-Out from 12:00 PM to 12:30 PM for "Adjusted based on supervisor feedback"'
+        description: 'Changed Check-In from 8:00 AM to 7:30 AM and Changed Check-Out from 12:00 PM to 12:30 PM. Reason: Adjusted based on supervisor feedback'
       };
 
       expect(changeLogEntry.type).toBe('edit');
       expect(changeLogEntry.modifiedBy).toBe('admin');
       expect(changeLogEntry.reason).toBe('Adjusted based on supervisor feedback');
+      expect(changeLogEntry.description).toContain('. Reason:');
+      expect(changeLogEntry.description).not.toContain('for "');
     });
   });
 });

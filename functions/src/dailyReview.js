@@ -75,7 +75,7 @@ export const forceCheckOut = onCall(async (request) => {
     // Build change log entry
     const checkInTimeStr = toDate(entry.checkInTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const checkOutTimeStr = toDate(checkOutTimestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const changeDescription = `Forced Check-Out at ${checkOutTimeStr} (checked in at ${checkInTimeStr}) for "${reason}"`;
+    const changeDescription = `Forced Check-Out at ${checkOutTimeStr} (Checked in: ${checkInTimeStr}). Reason: ${reason}`;
 
     const changeLogEntry = {
       timestamp: new Date().toISOString(),
@@ -226,7 +226,7 @@ export const forceAllCheckOut = onCall(async (request) => {
       const checkInTimeStr = toDate(entry.checkInTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
       const checkOutTimeStr = toDate(checkOutTimestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
       const forceReason = reason || 'End of day bulk checkout';
-      const changeDescription = `Bulk Forced Check-Out at ${checkOutTimeStr} (checked in at ${checkInTimeStr}) for "${forceReason}"`;
+      const changeDescription = `Bulk Forced Check-Out at ${checkOutTimeStr} (Checked in: ${checkInTimeStr}). Reason: ${forceReason}`;
 
       const changeLogEntry = {
         timestamp: new Date().toISOString(),

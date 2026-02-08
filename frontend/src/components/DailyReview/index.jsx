@@ -4,6 +4,7 @@ import { collection, onSnapshot, query, where, doc, updateDoc } from 'firebase/f
 import { httpsCallable } from 'firebase/functions';
 import { useEvent } from '../../contexts/EventContext';
 import { formatTime, formatHours, getTodayDateString, formatDate } from '../../utils/hourCalculations';
+import { buildEditChangeDescription } from '../../utils/changeDescriptions';
 import { printInNewWindow, createPrintDocument } from '../../utils/printUtils';
 import Header from '../common/Header';
 import Button from '../common/Button';
@@ -394,13 +395,21 @@ export default function DailyReview() {
         hoursWorked = Math.round((minutes / 60) * 2) / 2; // Round to nearest 0.5
       }
 
-      // Build change log message
-      const oldIn = editModal.originalCheckInTime ? formatTime(new Date(editModal.originalCheckInTime)) : 'none';
-      const newIn = formatTime(checkInTime);
-      const oldOut = editModal.originalCheckOutTime ? formatTime(new Date(editModal.originalCheckOutTime)) : 'none';
-      const newOut = checkOutTime ? formatTime(checkOutTime) : 'none';
+      // Build smart change description (only includes fields that actually changed)
+      const changeDescription = buildEditChangeDescription({
+        originalCheckInTime: editModal.originalCheckInTime,
+        newCheckInTime: editModal.checkInTime,
+        originalCheckOutTime: editModal.originalCheckOutTime,
+        newCheckOutTime: editModal.checkOutTime,
+        reason: editModal.reason
+      });
 
-      const changeDescription = `Changed Check-In from ${oldIn} to ${newIn} and Check-Out from ${oldOut} to ${newOut} for "${editModal.reason}"`;
+      // Skip saving if no actual changes were made
+      if (!changeDescription) {
+        setEditModal(prev => ({ ...prev, error: 'No changes detected. Modify check-in or check-out times before saving.' }));
+        setEditModal(prev => ({ ...prev, loading: false }));
+        return;
+      }
 
       // Create change log entry
       const changeLogEntry = {

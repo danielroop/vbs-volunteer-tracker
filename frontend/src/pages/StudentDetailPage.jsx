@@ -173,11 +173,12 @@ export default function StudentDetailPage() {
             });
 
             // 4. Format strings like "1/1/26 - 1/3/26, 1/5/26"
+            // Use UTC methods since uniqueDates are YYYY-MM-DD strings parsed as midnight UTC
             const dateStrings = groups.map(group => {
                 const start = new Date(group[0]);
                 const end = new Date(group[group.length - 1]);
-                const startStr = `${start.getMonth() + 1}/${start.getDate()}/${start.getFullYear().toString().slice(-2)}`;
-                const endStr = `${end.getMonth() + 1}/${end.getDate()}/${end.getFullYear().toString().slice(-2)}`;
+                const startStr = `${start.getUTCMonth() + 1}/${start.getUTCDate()}/${start.getUTCFullYear().toString().slice(-2)}`;
+                const endStr = `${end.getUTCMonth() + 1}/${end.getUTCDate()}/${end.getUTCFullYear().toString().slice(-2)}`;
 
                 return group.length > 1 ? `${startStr} - ${endStr}` : startStr;
             });
@@ -283,6 +284,10 @@ export default function StudentDetailPage() {
 
     // Generate and download filled PDF from template
     const handleGeneratePdf = async () => {
+        if (hasUncheckedOutEntries) {
+            alert('Cannot generate PDF: This student has time entries that are not checked out. Please ensure all entries have checkout times before printing.');
+            return;
+        }
         const template = pdfTemplates.find(t => t.id === selectedTemplateId);
         if (!template) {
             alert('Please select a PDF template first.');
@@ -308,6 +313,7 @@ export default function StudentDetailPage() {
                 eventName: currentEvent?.name || '',
                 activityLog,
                 event: currentEvent,
+                timeEntries: entries.filter(e => !e.isVoided),
             });
 
             // Download it

@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   FIELD_KEY_OPTIONS,
   ACTIVITY_COLUMN_OPTIONS,
+  DETAIL_COLUMN_OPTIONS,
   resolveFieldValue,
   resolveActivityColumnValue,
+  resolveDetailColumnValue,
   generateFilledPdf,
   downloadPdf,
   getPdfPageDimensions,
@@ -36,6 +38,14 @@ describe('pdfTemplateUtils', () => {
       expect(keys).toContain('date');
       expect(keys).toContain('eventName');
     });
+
+    it('should include new placeable field keys', () => {
+      const keys = FIELD_KEY_OPTIONS.map(o => o.key);
+      expect(keys).toContain('contactPerson');
+      expect(keys).toContain('contactPhone');
+      expect(keys).toContain('eventDescription');
+      expect(keys).toContain('nonprofitName');
+    });
   });
 
   describe('ACTIVITY_COLUMN_OPTIONS', () => {
@@ -61,6 +71,31 @@ describe('pdfTemplateUtils', () => {
     });
   });
 
+  describe('DETAIL_COLUMN_OPTIONS', () => {
+    it('should export an array of detail column options', () => {
+      expect(Array.isArray(DETAIL_COLUMN_OPTIONS)).toBe(true);
+      expect(DETAIL_COLUMN_OPTIONS.length).toBeGreaterThan(0);
+    });
+
+    it('should have key, label, and preview for each option', () => {
+      DETAIL_COLUMN_OPTIONS.forEach(option => {
+        expect(option).toHaveProperty('key');
+        expect(option).toHaveProperty('label');
+        expect(option).toHaveProperty('preview');
+      });
+    });
+
+    it('should include detail column keys', () => {
+      const keys = DETAIL_COLUMN_OPTIONS.map(o => o.key);
+      expect(keys).toContain('detailDate');
+      expect(keys).toContain('detailStartTime');
+      expect(keys).toContain('detailEndTime');
+      expect(keys).toContain('detailHours');
+      expect(keys).toContain('detailActivity');
+      expect(keys).toContain('detailContact');
+    });
+  });
+
   describe('resolveFieldValue', () => {
     const mockData = {
       student: {
@@ -72,6 +107,12 @@ describe('pdfTemplateUtils', () => {
       },
       totalHours: 25.5,
       eventName: 'VBS 2026',
+      event: {
+        contactName: 'Jane Smith',
+        contactPhone: '(555) 123-4567',
+        description: 'Summer volunteer program',
+        organizationName: 'First Baptist Church',
+      },
     };
 
     it('should resolve studentName', () => {
@@ -112,8 +153,39 @@ describe('pdfTemplateUtils', () => {
       expect(resolveFieldValue('eventName', mockData)).toBe('VBS 2026');
     });
 
+    it('should resolve contactPerson from event data', () => {
+      expect(resolveFieldValue('contactPerson', mockData)).toBe('Jane Smith');
+    });
+
+    it('should resolve contactPhone from event data', () => {
+      expect(resolveFieldValue('contactPhone', mockData)).toBe('(555) 123-4567');
+    });
+
+    it('should resolve eventDescription from event data', () => {
+      expect(resolveFieldValue('eventDescription', mockData)).toBe('Summer volunteer program');
+    });
+
+    it('should resolve nonprofitName from event data', () => {
+      expect(resolveFieldValue('nonprofitName', mockData)).toBe('First Baptist Church');
+    });
+
+    it('should handle missing event data for new fields gracefully', () => {
+      const dataNoEvent = { student: {}, totalHours: 0, eventName: '' };
+      expect(resolveFieldValue('contactPerson', dataNoEvent)).toBe('');
+      expect(resolveFieldValue('contactPhone', dataNoEvent)).toBe('');
+      expect(resolveFieldValue('eventDescription', dataNoEvent)).toBe('');
+      expect(resolveFieldValue('nonprofitName', dataNoEvent)).toBe('');
+    });
+
     it('should return empty string for unknown field keys', () => {
       expect(resolveFieldValue('unknownKey', mockData)).toBe('');
+    });
+
+    it('should coerce numeric gradeLevel to string', () => {
+      const dataWithNumericGrade = { ...mockData, student: { ...mockData.student, gradeLevel: 10 } };
+      const result = resolveFieldValue('gradeLevel', dataWithNumericGrade);
+      expect(result).toBe('10');
+      expect(typeof result).toBe('string');
     });
 
     it('should handle missing student data gracefully', () => {
@@ -163,6 +235,109 @@ describe('pdfTemplateUtils', () => {
     it('should handle missing activity data', () => {
       expect(resolveActivityColumnValue('activityDates', {}, mockEvent)).toBe('');
       expect(resolveActivityColumnValue('activityHours', {}, mockEvent)).toBe('0');
+    });
+  });
+
+  describe('resolveDetailColumnValue', () => {
+    const mockEntry = {
+      checkInTime: '2026-06-09T08:00:00',
+      checkOutTime: '2026-06-09T12:00:00',
+      hoursWorked: 4,
+      activityName: 'VBS Morning Session',
+    };
+    const mockEvent = {
+      contactName: 'Jane Smith',
+    };
+
+    it('should resolve detailDate from checkInTime', () => {
+      const result = resolveDetailColumnValue('detailDate', mockEntry);
+      expect(result).toBeTruthy();
+      expect(typeof result).toBe('string');
+    });
+
+    it('should resolve detailStartTime', () => {
+      const result = resolveDetailColumnValue('detailStartTime', mockEntry);
+      expect(result).toBeTruthy();
+      expect(typeof result).toBe('string');
+    });
+
+    it('should resolve detailEndTime', () => {
+      const result = resolveDetailColumnValue('detailEndTime', mockEntry);
+      expect(result).toBeTruthy();
+      expect(typeof result).toBe('string');
+    });
+
+    it('should resolve detailHours with 2 decimal places', () => {
+      expect(resolveDetailColumnValue('detailHours', { ...mockEntry, hoursWorked: 4 })).toBe('4.00');
+    });
+
+    it('should calculate detailHours from timestamps when hoursWorked is null', () => {
+      const entry = {
+        checkInTime: new Date('2026-06-09T08:00:00'),
+        checkOutTime: new Date('2026-06-09T12:00:00'),
+        hoursWorked: null,
+      };
+      expect(resolveDetailColumnValue('detailHours', entry)).toBe('4.00');
+    });
+
+    it('should calculate detailHours from Firestore Timestamp seconds', () => {
+      const entry = {
+        checkInTime: { seconds: 1000000, toDate: () => new Date(1000000000) },
+        checkOutTime: { seconds: 1014400, toDate: () => new Date(1014400000) },
+        hoursWorked: 0,
+      };
+      // 14400 seconds = 4 hours
+      expect(resolveDetailColumnValue('detailHours', entry)).toBe('4.00');
+    });
+
+    it('should resolve detailActivity', () => {
+      expect(resolveDetailColumnValue('detailActivity', mockEntry)).toBe('VBS Morning Session');
+    });
+
+    it('should resolve detailContact from event data', () => {
+      expect(resolveDetailColumnValue('detailContact', mockEntry, mockEvent)).toBe('Jane Smith');
+    });
+
+    it('should handle missing event for detailContact', () => {
+      expect(resolveDetailColumnValue('detailContact', mockEntry, null)).toBe('');
+      expect(resolveDetailColumnValue('detailContact', mockEntry)).toBe('');
+    });
+
+    it('should return empty string for unknown column keys', () => {
+      expect(resolveDetailColumnValue('unknown', mockEntry)).toBe('');
+    });
+
+    it('should handle missing entry data gracefully', () => {
+      expect(resolveDetailColumnValue('detailDate', {})).toBe('');
+      expect(resolveDetailColumnValue('detailStartTime', {})).toBe('');
+      expect(resolveDetailColumnValue('detailEndTime', {})).toBe('');
+      expect(resolveDetailColumnValue('detailHours', {})).toBe('0');
+      expect(resolveDetailColumnValue('detailActivity', {})).toBe('');
+    });
+
+    it('should handle Date objects for timestamps', () => {
+      const entryWithDates = {
+        checkInTime: new Date('2026-06-09T08:00:00'),
+        checkOutTime: new Date('2026-06-09T12:00:00'),
+        hoursWorked: 4,
+      };
+      expect(resolveDetailColumnValue('detailDate', entryWithDates)).toBeTruthy();
+      expect(resolveDetailColumnValue('detailStartTime', entryWithDates)).toBeTruthy();
+      expect(resolveDetailColumnValue('detailEndTime', entryWithDates)).toBeTruthy();
+    });
+
+    it('should handle Firestore Timestamp objects with toDate()', () => {
+      const mockTimestamp = (dateStr) => ({
+        toDate: () => new Date(dateStr),
+      });
+      const entryWithTimestamps = {
+        checkInTime: mockTimestamp('2026-06-09T08:00:00'),
+        checkOutTime: mockTimestamp('2026-06-09T12:00:00'),
+        hoursWorked: 4,
+      };
+      expect(resolveDetailColumnValue('detailDate', entryWithTimestamps)).toBeTruthy();
+      expect(resolveDetailColumnValue('detailStartTime', entryWithTimestamps)).toBeTruthy();
+      expect(resolveDetailColumnValue('detailEndTime', entryWithTimestamps)).toBeTruthy();
     });
   });
 
@@ -336,6 +511,176 @@ describe('pdfTemplateUtils', () => {
       };
 
       const result = await generateFilledPdf(templatePdfBytes, [], data);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+
+    it('should generate a PDF with detail table fields', async () => {
+      const fields = [
+        {
+          type: 'detailTable',
+          yPercent: 30,
+          rowHeight: 3,
+          maxRows: 10,
+          page: 0,
+          columns: [
+            { key: 'detailDate', xPercent: 5, fontSize: 10 },
+            { key: 'detailStartTime', xPercent: 25, fontSize: 10 },
+            { key: 'detailEndTime', xPercent: 45, fontSize: 10 },
+            { key: 'detailHours', xPercent: 65, fontSize: 10 },
+          ],
+        },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 8,
+        eventName: 'VBS 2026',
+        timeEntries: [
+          { date: '2026-06-09', checkInTime: '2026-06-09T08:00:00', checkOutTime: '2026-06-09T12:00:00', hoursWorked: 4 },
+          { date: '2026-06-10', checkInTime: '2026-06-10T08:00:00', checkOutTime: '2026-06-10T12:00:00', hoursWorked: 4 },
+        ],
+        event: { organizationName: 'Test Church', contactName: 'Admin' },
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
+      expect(result).toBeInstanceOf(Uint8Array);
+
+      const doc = await PDFDocument.load(result);
+      expect(doc.getPageCount()).toBe(1);
+    });
+
+    it('should respect maxRows limit for detail tables', async () => {
+      const fields = [
+        {
+          type: 'detailTable',
+          yPercent: 20,
+          rowHeight: 5,
+          maxRows: 1,
+          page: 0,
+          columns: [{ key: 'detailHours', xPercent: 10, fontSize: 10 }],
+        },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 0,
+        eventName: '',
+        timeEntries: [
+          { hoursWorked: 4 },
+          { hoursWorked: 3 }, // Should be skipped (maxRows=1)
+        ],
+        event: {},
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+
+    it('should handle empty timeEntries for detail table gracefully', async () => {
+      const fields = [
+        {
+          type: 'detailTable',
+          yPercent: 30,
+          rowHeight: 3,
+          maxRows: 10,
+          page: 0,
+          columns: [{ key: 'detailDate', xPercent: 5, fontSize: 10 }],
+        },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 0,
+        eventName: '',
+        timeEntries: [],
+        event: {},
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+
+    it('should generate a PDF with custom static fields', async () => {
+      const fields = [
+        {
+          type: 'customStatic',
+          label: 'Supervisor Title',
+          customValue: 'Program Director',
+          xPercent: 50,
+          yPercent: 80,
+          fontSize: 12,
+          page: 0,
+        },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 0,
+        eventName: '',
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+
+    it('should handle custom static field with empty value', async () => {
+      const fields = [
+        {
+          type: 'customStatic',
+          label: 'Notes',
+          customValue: '',
+          xPercent: 10,
+          yPercent: 50,
+          fontSize: 10,
+          page: 0,
+        },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 0,
+        eventName: '',
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+
+    it('should handle mixed static, activity, detail, and custom fields', async () => {
+      const fields = [
+        { type: 'static', fieldKey: 'studentName', xPercent: 10, yPercent: 5, fontSize: 14, page: 0 },
+        {
+          type: 'activityTable',
+          yPercent: 20,
+          rowHeight: 3,
+          maxRows: 5,
+          page: 0,
+          columns: [{ key: 'activityOrg', xPercent: 5, fontSize: 10 }],
+        },
+        {
+          type: 'detailTable',
+          yPercent: 50,
+          rowHeight: 3,
+          maxRows: 5,
+          page: 0,
+          columns: [{ key: 'detailDate', xPercent: 5, fontSize: 10 }],
+        },
+        {
+          type: 'customStatic',
+          label: 'Org Name',
+          customValue: 'My Organization',
+          xPercent: 10,
+          yPercent: 90,
+          fontSize: 12,
+          page: 0,
+        },
+        { type: 'static', fieldKey: 'totalHours', xPercent: 80, yPercent: 95, fontSize: 12, page: 0 },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 25.5,
+        eventName: 'VBS 2026',
+        activityLog: [{ name: 'Session', dateDisplay: '6/9', totalHours: '25.50' }],
+        timeEntries: [{ date: '2026-06-09', checkInTime: '2026-06-09T08:00:00', checkOutTime: '2026-06-09T12:00:00', hoursWorked: 4 }],
+        event: { organizationName: 'Church', contactName: 'Admin' },
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
       expect(result).toBeInstanceOf(Uint8Array);
     });
   });

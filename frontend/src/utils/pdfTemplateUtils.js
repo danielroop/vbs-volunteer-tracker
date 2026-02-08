@@ -13,10 +13,14 @@ export const FIELD_KEY_OPTIONS = [
   { key: 'totalHours', label: 'Total Hours', preview: '25.50' },
   { key: 'date', label: 'Current Date', preview: '2/7/2026' },
   { key: 'eventName', label: 'Event Name', preview: 'VBS 2026' },
+  { key: 'contactPerson', label: 'Contact Person', preview: 'John Smith' },
+  { key: 'contactPhone', label: 'Contact Phone', preview: '(555) 123-4567' },
+  { key: 'eventDescription', label: 'Event Description', preview: 'Vacation Bible School volunteer service' },
+  { key: 'nonprofitName', label: 'Non-Profit Organization', preview: 'First Baptist Church' },
 ];
 
 /**
- * Available column keys for ACTIVITY TABLE rows.
+ * Available column keys for ACTIVITY TABLE rows (summary mode).
  * Each row represents one activity from the event's activity log.
  */
 export const ACTIVITY_COLUMN_OPTIONS = [
@@ -27,9 +31,22 @@ export const ACTIVITY_COLUMN_OPTIONS = [
 ];
 
 /**
+ * Available column keys for DETAIL TABLE rows.
+ * Each row represents an individual time entry with date, start time, and end time.
+ */
+export const DETAIL_COLUMN_OPTIONS = [
+  { key: 'detailDate', label: 'Date', preview: '6/9/2026' },
+  { key: 'detailStartTime', label: 'Start Time', preview: '8:00 AM' },
+  { key: 'detailEndTime', label: 'End Time', preview: '12:00 PM' },
+  { key: 'detailHours', label: 'Hours', preview: '4.00' },
+  { key: 'detailActivity', label: 'Activity Name', preview: 'VBS Morning Session' },
+  { key: 'detailContact', label: 'Contact Name', preview: 'Jane Smith' },
+];
+
+/**
  * Resolves a static field key to its value.
  */
-export function resolveFieldValue(fieldKey, { student, totalHours, eventName }) {
+export function resolveFieldValue(fieldKey, { student, totalHours, eventName, event, customStaticFields }) {
   switch (fieldKey) {
     case 'studentName':
       return `${student.firstName || ''} ${student.lastName || ''}`.trim();
@@ -40,7 +57,7 @@ export function resolveFieldValue(fieldKey, { student, totalHours, eventName }) 
     case 'schoolName':
       return student.schoolName || '';
     case 'gradeLevel':
-      return student.gradeLevel || '';
+      return String(student.gradeLevel ?? '');
     case 'gradYear':
       return String(student.gradYear || '');
     case 'totalHours':
@@ -49,6 +66,14 @@ export function resolveFieldValue(fieldKey, { student, totalHours, eventName }) 
       return new Date().toLocaleDateString();
     case 'eventName':
       return eventName || '';
+    case 'contactPerson':
+      return event?.contactName || '';
+    case 'contactPhone':
+      return event?.contactPhone || '';
+    case 'eventDescription':
+      return event?.description || '';
+    case 'nonprofitName':
+      return event?.organizationName || '';
     default:
       return '';
   }
@@ -73,12 +98,63 @@ export function resolveActivityColumnValue(columnKey, activity, event) {
 }
 
 /**
+ * Resolves a detail column key to its value for a single time entry row.
+ */
+export function resolveDetailColumnValue(columnKey, entry, event) {
+  switch (columnKey) {
+    case 'detailDate': {
+      // Support Firestore Timestamps (with toDate()) and regular Date/string values
+      const raw = entry.checkInTime || entry.date;
+      if (!raw) return '';
+      const d = raw.toDate ? raw.toDate() : (raw instanceof Date ? raw : new Date(raw));
+      return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+    }
+    case 'detailStartTime': {
+      if (!entry.checkInTime) return '';
+      const d = entry.checkInTime.toDate ? entry.checkInTime.toDate() : (entry.checkInTime instanceof Date ? entry.checkInTime : new Date(entry.checkInTime));
+      return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    case 'detailEndTime': {
+      if (!entry.checkOutTime) return '';
+      const d = entry.checkOutTime.toDate ? entry.checkOutTime.toDate() : (entry.checkOutTime instanceof Date ? entry.checkOutTime : new Date(entry.checkOutTime));
+      return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    case 'detailHours': {
+      // Use stored hoursWorked if available, otherwise calculate from timestamps
+      if (typeof entry.hoursWorked === 'number' && entry.hoursWorked > 0) {
+        return entry.hoursWorked.toFixed(2);
+      }
+      // Fallback: calculate from checkIn/checkOut timestamps (supports Firestore Timestamps with .seconds)
+      if (entry.checkInTime && entry.checkOutTime) {
+        const inSec = entry.checkInTime.seconds != null ? entry.checkInTime.seconds
+          : (entry.checkInTime.toDate ? entry.checkInTime.toDate().getTime() / 1000
+          : new Date(entry.checkInTime).getTime() / 1000);
+        const outSec = entry.checkOutTime.seconds != null ? entry.checkOutTime.seconds
+          : (entry.checkOutTime.toDate ? entry.checkOutTime.toDate().getTime() / 1000
+          : new Date(entry.checkOutTime).getTime() / 1000);
+        if (!isNaN(inSec) && !isNaN(outSec) && outSec > inSec) {
+          const hours = Math.round(((outSec - inSec) / 3600) * 4) / 4; // Round to nearest 0.25
+          return hours.toFixed(2);
+        }
+      }
+      return '0';
+    }
+    case 'detailActivity':
+      return entry.activityName || '';
+    case 'detailContact':
+      return event?.contactName || '';
+    default:
+      return '';
+  }
+}
+
+/**
  * Generates a filled PDF by overlaying text at mapped field coordinates.
  * Supports both static fields and activity tables with repeating rows.
  *
  * @param {ArrayBuffer} templatePdfBytes - The raw bytes of the template PDF
- * @param {Array} fields - Array of field mappings (static fields and activity tables)
- * @param {Object} data - { student, totalHours, eventName, activityLog, event }
+ * @param {Array} fields - Array of field mappings (static fields, activity tables, detail tables, custom static)
+ * @param {Object} data - { student, totalHours, eventName, activityLog, event, timeEntries }
  * @returns {Promise<Uint8Array>} - The generated PDF bytes
  */
 export async function generateFilledPdf(templatePdfBytes, fields, data) {
@@ -98,7 +174,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
     const { width, height } = page.getSize();
 
     if (field.type === 'activityTable') {
-      // Render repeating activity rows
+      // Render repeating activity rows (summary)
       const activities = data.activityLog || [];
       const maxRows = field.maxRows || 10;
       const rowHeightPct = field.rowHeight || 3;
@@ -112,7 +188,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
           const colFontSize = col.fontSize || 10;
           // Shift baseline down by ascent so top of text aligns with yPercent
           const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
-          const value = resolveActivityColumnValue(col.key, activity, data.event);
+          const value = String(resolveActivityColumnValue(col.key, activity, data.event));
 
           page.drawText(value, {
             x,
@@ -124,13 +200,53 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
           });
         });
       });
+    } else if (field.type === 'detailTable') {
+      // Render repeating detail rows (individual time entries)
+      const entries = data.timeEntries || [];
+      const maxRows = field.maxRows || 10;
+      const rowHeightPct = field.rowHeight || 3;
+      const startYPct = field.yPercent;
+
+      entries.slice(0, maxRows).forEach((entry, rowIndex) => {
+        const rowYPct = startYPct + (rowIndex * rowHeightPct);
+
+        (field.columns || []).forEach((col) => {
+          const x = (col.xPercent / 100) * width;
+          const colFontSize = col.fontSize || 10;
+          const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
+          const value = String(resolveDetailColumnValue(col.key, entry, data.event));
+
+          page.drawText(value, {
+            x,
+            y,
+            size: colFontSize,
+            font,
+            color: rgb(0, 0, 0),
+            maxWidth: col.maxWidth ? (col.maxWidth / 100) * width : undefined,
+          });
+        });
+      });
+    } else if (field.type === 'customStatic') {
+      // Custom static field with admin-defined value
+      const x = (field.xPercent / 100) * width;
+      const fontSize = field.fontSize || 12;
+      const y = height - (field.yPercent / 100) * height - (fontSize * ASCENT_RATIO);
+      const value = String(field.customValue || '');
+
+      page.drawText(value, {
+        x,
+        y,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0),
+      });
     } else {
       // Static field
       const x = (field.xPercent / 100) * width;
       const fontSize = field.fontSize || 12;
       // Shift baseline down by ascent so top of text aligns with yPercent
       const y = height - (field.yPercent / 100) * height - (fontSize * ASCENT_RATIO);
-      const value = resolveFieldValue(field.fieldKey, data);
+      const value = String(resolveFieldValue(field.fieldKey, data));
 
       page.drawText(value, {
         x,

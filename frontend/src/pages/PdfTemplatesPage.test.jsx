@@ -51,12 +51,24 @@ vi.mock('../utils/pdfTemplateUtils', () => ({
     { key: 'studentName', label: 'Student Full Name', preview: 'Jane Smith' },
     { key: 'totalHours', label: 'Total Hours', preview: '25.50' },
     { key: 'date', label: 'Current Date', preview: '2/7/2026' },
+    { key: 'contactPerson', label: 'Contact Person', preview: 'John Smith' },
+    { key: 'contactPhone', label: 'Contact Phone', preview: '(555) 123-4567' },
+    { key: 'eventDescription', label: 'Event Description', preview: 'Vacation Bible School' },
+    { key: 'nonprofitName', label: 'Non-Profit Organization', preview: 'First Baptist Church' },
   ],
   ACTIVITY_COLUMN_OPTIONS: [
     { key: 'activityOrg', label: 'Organization + Activity', preview: 'First Baptist VBS AM' },
     { key: 'activityDates', label: 'Date(s) of Service', preview: '6/9/26 - 6/13/26' },
     { key: 'activityContact', label: 'Contact Name', preview: 'Jane Smith' },
     { key: 'activityHours', label: 'Hours Completed', preview: '12.50' },
+  ],
+  DETAIL_COLUMN_OPTIONS: [
+    { key: 'detailDate', label: 'Date', preview: '6/9/2026' },
+    { key: 'detailStartTime', label: 'Start Time', preview: '8:00 AM' },
+    { key: 'detailEndTime', label: 'End Time', preview: '12:00 PM' },
+    { key: 'detailHours', label: 'Hours', preview: '4.00' },
+    { key: 'detailActivity', label: 'Activity Name', preview: 'VBS Morning Session' },
+    { key: 'detailContact', label: 'Contact Name', preview: 'Jane Smith' },
   ],
   getPdfPageDimensions: vi.fn(() => Promise.resolve({ width: 612, height: 792, pageCount: 1 })),
   renderPdfPageToImage: vi.fn(() => Promise.resolve({ dataUrl: 'data:image/png;base64,test', width: 1224, height: 1584, pageCount: 1 })),
@@ -296,6 +308,113 @@ describe('PdfTemplatesPage', () => {
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Save Mappings/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should show Place Detail Table button', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Place Detail Table/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should show Place Custom Field button', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Place Custom Field/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should show detail table configuration when Place Detail Table is clicked', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Place Detail Table/i })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Place Detail Table/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Detail Table Configuration')).toBeInTheDocument();
+      });
+    });
+
+    it('should show custom static field configuration when Place Custom Field is clicked', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Place Custom Field/i })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Place Custom Field/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Custom Static Field')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('e.g., Supervisor Title')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('e.g., Program Director')).toBeInTheDocument();
+      });
+    });
+
+    it('should show new field options in static field dropdown', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user);
+
+      await waitFor(() => {
+        const select = screen.getAllByRole('combobox')[0];
+        expect(select).toBeInTheDocument();
+      });
+
+      const options = screen.getAllByRole('option');
+      const optionLabels = options.map(o => o.textContent);
+      expect(optionLabels).toContain('Contact Person');
+      expect(optionLabels).toContain('Contact Phone');
+      expect(optionLabels).toContain('Event Description');
+      expect(optionLabels).toContain('Non-Profit Organization');
+    });
+
+    it('should display custom static fields in mapped fields list', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user, {
+        name: 'Custom Test',
+        fields: [
+          { id: 'cf1', type: 'customStatic', label: 'Supervisor', customValue: 'Dr. Smith', xPercent: 10, yPercent: 50, fontSize: 12, page: 0 },
+        ],
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Mapped Fields \(1\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Custom: Supervisor/)).toBeInTheDocument();
+      });
+    });
+
+    it('should display detail table fields in mapped fields list', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user, {
+        name: 'Detail Test',
+        fields: [
+          {
+            id: 'dt1',
+            type: 'detailTable',
+            label: 'Detail Table',
+            xPercent: 5,
+            yPercent: 30,
+            rowHeight: 3,
+            maxRows: 10,
+            columns: [{ key: 'detailDate', label: 'Date', xPercent: 5, fontSize: 10 }],
+            page: 0,
+          },
+        ],
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Mapped Fields \(1\)/)).toBeInTheDocument();
+        expect(screen.getByText('Detail Table')).toBeInTheDocument();
       });
     });
   });

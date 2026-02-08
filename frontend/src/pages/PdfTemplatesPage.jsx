@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db, storage } from '../utils/firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { FIELD_KEY_OPTIONS, ACTIVITY_COLUMN_OPTIONS, getPdfPageDimensions, renderPdfPageToImage } from '../utils/pdfTemplateUtils';
+import { FIELD_KEY_OPTIONS, ACTIVITY_COLUMN_OPTIONS, DETAIL_COLUMN_OPTIONS, getPdfPageDimensions, renderPdfPageToImage } from '../utils/pdfTemplateUtils';
 import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
@@ -219,7 +219,7 @@ function FieldMapperModal({ isOpen, template, onClose }) {
   const [selectedFieldKey, setSelectedFieldKey] = useState(FIELD_KEY_OPTIONS[0].key);
   const [fontSize, setFontSize] = useState(12);
   const [saving, setSaving] = useState(false);
-  const [placingMode, setPlacingMode] = useState(null); // null, 'static', 'activityTable'
+  const [placingMode, setPlacingMode] = useState(null); // null, 'static', 'activityTable', 'detailTable', 'customStatic'
   const [currentPage, setCurrentPage] = useState(1);
   const [pdfImage, setPdfImage] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(true);
@@ -244,6 +244,24 @@ function FieldMapperModal({ isOpen, template, onClose }) {
       enabled: true,
     }))
   );
+
+  // Detail table config state
+  const [dtRowHeight, setDtRowHeight] = useState(3);
+  const [dtMaxRows, setDtMaxRows] = useState(10);
+  const [dtColumns, setDtColumns] = useState(
+    DETAIL_COLUMN_OPTIONS.map((opt, i) => ({
+      key: opt.key,
+      label: opt.label,
+      xPercent: 5 + (i * 19),
+      fontSize: 10,
+      maxWidth: 18,
+      enabled: true,
+    }))
+  );
+
+  // Custom static field config state
+  const [customLabel, setCustomLabel] = useState('');
+  const [customValue, setCustomValue] = useState('');
 
   const previewRef = useRef(null);
   const pageWidth = template.pageWidth || 612;
@@ -345,7 +363,7 @@ function FieldMapperModal({ isOpen, template, onClose }) {
         {
           id: newFieldId,
           type: 'activityTable',
-          label: 'Activity Table',
+          label: 'Activity Table (Summary)',
           xPercent,
           yPercent,
           rowHeight: atRowHeight,
@@ -356,11 +374,52 @@ function FieldMapperModal({ isOpen, template, onClose }) {
       ]);
       setPlacingMode(null);
       setSelectedFieldId(newFieldId);
+    } else if (placingMode === 'detailTable') {
+      const { xPercent, yPercent } = getPercentFromEvent(e);
+      const enabledCols = dtColumns.filter(c => c.enabled).map(c => ({ ...c }));
+
+      const newFieldId = `field_${Date.now()}`;
+      setFields(prev => [
+        ...prev,
+        {
+          id: newFieldId,
+          type: 'detailTable',
+          label: 'Detail Table',
+          xPercent,
+          yPercent,
+          rowHeight: dtRowHeight,
+          maxRows: dtMaxRows,
+          columns: enabledCols,
+          page: currentPage - 1,
+        }
+      ]);
+      setPlacingMode(null);
+      setSelectedFieldId(newFieldId);
+    } else if (placingMode === 'customStatic') {
+      if (!customLabel.trim()) return;
+      const { xPercent, yPercent } = getPercentFromEvent(e);
+
+      const newFieldId = `field_${Date.now()}`;
+      setFields(prev => [
+        ...prev,
+        {
+          id: newFieldId,
+          type: 'customStatic',
+          label: customLabel.trim(),
+          customValue: customValue.trim(),
+          xPercent,
+          yPercent,
+          fontSize,
+          page: currentPage - 1,
+        }
+      ]);
+      setPlacingMode(null);
+      setSelectedFieldId(newFieldId);
     } else {
       // Deselect if clicking on empty area
       setSelectedFieldId(null);
     }
-  }, [placingMode, dragging, justDragged, selectedFieldKey, fontSize, currentPage, getPercentFromEvent, atRowHeight, atMaxRows, atColumns]);
+  }, [placingMode, dragging, justDragged, selectedFieldKey, fontSize, currentPage, getPercentFromEvent, atRowHeight, atMaxRows, atColumns, dtRowHeight, dtMaxRows, dtColumns, customLabel, customValue]);
 
   // --- Drag support ---
   // For static fields: drag moves xPercent and yPercent
@@ -524,6 +583,21 @@ function FieldMapperModal({ isOpen, template, onClose }) {
             >
               {placingMode === 'activityTable' ? 'Cancel' : 'Place Activity Table'}
             </Button>
+            <Button
+              size="sm"
+              variant={placingMode === 'detailTable' ? 'danger' : 'secondary'}
+              onClick={() => setPlacingMode(placingMode === 'detailTable' ? null : 'detailTable')}
+            >
+              {placingMode === 'detailTable' ? 'Cancel' : 'Place Detail Table'}
+            </Button>
+            <div className="border-l border-gray-300 h-8 mx-1" />
+            <Button
+              size="sm"
+              variant={placingMode === 'customStatic' ? 'danger' : 'secondary'}
+              onClick={() => setPlacingMode(placingMode === 'customStatic' ? null : 'customStatic')}
+            >
+              {placingMode === 'customStatic' ? 'Cancel' : 'Place Custom Field'}
+            </Button>
             <div className="ml-auto flex items-center gap-2">
               <label className="text-xs text-gray-500 flex items-center gap-1">
                 <input
@@ -625,6 +699,132 @@ function FieldMapperModal({ isOpen, template, onClose }) {
               <p className="text-xs text-primary-600">Click on the PDF where the first row should start. Drag columns to position them independently.</p>
             </div>
           )}
+
+          {/* Detail table config (shown when placing detail table) */}
+          {placingMode === 'detailTable' && (
+            <div className="border-t border-gray-200 pt-3 space-y-2">
+              <p className="text-xs font-bold text-gray-600 uppercase">Detail Table Configuration</p>
+              <p className="text-xs text-gray-500">Shows individual time entries with date, start time, and end time (no aggregation).</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Row Height (%)</label>
+                  <input
+                    type="number"
+                    value={dtRowHeight}
+                    onChange={(e) => setDtRowHeight(Number(e.target.value))}
+                    min={1}
+                    max={15}
+                    step={0.5}
+                    className="input-field text-sm w-20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max Rows</label>
+                  <input
+                    type="number"
+                    value={dtMaxRows}
+                    onChange={(e) => setDtMaxRows(Number(e.target.value))}
+                    min={1}
+                    max={30}
+                    className="input-field text-sm w-16"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                {dtColumns.map((col, idx) => (
+                  <div key={col.key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={col.enabled}
+                      onChange={(e) => {
+                        const updated = [...dtColumns];
+                        updated[idx] = { ...updated[idx], enabled: e.target.checked };
+                        setDtColumns(updated);
+                      }}
+                      className="rounded"
+                    />
+                    <span className="w-40 text-gray-700">{col.label}</span>
+                    <label className="text-xs text-gray-500">X%:</label>
+                    <input
+                      type="number"
+                      value={col.xPercent}
+                      onChange={(e) => {
+                        const updated = [...dtColumns];
+                        updated[idx] = { ...updated[idx], xPercent: Number(e.target.value) };
+                        setDtColumns(updated);
+                      }}
+                      min={0}
+                      max={100}
+                      className="input-field text-sm w-16"
+                    />
+                    <label className="text-xs text-gray-500">Size:</label>
+                    <input
+                      type="number"
+                      value={col.fontSize}
+                      onChange={(e) => {
+                        const updated = [...dtColumns];
+                        updated[idx] = { ...updated[idx], fontSize: Number(e.target.value) };
+                        setDtColumns(updated);
+                      }}
+                      min={6}
+                      max={24}
+                      className="input-field text-sm w-14"
+                    />
+                    <label className="text-xs text-gray-500">Width%:</label>
+                    <input
+                      type="number"
+                      value={col.maxWidth || 0}
+                      onChange={(e) => {
+                        const updated = [...dtColumns];
+                        updated[idx] = { ...updated[idx], maxWidth: Number(e.target.value) || 0 };
+                        setDtColumns(updated);
+                      }}
+                      min={0}
+                      max={100}
+                      className="input-field text-sm w-14"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-primary-600">Click on the PDF where the first row should start. Drag columns to position them independently.</p>
+            </div>
+          )}
+
+          {/* Custom static field config (shown when placing custom field) */}
+          {placingMode === 'customStatic' && (
+            <div className="border-t border-gray-200 pt-3 space-y-2">
+              <p className="text-xs font-bold text-gray-600 uppercase">Custom Static Field</p>
+              <p className="text-xs text-gray-500">Create a field with your own label and value that stays the same on every generated form.</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Label</label>
+                  <input
+                    type="text"
+                    value={customLabel}
+                    onChange={(e) => setCustomLabel(e.target.value)}
+                    placeholder="e.g., Supervisor Title"
+                    className="input-field text-sm w-48"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Value</label>
+                  <input
+                    type="text"
+                    value={customValue}
+                    onChange={(e) => setCustomValue(e.target.value)}
+                    placeholder="e.g., Program Director"
+                    className="input-field text-sm w-48"
+                  />
+                </div>
+              </div>
+              {!customLabel.trim() && (
+                <p className="text-xs text-amber-600">Please enter a label before placing the field.</p>
+              )}
+              {customLabel.trim() && (
+                <p className="text-xs text-primary-600">Click on the PDF to place the custom field.</p>
+              )}
+            </div>
+          )}
         </div>
 
         {placingMode === 'static' && (
@@ -714,13 +914,22 @@ function FieldMapperModal({ isOpen, template, onClose }) {
                   onClick={() => setSelectedFieldId(field.id)}
                 >
                   <div>
-                    <span className={`font-medium ${field.type === 'activityTable' ? 'text-green-700' : 'text-gray-900'}`}>
-                      {field.type === 'activityTable' ? 'Activity Table' : field.label}
+                    <span className={`font-medium ${
+                      field.type === 'activityTable' ? 'text-green-700'
+                      : field.type === 'detailTable' ? 'text-purple-700'
+                      : field.type === 'customStatic' ? 'text-amber-700'
+                      : 'text-gray-900'
+                    }`}>
+                      {field.type === 'activityTable' ? 'Activity Table (Summary)'
+                        : field.type === 'detailTable' ? 'Detail Table'
+                        : field.type === 'customStatic' ? `Custom: ${field.label}`
+                        : field.label}
                     </span>
                     <span className="text-gray-400 ml-2 text-xs">
                       ({field.xPercent.toFixed(1)}%, {field.yPercent.toFixed(1)}%)
-                      {field.type !== 'activityTable' && ` ${field.fontSize}pt`}
-                      {field.type === 'activityTable' && ` ${field.maxRows} rows, ${(field.columns || []).length} cols`}
+                      {field.type !== 'activityTable' && field.type !== 'detailTable' && ` ${field.fontSize}pt`}
+                      {(field.type === 'activityTable' || field.type === 'detailTable') && ` ${field.maxRows} rows, ${(field.columns || []).length} cols`}
+                      {field.type === 'customStatic' && ` = "${field.customValue}"`}
                       {totalPages > 1 && ` | p${(field.page || 0) + 1}`}
                     </span>
                   </div>
@@ -746,11 +955,14 @@ function FieldMapperModal({ isOpen, template, onClose }) {
  * Activity tables: anchor label + independently draggable column markers.
  */
 function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown, onRemove, isDragging, draggingColKey }) {
-  const isTable = field.type === 'activityTable';
+  const isTable = field.type === 'activityTable' || field.type === 'detailTable';
+  const isDetail = field.type === 'detailTable';
 
   if (!isTable) {
-    // --- Static field ---
-    const previewText = FIELD_KEY_OPTIONS.find(o => o.key === field.fieldKey)?.preview || field.label;
+    // --- Static field (including customStatic) ---
+    const previewText = field.type === 'customStatic'
+      ? (field.customValue || field.label)
+      : (FIELD_KEY_OPTIONS.find(o => o.key === field.fieldKey)?.preview || field.label);
     const labelText = field.label;
     // WYSIWYG font size: PDF points * (container px / PDF page width)
     const displayFontSize = field.fontSize * previewScale;
@@ -812,8 +1024,15 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
     );
   }
 
-  // --- Activity table ---
+  // --- Activity/Detail table ---
   const columns = field.columns || [];
+  const tableBgColor = isDetail ? 'bg-purple-600' : 'bg-green-600';
+  const tableRingColor = isDetail ? 'ring-purple-400' : 'ring-green-400';
+  const tableLabel = isDetail ? 'Detail Table' : 'Activity Table (Summary)';
+  const colBgActive = isDetail ? 'bg-purple-700' : 'bg-green-700';
+  const colBgSelected = isDetail ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-300' : 'bg-green-100 text-green-800 ring-1 ring-green-300';
+  const colBgDefault = isDetail ? 'bg-purple-50 text-purple-700' : 'bg-green-50 text-green-700';
+  const columnOptions = isDetail ? DETAIL_COLUMN_OPTIONS : ACTIVITY_COLUMN_OPTIONS;
 
   return (
     <>
@@ -827,11 +1046,11 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
         }}
         onMouseDown={(e) => onMouseDown(e, null)}
       >
-        <div className={`inline-flex items-center gap-1 ${isSelected ? 'ring-2 ring-green-400 rounded' : ''}`}
+        <div className={`inline-flex items-center gap-1 ${isSelected ? `ring-2 ${tableRingColor} rounded` : ''}`}
           style={{ transform: 'translateY(-100%)' }}
         >
-          <span className="bg-green-600 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
-            Activity Table ({field.maxRows} rows)
+          <span className={`${tableBgColor} text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap`}>
+            {tableLabel} ({field.maxRows} rows)
           </span>
           <button
             onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(); }}
@@ -845,7 +1064,7 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
 
       {/* Column position markers - each independently draggable */}
       {columns.map(col => {
-        const colPreview = ACTIVITY_COLUMN_OPTIONS.find(o => o.key === col.key)?.preview || col.label;
+        const colPreview = columnOptions.find(o => o.key === col.key)?.preview || col.label;
         const displayFontSize = (col.fontSize || 10) * previewScale;
         const isColDragging = draggingColKey === col.key;
 
@@ -864,10 +1083,10 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
             >
               <span className={`text-[8px] px-1 py-0.5 rounded whitespace-nowrap ${
                 isColDragging
-                  ? 'bg-green-700 text-white'
+                  ? `${colBgActive} text-white`
                   : isSelected
-                    ? 'bg-green-100 text-green-800 ring-1 ring-green-300'
-                    : 'bg-green-50 text-green-700'
+                    ? colBgSelected
+                    : colBgDefault
               }`}>
                 {col.label}
               </span>
@@ -911,16 +1130,26 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
  * Shows above the PDF preview for immediate visibility.
  */
 function SelectedFieldEditor({ field, onUpdate, onRemove }) {
-  if (field.type === 'activityTable') {
+  if (field.type === 'activityTable' || field.type === 'detailTable') {
+    const isDetail = field.type === 'detailTable';
+    const bgColor = isDetail ? 'bg-purple-50' : 'bg-green-50';
+    const borderColor = isDetail ? 'border-purple-200' : 'border-green-200';
+    const titleColor = isDetail ? 'text-purple-800' : 'text-green-800';
+    const labelColor = isDetail ? 'text-purple-700' : 'text-green-700';
+    const colLabelColor = isDetail ? 'text-purple-600' : 'text-green-600';
+    const colTextColor = isDetail ? 'text-purple-800' : 'text-green-800';
+    const colBorderColor = isDetail ? 'border-purple-100' : 'border-green-100';
+    const title = isDetail ? 'Edit Detail Table' : 'Edit Activity Table (Summary)';
+
     return (
-      <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-3">
+      <div className={`p-4 ${bgColor} border ${borderColor} rounded-lg space-y-3`}>
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-bold text-green-800">Edit Activity Table</h4>
+          <h4 className={`text-sm font-bold ${titleColor}`}>{title}</h4>
           <Button size="sm" variant="danger" onClick={onRemove}>Remove Table</Button>
         </div>
         <div className="flex flex-wrap gap-3">
           <div>
-            <label className="block text-xs text-green-700 mb-1">Row Height (%)</label>
+            <label className={`block text-xs ${labelColor} mb-1`}>Row Height (%)</label>
             <input
               type="number"
               value={field.rowHeight}
@@ -932,18 +1161,18 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
             />
           </div>
           <div>
-            <label className="block text-xs text-green-700 mb-1">Max Rows</label>
+            <label className={`block text-xs ${labelColor} mb-1`}>Max Rows</label>
             <input
               type="number"
               value={field.maxRows}
               onChange={(e) => onUpdate({ maxRows: Number(e.target.value) })}
               min={1}
-              max={20}
+              max={isDetail ? 30 : 20}
               className="input-field text-sm w-16"
             />
           </div>
           <div>
-            <label className="block text-xs text-green-700 mb-1">Y Position (%)</label>
+            <label className={`block text-xs ${labelColor} mb-1`}>Y Position (%)</label>
             <input
               type="number"
               value={field.yPercent}
@@ -956,11 +1185,11 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
           </div>
         </div>
         <div className="space-y-2">
-          <p className="text-xs font-bold text-green-700 uppercase">Columns (drag on PDF to position, or edit X% below)</p>
+          <p className={`text-xs font-bold ${labelColor} uppercase`}>Columns (drag on PDF to position, or edit X% below)</p>
           {(field.columns || []).map((col, idx) => (
-            <div key={col.key} className="flex items-center gap-2 text-sm bg-white p-2 rounded border border-green-100">
-              <span className="w-40 text-green-800 font-medium">{col.label}</span>
-              <label className="text-xs text-green-600">X%:</label>
+            <div key={col.key} className={`flex items-center gap-2 text-sm bg-white p-2 rounded border ${colBorderColor}`}>
+              <span className={`w-40 ${colTextColor} font-medium`}>{col.label}</span>
+              <label className={`text-xs ${colLabelColor}`}>X%:</label>
               <input
                 type="number"
                 value={col.xPercent}
@@ -974,7 +1203,7 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
                 step={0.5}
                 className="input-field text-sm w-16"
               />
-              <label className="text-xs text-green-600">Font:</label>
+              <label className={`text-xs ${colLabelColor}`}>Font:</label>
               <input
                 type="number"
                 value={col.fontSize}
@@ -987,7 +1216,7 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
                 max={24}
                 className="input-field text-sm w-14"
               />
-              <label className="text-xs text-green-600">MaxW%:</label>
+              <label className={`text-xs ${colLabelColor}`}>MaxW%:</label>
               <input
                 type="number"
                 value={col.maxWidth || 0}
@@ -1002,6 +1231,72 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
               />
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (field.type === 'customStatic') {
+    return (
+      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-bold text-amber-800">Edit Custom Field: {field.label}</h4>
+          <Button size="sm" variant="danger" onClick={onRemove}>Remove</Button>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div>
+            <label className="block text-xs text-amber-700 mb-1">Label</label>
+            <input
+              type="text"
+              value={field.label}
+              onChange={(e) => onUpdate({ label: e.target.value })}
+              className="input-field text-sm w-48"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-amber-700 mb-1">Value</label>
+            <input
+              type="text"
+              value={field.customValue || ''}
+              onChange={(e) => onUpdate({ customValue: e.target.value })}
+              className="input-field text-sm w-48"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-amber-700 mb-1">Font Size</label>
+            <input
+              type="number"
+              value={field.fontSize}
+              onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
+              min={6}
+              max={36}
+              className="input-field text-sm w-16"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-amber-700 mb-1">X Position (%)</label>
+            <input
+              type="number"
+              value={field.xPercent}
+              onChange={(e) => onUpdate({ xPercent: Number(e.target.value) })}
+              min={0}
+              max={100}
+              step={0.1}
+              className="input-field text-sm w-20"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-amber-700 mb-1">Y Position (%)</label>
+            <input
+              type="number"
+              value={field.yPercent}
+              onChange={(e) => onUpdate({ yPercent: Number(e.target.value) })}
+              min={0}
+              max={100}
+              step={0.1}
+              className="input-field text-sm w-20"
+            />
+          </div>
         </div>
       </div>
     );

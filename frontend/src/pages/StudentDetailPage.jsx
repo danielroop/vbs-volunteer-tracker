@@ -284,6 +284,10 @@ export default function StudentDetailPage() {
 
     // Generate and download filled PDF from template
     const handleGeneratePdf = async () => {
+        if (hasUncheckedOutEntries) {
+            alert('Cannot generate PDF: This student has time entries that are not checked out. Please ensure all entries have checkout times before printing.');
+            return;
+        }
         const template = pdfTemplates.find(t => t.id === selectedTemplateId);
         if (!template) {
             alert('Please select a PDF template first.');

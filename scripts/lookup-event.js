@@ -1,3 +1,14 @@
+/**
+ * lookup-event.js
+ * Fetch and display event data by ID
+ *
+ * Usage:
+ * node lookup-event.js <eventId>
+ *
+ * Example:
+ * node lookup-event.js qyJ9b9SOB0zzIrenV5ev
+ */
+
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
@@ -41,5 +52,14 @@ async function getEventJson(eventId) {
   }
 }
 
-// The specific ID you requested
-getEventJson('9hkuf2x6K8YcIdtuMmbG');
+// Get event ID from command line argument
+const eventId = process.argv[2];
+
+if (!eventId) {
+  console.error('❌ Error: Event ID is required');
+  console.log('Usage: node lookup-event.js <eventId>');
+  console.log('Example: node lookup-event.js qyJ9b9SOB0zzIrenV5ev');
+  process.exit(1);
+}
+
+getEventJson(eventId);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 /**
@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
  * to provide a streamlined experience during check-in/check-out operations.
  */
 export default function ScannerHeader() {
-  const { userProfile, signOut, canAccessAdmin } = useAuth();
+  const { signOut, canAccessAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -18,34 +18,29 @@ export default function ScannerHeader() {
     navigate('/login');
   };
 
+  const handleExit = async () => {
+    if (canAccessAdmin()) {
+      navigate('/admin');
+      return;
+    }
+
+    await handleSignOut();
+  };
+
   return (
     <div className="bg-white shadow-sm border-b mb-6">
-      <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Left: User Info & Role Badge */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">{userProfile?.name || userProfile?.email}</span>
-          <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-100 text-blue-700">
-            {userProfile?.role === 'admin' ? 'Admin' : 'Volunteer'}
-          </span>
+      <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary-600">Scan Mode</p>
+          <h1 className="text-sm font-black text-gray-950">VBS Volunteer Tracker</h1>
         </div>
 
-        {/* Right: Navigation & Actions */}
-        <div className="flex items-center gap-2">
-          {canAccessAdmin() && (
-            <Link
-              to="/admin"
-              className="text-xs font-bold text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-colors"
-            >
-              Dashboard
-            </Link>
-          )}
-          <button
-            onClick={handleSignOut}
-            className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            Logout
-          </button>
-        </div>
+        <button
+          onClick={handleExit}
+          className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 transition-colors hover:bg-gray-200"
+        >
+          Exit Scan Mode
+        </button>
       </div>
     </div>
   );

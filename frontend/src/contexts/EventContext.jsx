@@ -1,20 +1,32 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../utils/firebase';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  onSnapshot, 
-  orderBy, 
-  limit, 
-  updateDoc // Added this import
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  onSnapshot,
+  updateDoc
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
 const EventContext = createContext(null);
+
+const getCreatedMillis = (event) => {
+  const createdAt = event.createdAt;
+  if (!createdAt) return 0;
+  if (typeof createdAt.toMillis === 'function') return createdAt.toMillis();
+  if (typeof createdAt.seconds === 'number') return createdAt.seconds * 1000;
+  return new Date(createdAt).getTime() || 0;
+};
+
+const sortEvents = (eventList) => {
+  return [...eventList].sort((a, b) => {
+    const createdDiff = getCreatedMillis(b) - getCreatedMillis(a);
+    if (createdDiff !== 0) return createdDiff;
+    return (b.name || '').localeCompare(a.name || '');
+  });
+};
 
 export function useEvent() {
   const context = useContext(EventContext);
@@ -26,6 +38,7 @@ export function useEvent() {
 
 export function EventProvider({ children }) {
   const [currentEvent, setCurrentEvent] = useState(null);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { user } = useAuth();
@@ -53,12 +66,36 @@ export function EventProvider({ children }) {
     return () => unsubscribe();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) {
+      setEvents([]);
+      return;
+    }
+
+    const unsubscribe = onSnapshot(collection(db, 'events'), (snapshot) => {
+      const eventList = snapshot.docs.map(eventDoc => ({
+        id: eventDoc.id,
+        ...eventDoc.data()
+      }));
+      setEvents(sortEvents(eventList));
+    }, (err) => {
+      console.error('Error loading events:', err);
+      setError('Failed to load events');
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   /**
    * Updates the Admin's selected event in Firestore
    */
   const switchActiveEvent = async (eventId) => {
     if (!user) return;
     try {
+      const selectedEvent = events.find(event => event.id === eventId);
+      if (selectedEvent) {
+        setCurrentEvent(selectedEvent);
+      }
       const adminRef = doc(db, 'admins', user.uid);
       // This persistent update ensures your selection follows you across devices
       await updateDoc(adminRef, { selectedEventId: eventId });
@@ -69,10 +106,13 @@ export function EventProvider({ children }) {
   };
 
   const loadDefaultEvent = async () => {
-    const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'), limit(1));
-    const snap = await getDocs(q);
+    const snap = await getDocs(collection(db, 'events'));
     if (!snap.empty) {
-      setCurrentEvent({ id: snap.docs[0].id, ...snap.docs[0].data() });
+      const eventList = sortEvents(snap.docs.map(eventDoc => ({
+        id: eventDoc.id,
+        ...eventDoc.data()
+      })));
+      setCurrentEvent(eventList[0]);
     }
   };
 
@@ -106,6 +146,7 @@ export function EventProvider({ children }) {
 
   const value = {
     currentEvent,
+    events,
     loading,
     error,
     loadEventById,

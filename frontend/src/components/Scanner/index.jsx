@@ -278,8 +278,9 @@ export default function Scanner() {
   const actionColor = urlAction === 'checkout' ? 'red' : 'green';
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <ScannerHeader />
+      <div className="max-w-2xl mx-auto p-4">
         <div className="bg-white rounded-lg shadow-md p-6 mb-4 border-t-4 border-primary-600">
           <div className="flex justify-between items-center">
             <div>

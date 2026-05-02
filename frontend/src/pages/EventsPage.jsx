@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../utils/firebase';
 import { collection, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
-import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 
@@ -96,14 +95,12 @@ export default function EventsPage() {
 
     if (loading) return (
         <div className="min-h-screen bg-gray-50">
-            <Header />
             <div className="p-20 text-center"><Spinner size="lg" /></div>
         </div>
     );
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header />
             <div className="p-6 max-w-7xl mx-auto">
                 {/* PAGE HEADER */}
                 <div className="mb-8">

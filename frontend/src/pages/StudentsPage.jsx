@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
-import { db } from '../utils/firebase';
-import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
+import { db, storage } from '../utils/firebase';
+import { collection, onSnapshot, addDoc, serverTimestamp, query, where, doc } from 'firebase/firestore';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 import { useEvent } from '../contexts/EventContext';
-import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
@@ -19,9 +20,11 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [printMode, setPrintMode] = useState(false);
   const [badgePrintMode, setBadgePrintMode] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState(new Set());
+  const [pdfTemplates, setPdfTemplates] = useState([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState(null);
+  const [printingReports, setPrintingReports] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -31,27 +34,24 @@ export default function StudentsPage() {
     gradYear: ''
   });
 
-  // Watch for printMode changes and reset after print dialog closes
-  useEffect(() => {
-    if (!printMode) return;
-    
-    const timer = setTimeout(() => {
-      setPrintMode(false);
-    }, 3000);
-    
-    return () => clearTimeout(timer);
-  }, [printMode]);
-
   // Watch for badgePrintMode changes and reset after print dialog closes
   useEffect(() => {
     if (!badgePrintMode) return;
-    
-    const timer = setTimeout(() => {
-      setBadgePrintMode(false);
-    }, 3000);
-    
+    const timer = setTimeout(() => setBadgePrintMode(false), 3000);
     return () => clearTimeout(timer);
-  }, [badgePrintMode]);  useEffect(() => {
+  }, [badgePrintMode]);
+
+  useEffect(() => {
+    const unsubTemplates = onSnapshot(collection(db, 'pdfTemplates'), (snapshot) => {
+      setPdfTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    const unsubDefaults = onSnapshot(doc(db, 'settings', 'pdfDefaults'), (snap) => {
+      setDefaultTemplateId(snap.exists() ? snap.data().defaultTemplateId : null);
+    });
+    return () => { unsubTemplates(); unsubDefaults(); };
+  }, []);
+
+  useEffect(() => {
     // 1. Listen for all student records
     const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -237,8 +237,136 @@ export default function StudentsPage() {
     });
   };
 
-  const handlePrintReports = () => {
-    printElementById('print-all-forms', 'Service Logs', setPrintMode);
+  // Returns the effective PDF template for a student (own → default → null)
+  const getEffectiveTemplate = (student) => {
+    const id = student.pdfTemplateId || defaultTemplateId;
+    return id ? pdfTemplates.find(t => t.id === id) || null : null;
+  };
+
+  // Builds the HTML string for one student's OCPS form (used as HTML fallback)
+  const buildStudentFormHtml = (student, activityLog, grandTotal) => {
+    const orgName = currentEvent?.organizationName || '';
+    const contactName = currentEvent?.contactName || '---';
+    const activityRows = activityLog.map(act => `
+      <tr class="h9">
+        <td>${orgName} ${act.name || ''}</td>
+        <td style="text-align:center">${act.dateDisplay}</td>
+        <td>${contactName}</td>
+        <td></td>
+        <td style="font-weight:bold">${act.totalHours}</td>
+      </tr>`).join('');
+    const blankRows = Array.from({ length: Math.max(0, 10 - activityLog.length) })
+      .map(() => '<tr style="height:36px"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+
+    return `<div class="ocps-form-container">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border-bottom:2px solid black;padding-bottom:4px">
+        <div class="ocps-logo">OCPS</div>
+        <h1 style="font-size:13pt;font-weight:bold;text-align:center;flex:1">Community/Work Service Log and Reflection</h1>
+      </div>
+      <table style="margin-bottom:4px"><tbody>
+        <tr>
+          <td style="width:33%;border:none">Student ID #: <span class="field-box" style="min-width:100px"></span></td>
+          <td style="border:none">Student Name: <span class="field-box" style="min-width:220px">${student.firstName} ${student.lastName}</span></td>
+        </tr>
+        <tr>
+          <td style="border:none">School Name: <span class="field-box" style="min-width:200px">${student.schoolName || ''}</span></td>
+          <td style="border:none;text-align:right">Graduation Year: <span class="field-box" style="min-width:80px">${student.gradYear || '____'}</span></td>
+        </tr>
+      </tbody></table>
+      <p style="font-size:7.5pt;margin:2px 0">Social/Civic Issue/Professional Area Addressing with Service Activity Log (Optional):</p>
+      <div style="border-bottom:1px solid black;width:100%;margin-bottom:4px;height:16px"></div>
+      <p style="font-weight:bold;font-size:8pt;margin:2px 0">Description of Volunteer/Paid Work Activity:</p>
+      <div style="border-bottom:1px solid black;width:100%;margin-bottom:8px;height:16px"></div>
+      <table style="margin-bottom:8px;text-align:center"><thead>
+        <tr style="background:#f3f4f6;font-size:8pt">
+          <th style="width:20%">Service Organization/Business</th>
+          <th style="width:30%">Date(s) of Service Activity/Work</th>
+          <th style="width:15%">Contact Name</th>
+          <th style="width:20%">Signature of Contact</th>
+          <th style="width:15%">Hours Completed</th>
+        </tr>
+      </thead><tbody>
+        ${activityRows}${blankRows}
+        <tr>
+          <td colspan="4" style="text-align:right;font-weight:bold;text-transform:uppercase">Total:</td>
+          <td style="font-weight:bold;background:#f9fafb">${grandTotal.toFixed(2)}</td>
+        </tr>
+      </tbody></table>
+      <div style="margin-top:4px">
+        <p style="font-weight:bold;font-size:7.5pt;margin:0">Reflection on Service Activity/Work (attach additional pages if necessary):</p>
+        <p style="font-size:6.5pt;font-style:italic;margin:2px 0">Attach a copy of your pay stub for work hours if applicable. Complete the reflection below...</p>
+        <div class="reflection-box">${Array.from({ length: 7 }).map(() => '<div class="reflection-line"></div>').join('')}</div>
+      </div>
+      <p style="font-size:7pt;margin-top:8px;font-weight:bold;line-height:1.3">By signing below, I certify that all information on this document is true and correct. I understand that if I am found to have given false testimony about these hours that the hours will be revoked and endanger my eligibility for the Bright Futures Scholarship.</p>
+      <div style="margin-top:12px;display:flex;justify-content:space-between">
+        <div style="font-size:8pt">Student Signature: _______________________ Date: ________</div>
+        <div style="font-size:8pt">Parent Signature: ________________________ Date: ________</div>
+      </div>
+      <p style="font-size:5.5pt;margin-top:4px;color:#9ca3af">Revised 8/2023</p>
+    </div>`;
+  };
+
+  const handlePrintReports = async () => {
+    const studentsToPrint = getStudentsToPrint();
+    const pdfGroup = [];
+    const htmlGroup = [];
+
+    for (const student of studentsToPrint) {
+      const template = getEffectiveTemplate(student);
+      if (template) {
+        pdfGroup.push({ student, template });
+      } else {
+        htmlGroup.push(student);
+      }
+    }
+
+    // PDF path: generate, merge, open print dialog
+    if (pdfGroup.length > 0) {
+      setPrintingReports(true);
+      try {
+        const allPdfBytes = [];
+        for (const { student, template } of pdfGroup) {
+          const storageRef = ref(storage, template.storagePath);
+          const url = await getDownloadURL(storageRef);
+          const response = await fetch(url);
+          const templateBytes = await response.arrayBuffer();
+
+          const activityLog = getStudentActivityLog(student.id);
+          const totalCalc = activityLog.reduce((sum, a) => sum + parseFloat(a.totalHours), 0);
+          const grandTotal = totalCalc + parseFloat(student.overrideHours || 0);
+
+          const pdfBytes = await generateFilledPdf(templateBytes, template.fields, {
+            student,
+            totalHours: grandTotal,
+            eventName: currentEvent?.name || '',
+            activityLog,
+            event: currentEvent,
+            timeEntries: allEntries.filter(e => e.studentId === student.id && !e.isVoided),
+          });
+          allPdfBytes.push(pdfBytes);
+        }
+        const mergedBytes = await mergePdfs(allPdfBytes);
+        openPdfForPrinting(mergedBytes, 'service-logs.pdf');
+      } catch (err) {
+        console.error('Bulk PDF generation failed:', err);
+        alert('Failed to generate PDFs: ' + err.message);
+      } finally {
+        setPrintingReports(false);
+      }
+    }
+
+    // HTML fallback path: students with no template
+    if (htmlGroup.length > 0) {
+      const formsHtml = htmlGroup.map(student => {
+        const activityLog = getStudentActivityLog(student.id);
+        const totalCalc = activityLog.reduce((sum, a) => sum + parseFloat(a.totalHours), 0);
+        const grandTotal = totalCalc + parseFloat(student.overrideHours || 0);
+        return buildStudentFormHtml(student, activityLog, grandTotal);
+      }).join('');
+
+      const html = createPrintDocument({ title: 'Service Logs', styles: PRINT_STYLES, body: formsHtml });
+      printInNewWindow(html);
+    }
   };
 
   const handlePrintBadges = () => {
@@ -251,44 +379,20 @@ export default function StudentsPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="p-20 text-center"><Spinner size="lg" /></div>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="p-6 max-w-7xl mx-auto">
       <style>
         {`
           @media print {
             .no-print { display: none !important; }
-            #print-all-forms { display: ${printMode ? 'block' : 'none'} !important; }
             #print-all-badges { display: ${badgePrintMode ? 'block' : 'none'} !important; }
 
             body { background: white; margin: 0; padding: 0; }
-            .ocps-form-container {
-              font-family: Arial, sans-serif;
-              padding: 0.25in;
-              color: black;
-              line-height: 1.05;
-              font-size: 8.5pt;
-              page-break-after: always;
-              height: 100vh;
-              box-sizing: border-box;
-            }
-            .ocps-form-container:last-child {
-              page-break-after: auto;
-            }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 2px; }
-            th, td { border: 1px solid black; padding: 2px 6px; vertical-align: middle; }
-            .field-box { border-bottom: 1px solid black; display: inline-block; min-width: 120px; padding: 0 5px; font-weight: bold; }
-            .reflection-box { border: 1px solid black; height: 165px; width: 100%; margin-top: 2px; display: flex; flex-direction: column; }
-            .reflection-line { border-bottom: 1px solid #eee; flex: 1; }
-            .ocps-logo { width: 40px; height: 40px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 7pt; text-align: center; }
-
-            /* Badge printing styles */
             .badge-page {
               page-break-after: always;
               height: 100vh;
@@ -300,9 +404,7 @@ export default function StudentsPage() {
               padding: 0.25in;
               box-sizing: border-box;
             }
-            .badge-page:last-child {
-              page-break-after: auto;
-            }
+            .badge-page:last-child { page-break-after: auto; }
             .student-badge {
               border: 2px solid #000;
               padding: 0.15in;
@@ -315,22 +417,10 @@ export default function StudentsPage() {
               text-align: center;
               margin: 2px;
             }
-            .badge-name {
-              font-size: 14pt;
-              font-weight: bold;
-              margin-bottom: 4px;
-              color: #000;
-            }
-            .badge-id {
-              font-size: 9pt;
-              color: #666;
-              margin-bottom: 8px;
-            }
-            .badge-qr {
-              margin: 0 auto;
-            }
+            .badge-name { font-size: 14pt; font-weight: bold; margin-bottom: 4px; color: #000; }
+            .badge-id { font-size: 9pt; color: #666; margin-bottom: 8px; }
+            .badge-qr { margin: 0 auto; }
           }
-          #print-all-forms { display: none; }
           #print-all-badges { display: none; }
         `}
       </style>
@@ -351,8 +441,8 @@ export default function StudentsPage() {
           <Button onClick={handlePrintBadges} variant="secondary">
             {selectedStudents.size > 0 ? `Print Badges (${selectedStudents.size})` : 'Print Badges'}
           </Button>
-          <Button onClick={handlePrintReports} variant="secondary">
-            {selectedStudents.size > 0 ? `Print Reports (${selectedStudents.size})` : 'Print Reports'}
+          <Button onClick={handlePrintReports} variant="secondary" disabled={printingReports} loading={printingReports}>
+            {printingReports ? 'Generating...' : selectedStudents.size > 0 ? `Print Reports (${selectedStudents.size})` : 'Print Reports'}
           </Button>
           <Button onClick={() => setIsModalOpen(true)} variant="primary">+ Add Student</Button>
         </div>
@@ -521,91 +611,6 @@ export default function StudentsPage() {
           </div>
         </div>
       )}
-
-      {/* PRINT ALL FORMS */}
-      <div id="print-all-forms">
-        {getStudentsToPrint().map((student) => {
-          const activityLog = getStudentActivityLog(student.id);
-          const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);
-          const overrideHours = parseFloat(student?.overrideHours || 0);
-          const grandTotal = totalCalculatedHours + overrideHours;
-
-          return (
-            <div key={student.id} className="ocps-form-container">
-              <div className="flex items-center justify-between mb-2 border-b-2 border-black pb-1">
-                <div className="ocps-logo">OCPS</div>
-                <h1 className="text-lg font-bold text-center flex-1">Community/Work Service Log and Reflection</h1>
-              </div>
-
-              <table className="mb-1">
-                <tbody>
-                  <tr>
-                    <td className="w-1/3 border-none">Student ID #: <span className="field-box" style={{ minWidth: '100px' }}></span></td>
-                    <td className="border-none">Student Name: <span className="field-box" style={{ minWidth: '220px' }}>{student.firstName} {student.lastName}</span></td>
-                  </tr>
-                  <tr>
-                    <td className="border-none">School Name: <span className="field-box" style={{ minWidth: '200px' }}>{student.schoolName}</span></td>
-                    <td className="border-none text-right">Graduation Year: <span className="field-box" style={{ minWidth: '80px' }}>{student.gradYear || '____'}</span></td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <p className="text-[7.5pt] mb-0.5">Social/Civic Issue/Professional Area Addressing with Service Activity Log (Optional):</p>
-              <div className="border-b border-black w-full mb-1 h-4"></div>
-              <p className="font-bold text-[8pt] mb-0.5">Description of Volunteer/Paid Work Activity:</p>
-              <div className="border-b border-black w-full mb-2 h-4"></div>
-
-              <table className="mb-2 text-center">
-                <thead>
-                  <tr className="bg-gray-100 text-[8pt]">
-                    <th className="w-[20%]">Service Organization/Business</th>
-                    <th className="w-[30%]">Date(s) of Service Activity/Work</th>
-                    <th className="w-[15%]">Contact Name</th>
-                    <th className="w-[20%]">Signature of Contact</th>
-                    <th className="w-[15%]">Hours Completed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activityLog.map((act, i) => (
-                    <tr key={i} className="h-9">
-                      <td>{currentEvent?.organizationName} {act?.name}</td>
-                      <td className="text-center">{act.dateDisplay}</td>
-                      <td>{currentEvent?.contactName || '---'}</td>
-                      <td></td>
-                      <td className="font-bold">{act.totalHours}</td>
-                    </tr>
-                  ))}
-                  {[...Array(Math.max(0, 10 - activityLog.length))].map((_, i) => (
-                    <tr key={`blank-${i}`} className="h-9">
-                      <td></td><td></td><td></td><td></td><td></td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td colSpan="4" className="text-right font-bold uppercase">Total:</td>
-                    <td className="font-bold bg-gray-50">{grandTotal.toFixed(2)}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="mt-1">
-                <p className="font-bold text-[7.5pt] mb-0">Reflection on Service Activity/Work (attach additional pages if necessary):</p>
-                <p className="text-[6.5pt] italic mb-0.5">Attach a copy of your pay stub for work hours if applicable. Complete the reflection below...</p>
-                <div className="reflection-box">
-                  {[...Array(7)].map((_, i) => <div key={i} className="reflection-line"></div>)}
-                </div>
-              </div>
-
-              <p className="text-[7pt] mt-2 font-bold leading-tight">By signing below, I certify that all information on this document is true and correct. I understand that if I am found to have given false testimony about these hours that the hours will be revoked and endanger my eligibility for the Bright Futures Scholarship.</p>
-
-              <div className="mt-3 flex justify-between">
-                <div className="text-[8pt]">Student Signature: _______________________ Date: ________</div>
-                <div className="text-[8pt]">Parent Signature: ________________________ Date: ________</div>
-              </div>
-              <p className="text-[5.5pt] mt-1 text-gray-400">Revised 8/2023</p>
-            </div>
-          );
-        })}
-      </div>
 
       {/* PRINT ALL BADGES */}
       <div id="print-all-badges">

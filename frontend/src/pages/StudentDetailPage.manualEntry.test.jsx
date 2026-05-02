@@ -7,13 +7,14 @@ import { act } from 'react-dom/test-utils';
 
 // Mock Firebase
 vi.mock('../utils/firebase', () => ({
-    db: {}
+    db: {},
+    storage: {},
 }));
 
 // Mock Firestore functions
 vi.mock('firebase/firestore', () => ({
-    collection: vi.fn(),
-    doc: vi.fn(() => ({ id: 'entry123' })),
+    collection: vi.fn((db, path) => ({ _collPath: path })),
+    doc: vi.fn((db, ...args) => ({ _isDoc: true, id: args[args.length - 1] })),
     getDoc: vi.fn(() => Promise.resolve({
         exists: () => true,
         id: 'student123',
@@ -25,18 +26,35 @@ vi.mock('firebase/firestore', () => ({
             gradYear: '2028'
         })
     })),
-    onSnapshot: vi.fn((query, callback) => {
-        callback({ docs: [] }); // Start with empty entries
+    onSnapshot: vi.fn((queryOrRef, callback) => {
+        if (queryOrRef?._isDoc) {
+            callback({ exists: () => false, data: () => null });
+        } else {
+            callback({ docs: [] }); // Start with empty entries
+        }
         return vi.fn();
     }),
-    query: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
+    query: vi.fn((ref) => ref),
+    where: vi.fn(() => ({})),
+    orderBy: vi.fn(() => ({})),
     Timestamp: {
         fromDate: (date) => ({ toDate: () => date, seconds: Math.floor(date.getTime() / 1000) })
     },
     addDoc: vi.fn(),
     updateDoc: vi.fn()
+}));
+
+// Mock Firebase Storage
+vi.mock('firebase/storage', () => ({
+    ref: vi.fn(),
+    getDownloadURL: vi.fn(() => Promise.resolve('https://storage.example.com/template.pdf')),
+}));
+
+// Mock pdfTemplateUtils
+vi.mock('../utils/pdfTemplateUtils', () => ({
+    generateFilledPdf: vi.fn(() => Promise.resolve(new Uint8Array([1, 2, 3]))),
+    openPdfForPrinting: vi.fn(),
+    downloadPdf: vi.fn(),
 }));
 
 // Mock AuthContext

@@ -11,19 +11,26 @@ vi.mock('../utils/firebase', () => ({
 }));
 
 // Track onSnapshot callbacks for programmatic updates
-let onSnapshotCallback = null;
+let onSnapshotTemplatesCallback = null;
 
 vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(),
+  collection: vi.fn((db, path) => ({ _collPath: path })),
   addDoc: vi.fn(() => Promise.resolve({ id: 'new-template-id' })),
-  onSnapshot: vi.fn((query, callback) => {
-    onSnapshotCallback = callback;
-    callback({ docs: [] });
+  onSnapshot: vi.fn((queryOrRef, callback) => {
+    if (queryOrRef?._isDoc) {
+      // Document snapshot (settings/pdfDefaults)
+      callback({ exists: () => false, data: () => null });
+    } else {
+      // Collection snapshot (pdfTemplates)
+      onSnapshotTemplatesCallback = callback;
+      callback({ docs: [] });
+    }
     return vi.fn();
   }),
   deleteDoc: vi.fn(() => Promise.resolve()),
-  doc: vi.fn(() => ({ id: 'template1' })),
+  doc: vi.fn(() => ({ _isDoc: true, id: 'template1' })),
   updateDoc: vi.fn(() => Promise.resolve()),
+  setDoc: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('firebase/storage', () => ({
@@ -84,7 +91,7 @@ const renderPage = () => {
 
 const simulateTemplates = async (docs) => {
   await act(async () => {
-    onSnapshotCallback({ docs });
+    onSnapshotTemplatesCallback({ docs });
   });
 };
 
@@ -96,7 +103,7 @@ const makeTemplateDoc = (id, data) => ({
 describe('PdfTemplatesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    onSnapshotCallback = null;
+    onSnapshotTemplatesCallback = null;
   });
 
   afterEach(() => {
@@ -416,6 +423,53 @@ describe('PdfTemplatesPage', () => {
         expect(screen.getByText(/Mapped Fields \(1\)/)).toBeInTheDocument();
         expect(screen.getByText('Detail Table')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('default template', () => {
+    it('should show Set as Default button for non-default templates', async () => {
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Form', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      expect(screen.getByRole('button', { name: /Set as Default/i })).toBeInTheDocument();
+    });
+
+    it('should show Default badge for the default template', async () => {
+      const { setDoc } = await import('firebase/firestore');
+      const user = userEvent.setup();
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Form', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      await user.click(screen.getByRole('button', { name: /Set as Default/i }));
+
+      expect(setDoc).toHaveBeenCalled();
+    });
+
+    it('should not show Set as Default button when template is already default', async () => {
+      const { onSnapshot } = await import('firebase/firestore');
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Form', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      // Simulate the defaults snapshot returning tmpl1 as default
+      const { vi: viTest } = await import('vitest');
+      const calls = onSnapshot.mock.calls;
+      const docCallback = calls.find(([ref]) => ref?._isDoc)?.[1];
+      if (docCallback) {
+        await act(async () => {
+          docCallback({ exists: () => true, data: () => ({ defaultTemplateId: 'tmpl1' }) });
+        });
+        expect(screen.queryByRole('button', { name: /Set as Default/i })).not.toBeInTheDocument();
+        expect(screen.getByText('Default')).toBeInTheDocument();
+      }
     });
   });
 

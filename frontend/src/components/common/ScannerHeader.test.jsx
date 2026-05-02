@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ScannerHeader from './ScannerHeader';
 
-// Mock useNavigate
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
@@ -14,20 +13,16 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock AuthContext - default to admin user
 const mockSignOut = vi.fn().mockResolvedValue(undefined);
-let mockUserProfile = { name: 'Admin User', email: 'admin@test.com', role: 'admin' };
 let mockCanAccessAdmin = vi.fn(() => true);
 
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
-    userProfile: mockUserProfile,
     signOut: mockSignOut,
     canAccessAdmin: mockCanAccessAdmin,
   }),
 }));
 
-// Helper to render with router
 const renderWithRouter = (ui, { route = '/scan' } = {}) => {
   return render(
     <MemoryRouter initialEntries={[route]}>
@@ -39,123 +34,56 @@ const renderWithRouter = (ui, { route = '/scan' } = {}) => {
 describe('ScannerHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUserProfile = { name: 'Admin User', email: 'admin@test.com', role: 'admin' };
     mockCanAccessAdmin = vi.fn(() => true);
   });
 
-  describe('rendering', () => {
-    it('should render user name when available', () => {
-      renderWithRouter(<ScannerHeader />);
-      expect(screen.getByText('Admin User')).toBeInTheDocument();
-    });
+  it('renders kiosk scan mode chrome', () => {
+    renderWithRouter(<ScannerHeader />);
 
-    it('should render user email when name is not available', () => {
-      mockUserProfile = { email: 'user@test.com', role: 'admin' };
-      renderWithRouter(<ScannerHeader />);
-      expect(screen.getByText('user@test.com')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Scan Mode')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'VBS Volunteer Tracker' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Exit Scan Mode' })).toBeInTheDocument();
+  });
 
-    it('should render admin role badge for admin users', () => {
-      mockUserProfile = { name: 'Test User', email: 'admin@test.com', role: 'admin' };
-      renderWithRouter(<ScannerHeader />);
-      // Get the badge by its styling class
-      const badges = screen.getAllByText('Admin');
-      expect(badges.length).toBeGreaterThanOrEqual(1);
-      // Find the one with the badge styling
-      const badge = badges.find(el => el.classList.contains('uppercase'));
-      expect(badge).toBeInTheDocument();
-    });
+  it('does not render admin navigation links or logout controls', () => {
+    renderWithRouter(<ScannerHeader />);
 
-    it('should render volunteer role badge for volunteer users', () => {
-      mockUserProfile = { name: 'Test User', email: 'volunteer@test.com', role: 'adult_volunteer' };
-      renderWithRouter(<ScannerHeader />);
-      // Get the badge by its styling class
-      const badges = screen.getAllByText('Volunteer');
-      expect(badges.length).toBeGreaterThanOrEqual(1);
-      // Find the one with the badge styling
-      const badge = badges.find(el => el.classList.contains('uppercase'));
-      expect(badge).toBeInTheDocument();
-    });
+    expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /logout/i })).not.toBeInTheDocument();
+  });
 
-    it('should render logout button', () => {
-      renderWithRouter(<ScannerHeader />);
-      expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
+  it('returns admins to the admin workspace', async () => {
+    const user = userEvent.setup();
+    mockCanAccessAdmin = vi.fn(() => true);
+    renderWithRouter(<ScannerHeader />);
+
+    await user.click(screen.getByRole('button', { name: 'Exit Scan Mode' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/admin');
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('signs non-admin scanner users out on exit', async () => {
+    const user = userEvent.setup();
+    mockCanAccessAdmin = vi.fn(() => false);
+    renderWithRouter(<ScannerHeader />);
+
+    await user.click(screen.getByRole('button', { name: 'Exit Scan Mode' }));
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/login');
     });
   });
 
-  describe('admin access', () => {
-    it('should show Dashboard link for admin users', () => {
-      mockCanAccessAdmin = vi.fn(() => true);
-      renderWithRouter(<ScannerHeader />);
-      expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
-    });
+  it('keeps the compact scanner wrapper styling', () => {
+    const { container } = renderWithRouter(<ScannerHeader />);
 
-    it('should hide Dashboard link for non-admin users', () => {
-      mockCanAccessAdmin = vi.fn(() => false);
-      renderWithRouter(<ScannerHeader />);
-      expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument();
-    });
-
-    it('should link Dashboard to /admin route', () => {
-      mockCanAccessAdmin = vi.fn(() => true);
-      renderWithRouter(<ScannerHeader />);
-
-      const dashboardLink = screen.getByRole('link', { name: /dashboard/i });
-      expect(dashboardLink).toHaveAttribute('href', '/admin');
-    });
-  });
-
-  describe('logout functionality', () => {
-    it('should call signOut when logout button is clicked', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<ScannerHeader />);
-
-      const logoutButton = screen.getByRole('button', { name: /logout/i });
-      await user.click(logoutButton);
-
-      expect(mockSignOut).toHaveBeenCalledTimes(1);
-    });
-
-    it('should navigate to /login after signOut', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<ScannerHeader />);
-
-      const logoutButton = screen.getByRole('button', { name: /logout/i });
-      await user.click(logoutButton);
-
-      await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/login');
-      });
-    });
-  });
-
-  describe('styling', () => {
-    it('should have the scanner header wrapper class', () => {
-      const { container } = renderWithRouter(<ScannerHeader />);
-
-      const header = container.firstChild;
-      expect(header).toHaveClass('bg-white');
-      expect(header).toHaveClass('shadow-sm');
-      expect(header).toHaveClass('border-b');
-      expect(header).toHaveClass('mb-6');
-    });
-
-    it('should have role badge styling', () => {
-      renderWithRouter(<ScannerHeader />);
-
-      const badge = screen.getByText('Admin');
-      expect(badge).toHaveClass('bg-blue-100');
-      expect(badge).toHaveClass('text-blue-700');
-      expect(badge).toHaveClass('uppercase');
-    });
-  });
-
-  describe('mobile optimization', () => {
-    it('should have max-width constraint for mobile', () => {
-      const { container } = renderWithRouter(<ScannerHeader />);
-
-      const innerContainer = container.querySelector('.max-w-md');
-      expect(innerContainer).toBeInTheDocument();
-    });
+    const header = container.firstChild;
+    expect(header).toHaveClass('bg-white');
+    expect(header).toHaveClass('shadow-sm');
+    expect(header).toHaveClass('border-b');
+    expect(header).toHaveClass('mb-6');
+    expect(container.querySelector('.max-w-2xl')).toBeInTheDocument();
   });
 });

@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import Header from './Header';
 
-// Mock AuthContext
 const mockSignOut = vi.fn();
+const mockSwitchActiveEvent = vi.fn();
 const mockUser = { email: 'admin@test.com', uid: 'admin123' };
+const mockCurrentEvent = { id: 'event123', name: 'VBS 2026' };
+const mockEvents = [
+  mockCurrentEvent,
+  { id: 'event2025', name: 'VBS 2025' },
+];
 
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -15,16 +20,14 @@ vi.mock('../../contexts/AuthContext', () => ({
   }),
 }));
 
-// Mock EventContext
-const mockCurrentEvent = { id: 'event123', name: 'VBS 2026' };
-
 vi.mock('../../contexts/EventContext', () => ({
   useEvent: () => ({
     currentEvent: mockCurrentEvent,
+    events: mockEvents,
+    switchActiveEvent: mockSwitchActiveEvent,
   }),
 }));
 
-// Helper to render with router
 const renderWithRouter = (ui, { route = '/admin' } = {}) => {
   return render(
     <MemoryRouter initialEntries={[route]}>
@@ -38,340 +41,122 @@ describe('Header', () => {
     vi.clearAllMocks();
   });
 
-  describe('rendering', () => {
-    it('should render the app title', () => {
-      renderWithRouter(<Header />);
-      expect(screen.getByText('VBS Volunteer Tracker')).toBeInTheDocument();
-    });
+  it('renders the admin workspace shell', () => {
+    renderWithRouter(<Header />);
 
-    it('should render custom title when provided', () => {
-      renderWithRouter(<Header title="Custom Title" />);
-      expect(screen.getByText('Custom Title')).toBeInTheDocument();
-    });
-
-    it('should render active event indicator', () => {
-      renderWithRouter(<Header />);
-      // Event name appears in both desktop and mobile views
-      const eventNames = screen.getAllByText('VBS 2026');
-      expect(eventNames.length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText(/Active Event:/)).toBeInTheDocument();
-    });
-
-    it('should display event indicator with the mocked event', () => {
-      // This test verifies the default mocked event is rendered
-      // Testing null event would require module reset which is complex in Vitest
-      renderWithRouter(<Header />);
-
-      // Verify the mocked event is displayed
-      const eventNames = screen.getAllByText('VBS 2026');
-      expect(eventNames.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should render user email', () => {
-      renderWithRouter(<Header />);
-      // User email appears in desktop header and mobile menu
-      const userEmails = screen.getAllByText('admin@test.com');
-      expect(userEmails.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should render logout button', () => {
-      renderWithRouter(<Header />);
-      // Multiple logout buttons for responsive design (desktop and mobile menu)
-      const logoutButtons = screen.getAllByRole('button', { name: /logout/i });
-      expect(logoutButtons.length).toBeGreaterThanOrEqual(1);
-    });
+    expect(screen.getAllByRole('link', { name: 'VBS Volunteer Tracker' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole('combobox', { name: 'Active Event' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('VBS 2026').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Operations')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/admin/settings');
   });
 
-  describe('navigation tabs', () => {
-    it('should render all navigation tabs by default', () => {
-      renderWithRouter(<Header />);
-
-      // Desktop navigation links (there may be duplicates in mobile menu)
-      expect(screen.getAllByRole('link', { name: 'Dashboard' }).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByRole('link', { name: 'Daily Review' }).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByRole('link', { name: 'Students' }).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByRole('link', { name: 'Events' }).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByRole('link', { name: 'Users' }).length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should hide navigation tabs when showNavTabs is false', () => {
-      renderWithRouter(<Header showNavTabs={false} />);
-
-      // Dashboard link should still exist in title, but Daily Review should not
-      expect(screen.queryByRole('link', { name: 'Daily Review' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'Students' })).not.toBeInTheDocument();
-    });
-
-    it('should have correct hrefs for navigation tabs', () => {
-      renderWithRouter(<Header />);
-
-      // Check that at least one link has correct href for each nav item
-      const dashboardLinks = screen.getAllByRole('link', { name: 'Dashboard' });
-      expect(dashboardLinks.some(link => link.getAttribute('href') === '/admin')).toBe(true);
-
-      const dailyReviewLinks = screen.getAllByRole('link', { name: 'Daily Review' });
-      expect(dailyReviewLinks.some(link => link.getAttribute('href') === '/admin/daily-review')).toBe(true);
-
-      const studentsLinks = screen.getAllByRole('link', { name: 'Students' });
-      expect(studentsLinks.some(link => link.getAttribute('href') === '/admin/students')).toBe(true);
-
-      const eventsLinks = screen.getAllByRole('link', { name: 'Events' });
-      expect(eventsLinks.some(link => link.getAttribute('href') === '/admin/events')).toBe(true);
-
-      const usersLinks = screen.getAllByRole('link', { name: 'Users' });
-      expect(usersLinks.some(link => link.getAttribute('href') === '/admin/users')).toBe(true);
-    });
-
-    it('should highlight active Dashboard tab on /admin route', () => {
-      renderWithRouter(<Header />, { route: '/admin' });
-
-      // Check desktop nav link (has border styling)
-      const dashboardLinks = screen.getAllByRole('link', { name: 'Dashboard' });
-      const desktopLink = dashboardLinks.find(link => link.classList.contains('border-b-2'));
-      expect(desktopLink).toHaveClass('text-primary-600');
-      expect(desktopLink).toHaveClass('border-primary-600');
-    });
-
-    it('should highlight active Students tab on /admin/students route', () => {
-      renderWithRouter(<Header />, { route: '/admin/students' });
-
-      const studentsLinks = screen.getAllByRole('link', { name: 'Students' });
-      // At least one should have the active styling
-      expect(studentsLinks.some(link => link.classList.contains('text-primary-600'))).toBe(true);
-    });
-
-    it('should highlight active Daily Review tab on /admin/daily-review route', () => {
-      renderWithRouter(<Header />, { route: '/admin/daily-review' });
-
-      const dailyReviewLinks = screen.getAllByRole('link', { name: 'Daily Review' });
-      expect(dailyReviewLinks.some(link => link.classList.contains('text-primary-600'))).toBe(true);
-    });
+  it('renders custom title when provided', () => {
+    renderWithRouter(<Header title="Custom Title" />);
+    expect(screen.getAllByRole('link', { name: 'Custom Title' }).length).toBeGreaterThanOrEqual(1);
   });
 
-  describe('event indicator', () => {
-    it('should hide event indicator when showEventIndicator is false', () => {
-      renderWithRouter(<Header showEventIndicator={false} />);
+  it('keeps operational links separate from settings pages', () => {
+    renderWithRouter(<Header />);
 
-      expect(screen.queryByText(/Active Event:/)).not.toBeInTheDocument();
-    });
-
-    it('should show event indicator when showEventIndicator is true', () => {
-      renderWithRouter(<Header showEventIndicator={true} />);
-
-      expect(screen.getByText(/Active Event:/)).toBeInTheDocument();
-    });
+    expect(screen.getAllByRole('link', { name: 'Dashboard' }).some(link => link.getAttribute('href') === '/admin')).toBe(true);
+    expect(screen.getAllByRole('link', { name: 'Students' }).some(link => link.getAttribute('href') === '/admin/students')).toBe(true);
+    expect(screen.getAllByRole('link', { name: 'Daily Review' }).some(link => link.getAttribute('href') === '/admin/daily-review')).toBe(true);
+    expect(screen.getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/admin/settings');
+    expect(screen.queryByRole('link', { name: 'Events' })).not.toBeInTheDocument();
   });
 
-  describe('actions', () => {
-    it('should render custom actions when provided', () => {
-      const CustomAction = <button>Custom Action</button>;
-      renderWithRouter(<Header actions={CustomAction} />);
+  it('highlights settings when a settings route is active', () => {
+    renderWithRouter(<Header />, { route: '/admin/settings/users' });
 
-      expect(screen.getByRole('button', { name: 'Custom Action' })).toBeInTheDocument();
-    });
+    expect(screen.getByRole('link', { name: /settings/i })).toHaveClass('bg-gray-100');
   });
 
-  describe('logout functionality', () => {
-    it('should call signOut when logout button is clicked', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
+  it('highlights active operational links', () => {
+    renderWithRouter(<Header />, { route: '/admin/students' });
 
-      // Get the first logout button (multiple exist for responsive design)
-      const logoutButtons = screen.getAllByRole('button', { name: /logout/i });
-      await user.click(logoutButtons[0]);
-
-      expect(mockSignOut).toHaveBeenCalledTimes(1);
-    });
+    const studentsLinks = screen.getAllByRole('link', { name: 'Students' });
+    expect(studentsLinks.some(link => link.classList.contains('bg-primary-50'))).toBe(true);
   });
 
-  describe('responsive behavior', () => {
-    it('should render mobile logout button', () => {
-      renderWithRouter(<Header />);
+  it('switches the active event from the context switcher', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<Header />);
 
-      // Both desktop and mobile logout buttons should exist
-      const logoutButtons = screen.getAllByRole('button', { name: /logout/i });
-      expect(logoutButtons.length).toBeGreaterThanOrEqual(1);
-    });
+    await user.selectOptions(screen.getAllByRole('combobox', { name: 'Active Event' })[0], 'event2025');
+
+    expect(mockSwitchActiveEvent).toHaveBeenCalledWith('event2025');
   });
 
-  describe('app title link', () => {
-    it('should link to /admin dashboard', () => {
-      renderWithRouter(<Header />);
+  it('renders the Scan action as the prominent app switcher', () => {
+    renderWithRouter(<Header />);
 
-      const titleLink = screen.getByRole('link', { name: /VBS Volunteer Tracker/i });
-      expect(titleLink).toHaveAttribute('href', '/admin');
-    });
+    const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
+    expect(scanLinks.some(link => link.getAttribute('href') === '/scan')).toBe(true);
+    expect(scanLinks.some(link => link.classList.contains('bg-primary-600'))).toBe(true);
   });
 
-  describe('hamburger menu', () => {
-    it('should render hamburger menu button when showNavTabs is true', () => {
-      renderWithRouter(<Header showNavTabs={true} />);
+  it('hides nav groups when showNavTabs is false', () => {
+    renderWithRouter(<Header showNavTabs={false} />);
 
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      expect(menuButton).toBeInTheDocument();
-    });
+    expect(screen.queryByRole('link', { name: 'Daily Review' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Students' })).not.toBeInTheDocument();
+  });
 
-    it('should not render hamburger menu button when showNavTabs is false', () => {
-      renderWithRouter(<Header showNavTabs={false} />);
+  it('hides event indicator text when showEventIndicator is false', () => {
+    renderWithRouter(<Header showEventIndicator={false} />);
 
-      expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
-    });
+    expect(screen.queryByText(/Active Event:/)).not.toBeInTheDocument();
+    expect(screen.queryByText('admin@test.com')).not.toBeInTheDocument();
+  });
 
-    it('should toggle mobile menu when hamburger button is clicked', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
+  it('renders custom actions', () => {
+    renderWithRouter(<Header actions={<button>Custom Action</button>} />);
 
-      // Mobile menu should not be visible initially (no id="mobile-menu" element)
-      expect(screen.queryByRole('button', { name: /close menu/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Custom Action' })).toBeInTheDocument();
+  });
 
-      // Click hamburger to open menu
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      await user.click(menuButton);
+  it('signs out from the desktop shell', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<Header />);
 
-      // Close button should now be visible
-      expect(screen.getByRole('button', { name: /close menu/i })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: /logout/i })[0]);
 
-      // Click again to close
-      const closeButton = screen.getByRole('button', { name: /close menu/i });
-      await user.click(closeButton);
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+  });
 
-      // Back to open menu button
+  it('toggles and closes the mobile menu', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<Header />);
+
+    await user.click(screen.getByRole('button', { name: /open menu/i }));
+    expect(screen.getByRole('button', { name: /close menu/i })).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(screen.getAllByRole('link', { name: 'Students' })[0]);
+
+    await waitFor(() => {
       expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
     });
+  });
 
-    it('should close mobile menu when a navigation link is clicked', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
+  it('closes the mobile menu when Scan is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<Header />);
 
-      // Open the mobile menu
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      await user.click(menuButton);
+    await user.click(screen.getByRole('button', { name: /open menu/i }));
+    const mobileScan = screen.getAllByRole('link', { name: 'Scan' }).find(link => link.classList.contains('text-center'));
+    await user.click(mobileScan);
 
-      // Verify menu is open (close button visible)
-      expect(screen.getByRole('button', { name: /close menu/i })).toBeInTheDocument();
-
-      // Click a navigation link in the mobile menu
-      // Mobile menu links have specific styling (rounded-md)
-      const mobileLinks = screen.getAllByRole('link', { name: 'Students' });
-      const mobileLink = mobileLinks.find(link => link.classList.contains('rounded-md'));
-      await user.click(mobileLink);
-
-      // Menu should be closed (back to open menu button)
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
-      });
-    });
-
-    it('should display user email in mobile menu', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
-
-      // Open the mobile menu
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      await user.click(menuButton);
-
-      // User email should be visible in mobile menu
-      const userEmails = screen.getAllByText('admin@test.com');
-      expect(userEmails.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should call signOut when logout in mobile menu is clicked', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
-
-      // Open the mobile menu
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      await user.click(menuButton);
-
-      // Find the mobile menu logout button (text-based, not the Button component)
-      const logoutButtons = screen.getAllByRole('button', { name: /logout/i });
-      // Click the one in mobile menu (should be the last one or the one with specific classes)
-      const mobileLogout = logoutButtons.find(btn => btn.classList.contains('w-full'));
-      await user.click(mobileLogout);
-
-      expect(mockSignOut).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
     });
   });
 
-  describe('scan button', () => {
-    it('should render Scan button in header', () => {
-      renderWithRouter(<Header />);
+  it('wires mobile menu accessibility attributes', () => {
+    renderWithRouter(<Header />);
 
-      const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      expect(scanLinks.length).toBeGreaterThanOrEqual(1);
-      expect(scanLinks.some(link => link.getAttribute('href') === '/scan')).toBe(true);
-    });
-
-    it('should render Scan button in mobile menu', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
-
-      // Open mobile menu
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      await user.click(menuButton);
-
-      // Find Scan button in mobile menu (styled as button with block and text-center)
-      const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      const mobileScanButton = scanLinks.find(link => link.classList.contains('text-center'));
-      expect(mobileScanButton).toBeInTheDocument();
-      expect(mobileScanButton).toHaveAttribute('href', '/scan');
-    });
-
-    it('should highlight Scan button when on /scan route', () => {
-      renderWithRouter(<Header />, { route: '/scan' });
-
-      const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      // Active state uses bg-primary-600 (filled button) instead of text-primary-600
-      expect(scanLinks.some(link => link.classList.contains('bg-primary-600'))).toBe(true);
-    });
-
-    it('should highlight Scan button when on /scan/:eventId route', () => {
-      renderWithRouter(<Header />, { route: '/scan/event123' });
-
-      const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      // Active state uses bg-primary-600 (filled button)
-      expect(scanLinks.some(link => link.classList.contains('bg-primary-600'))).toBe(true);
-    });
-
-    it('should close mobile menu when Scan button is clicked', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
-
-      // Open mobile menu
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      await user.click(menuButton);
-
-      // Click Scan button (mobile version has text-center class)
-      const scanLinks = screen.getAllByRole('link', { name: 'Scan' });
-      const mobileScanButton = scanLinks.find(link => link.classList.contains('text-center'));
-      await user.click(mobileScanButton);
-
-      // Menu should close
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('accessibility', () => {
-    it('should have aria-expanded attribute on hamburger button', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<Header />);
-
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      expect(menuButton).toHaveAttribute('aria-expanded', 'false');
-
-      await user.click(menuButton);
-
-      const closeButton = screen.getByRole('button', { name: /close menu/i });
-      expect(closeButton).toHaveAttribute('aria-expanded', 'true');
-    });
-
-    it('should have aria-controls attribute pointing to mobile menu', () => {
-      renderWithRouter(<Header />);
-
-      const menuButton = screen.getByRole('button', { name: /open menu/i });
-      expect(menuButton).toHaveAttribute('aria-controls', 'mobile-menu');
-    });
+    const menuButton = screen.getByRole('button', { name: /open menu/i });
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+    expect(menuButton).toHaveAttribute('aria-controls', 'mobile-menu');
   });
 });

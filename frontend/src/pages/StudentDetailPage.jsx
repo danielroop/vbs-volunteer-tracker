@@ -11,7 +11,6 @@ import { httpsCallable } from 'firebase/functions';
 
 import { useEvent } from '../contexts/EventContext';
 import { buildEditChangeDescription } from '../utils/changeDescriptions';
-import Header from '../components/common/Header';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
@@ -569,14 +568,12 @@ export default function StudentDetailPage() {
 
     if (loading) return (
         <div className="min-h-screen bg-gray-50">
-            <Header />
             <div className="p-20 text-center"><Spinner size="lg" /></div>
         </div>
     );
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header />
             <div className="max-w-7xl mx-auto p-6">
                 <style>
                     {`

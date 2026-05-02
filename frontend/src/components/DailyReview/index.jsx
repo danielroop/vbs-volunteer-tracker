@@ -6,7 +6,6 @@ import { useEvent } from '../../contexts/EventContext';
 import { formatTime, formatHours, getTodayDateString, formatDate } from '../../utils/hourCalculations';
 import { buildEditChangeDescription } from '../../utils/changeDescriptions';
 import { printInNewWindow, createPrintDocument } from '../../utils/printUtils';
-import Header from '../common/Header';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 import TimeEntryCard from './TimeEntryCard';
@@ -668,7 +667,6 @@ export default function DailyReview() {
   if (!currentEvent) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <div className="p-4 flex items-center justify-center min-h-[60vh]">
           <div className="text-center text-gray-500">
             <p className="text-lg">No event selected</p>
@@ -681,8 +679,6 @@ export default function DailyReview() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Page Content Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-4">

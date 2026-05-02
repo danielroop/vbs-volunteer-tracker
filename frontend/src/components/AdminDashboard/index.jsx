@@ -3,7 +3,6 @@ import { db } from '../../utils/firebase'; //
 import { collection, onSnapshot } from 'firebase/firestore'; //
 import { useEvent } from '../../contexts/EventContext'; // Add this
 import { useTimeEntries } from '../../hooks/useTimeEntries'; // Add this
-import Header from '../common/Header';
 
 /**
  * Admin Dashboard Component
@@ -98,8 +97,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-
       <div className="max-w-7xl mx-auto px-4 py-8">
 
         {/* Today's Overview */}

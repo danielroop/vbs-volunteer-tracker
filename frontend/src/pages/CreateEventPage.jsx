@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../utils/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 
@@ -31,7 +30,7 @@ export default function CreateEventPage() {
       });
 
       console.log("Event created with ID: ", docRef.id);
-      navigate('/admin/events'); // Redirect back to list
+      navigate('/admin/settings/events'); // Redirect back to list
     } catch (err) {
       console.error("Error adding event: ", err);
       alert("Failed to create event. Check console for details.");
@@ -47,7 +46,6 @@ export default function CreateEventPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="p-8">
         <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
           <h1 className="text-2xl font-bold mb-6 text-gray-900">Create New Volunteer Event</h1>
@@ -72,7 +70,7 @@ export default function CreateEventPage() {
               <Button type="submit" variant="primary" className="w-full" disabled={loading}>
                 {loading ? 'Creating...' : 'Create Event'}
               </Button>
-              <Button type="button" variant="secondary" onClick={() => navigate('/admin/events')}>
+              <Button type="button" variant="secondary" onClick={() => navigate('/admin/settings/events')}>
                 Cancel
               </Button>
             </div>

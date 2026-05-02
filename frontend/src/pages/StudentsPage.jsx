@@ -6,7 +6,6 @@ import { collection, onSnapshot, addDoc, serverTimestamp, query, where, doc } fr
 import { ref, getDownloadURL } from 'firebase/storage';
 import { generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 import { useEvent } from '../contexts/EventContext';
-import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
@@ -380,14 +379,12 @@ export default function StudentsPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="p-20 text-center"><Spinner size="lg" /></div>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="p-6 max-w-7xl mx-auto">
       <style>
         {`

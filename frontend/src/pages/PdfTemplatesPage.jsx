@@ -3,7 +3,6 @@ import { db, storage } from '../utils/firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { FIELD_KEY_OPTIONS, ACTIVITY_COLUMN_OPTIONS, DETAIL_COLUMN_OPTIONS, getPdfPageDimensions, renderPdfPageToImage } from '../utils/pdfTemplateUtils';
-import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import Spinner from '../components/common/Spinner';
@@ -53,7 +52,6 @@ export default function PdfTemplatesPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <div className="p-20 text-center"><Spinner size="lg" /></div>
       </div>
     );
@@ -61,7 +59,6 @@ export default function PdfTemplatesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="max-w-5xl mx-auto p-6">
         <div className="flex justify-between items-center mb-8">
           <div>

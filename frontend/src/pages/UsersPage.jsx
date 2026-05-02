@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../contexts/AuthContext';
-import Header from '../components/common/Header';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import Modal from '../components/common/Modal';
@@ -214,7 +213,6 @@ export default function UsersPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <div className="p-20 text-center">
           <Spinner size="lg" />
         </div>
@@ -224,7 +222,6 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="p-6 max-w-7xl mx-auto">
         {/* PAGE HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">

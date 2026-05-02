@@ -7,6 +7,8 @@ import {
   resolveActivityColumnValue,
   resolveDetailColumnValue,
   generateFilledPdf,
+  mergePdfs,
+  openPdfForPrinting,
   downloadPdf,
   getPdfPageDimensions,
 } from './pdfTemplateUtils';
@@ -682,6 +684,89 @@ describe('pdfTemplateUtils', () => {
 
       const result = await generateFilledPdf(templatePdfBytes, fields, data);
       expect(result).toBeInstanceOf(Uint8Array);
+    });
+  });
+
+  describe('mergePdfs', () => {
+    it('should merge multiple PDFs into one', async () => {
+      const pdfDoc1 = await PDFDocument.create();
+      pdfDoc1.addPage([612, 792]);
+      const bytes1 = await pdfDoc1.save();
+
+      const pdfDoc2 = await PDFDocument.create();
+      pdfDoc2.addPage([612, 792]);
+      pdfDoc2.addPage([612, 792]);
+      const bytes2 = await pdfDoc2.save();
+
+      const merged = await mergePdfs([bytes1, bytes2]);
+      expect(merged).toBeInstanceOf(Uint8Array);
+
+      const mergedDoc = await PDFDocument.load(merged);
+      expect(mergedDoc.getPageCount()).toBe(3);
+    });
+
+    it('should handle a single PDF', async () => {
+      const pdfDoc = await PDFDocument.create();
+      pdfDoc.addPage([612, 792]);
+      const bytes = await pdfDoc.save();
+
+      const merged = await mergePdfs([bytes]);
+      expect(merged).toBeInstanceOf(Uint8Array);
+
+      const mergedDoc = await PDFDocument.load(merged);
+      expect(mergedDoc.getPageCount()).toBe(1);
+    });
+
+    it('should produce a valid PDF for empty input', async () => {
+      const merged = await mergePdfs([]);
+      expect(merged).toBeInstanceOf(Uint8Array);
+      // Should be a valid loadable PDF document
+      const mergedDoc = await PDFDocument.load(merged);
+      expect(mergedDoc.getPageCount()).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('openPdfForPrinting', () => {
+    it('should open a new window with a blob URL', () => {
+      const mockOpen = vi.fn(() => ({ /* non-null window */ }));
+      const mockCreateObjectURL = vi.fn(() => 'blob:test-print-url');
+      const mockRevokeObjectURL = vi.fn();
+
+      global.URL.createObjectURL = mockCreateObjectURL;
+      global.URL.revokeObjectURL = mockRevokeObjectURL;
+      global.window.open = mockOpen;
+
+      const pdfBytes = new Uint8Array([1, 2, 3]);
+      openPdfForPrinting(pdfBytes, 'test.pdf');
+
+      expect(mockCreateObjectURL).toHaveBeenCalled();
+      expect(mockOpen).toHaveBeenCalledWith('blob:test-print-url', '_blank');
+    });
+
+    it('should fall back to download when popup is blocked', () => {
+      const mockOpen = vi.fn(() => null); // simulates blocked popup
+      const mockClick = vi.fn();
+      const mockAppendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => {});
+      const mockRemoveChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => {});
+      const mockCreateObjectURL = vi.fn(() => 'blob:fallback-url');
+      const mockRevokeObjectURL = vi.fn();
+
+      global.URL.createObjectURL = mockCreateObjectURL;
+      global.URL.revokeObjectURL = mockRevokeObjectURL;
+      global.window.open = mockOpen;
+
+      const mockLink = { href: '', download: '', click: mockClick };
+      vi.spyOn(document, 'createElement').mockReturnValue(mockLink);
+
+      const pdfBytes = new Uint8Array([1, 2, 3]);
+      openPdfForPrinting(pdfBytes, 'fallback.pdf');
+
+      expect(mockLink.download).toBe('fallback.pdf');
+      expect(mockClick).toHaveBeenCalled();
+
+      mockAppendChild.mockRestore();
+      mockRemoveChild.mockRestore();
+      document.createElement.mockRestore?.();
     });
   });
 

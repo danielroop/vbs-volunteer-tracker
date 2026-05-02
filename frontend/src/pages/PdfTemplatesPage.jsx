@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db, storage } from '../utils/firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { FIELD_KEY_OPTIONS, ACTIVITY_COLUMN_OPTIONS, DETAIL_COLUMN_OPTIONS, getPdfPageDimensions, renderPdfPageToImage } from '../utils/pdfTemplateUtils';
 import Header from '../components/common/Header';
@@ -10,17 +10,29 @@ import Spinner from '../components/common/Spinner';
 
 export default function PdfTemplatesPage() {
   const [templates, setTemplates] = useState([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploadModal, setUploadModal] = useState({ isOpen: false });
   const [mapperModal, setMapperModal] = useState({ isOpen: false, template: null });
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'pdfTemplates'), (snapshot) => {
+    const unsubTemplates = onSnapshot(collection(db, 'pdfTemplates'), (snapshot) => {
       setTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
-    return () => unsubscribe();
+    const unsubDefaults = onSnapshot(doc(db, 'settings', 'pdfDefaults'), (snap) => {
+      setDefaultTemplateId(snap.exists() ? snap.data().defaultTemplateId : null);
+    });
+    return () => { unsubTemplates(); unsubDefaults(); };
   }, []);
+
+  const handleSetDefault = async (templateId) => {
+    try {
+      await setDoc(doc(db, 'settings', 'pdfDefaults'), { defaultTemplateId: templateId });
+    } catch (err) {
+      alert('Failed to set default template: ' + err.message);
+    }
+  };
 
   const handleDeleteTemplate = async (template) => {
     if (!window.confirm(`Delete template "${template.name}"? This cannot be undone.`)) return;
@@ -30,6 +42,9 @@ export default function PdfTemplatesPage() {
         await deleteObject(storageRef).catch(() => {});
       }
       await deleteDoc(doc(db, 'pdfTemplates', template.id));
+      if (template.id === defaultTemplateId) {
+        await setDoc(doc(db, 'settings', 'pdfDefaults'), { defaultTemplateId: null });
+      }
     } catch (err) {
       alert('Failed to delete template: ' + err.message);
     }
@@ -65,36 +80,53 @@ export default function PdfTemplatesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {templates.map(template => (
-              <div key={template.id} className="bg-white rounded-2xl shadow-sm border p-6">
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-lg font-bold text-gray-900">{template.name}</h3>
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                    {(template.fields || []).length} fields
-                  </span>
+            {templates.map(template => {
+              const isDefault = template.id === defaultTemplateId;
+              return (
+                <div key={template.id} className={`bg-white rounded-2xl shadow-sm border p-6 ${isDefault ? 'ring-2 ring-primary-400' : ''}`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-gray-900">{template.name}</h3>
+                      {isDefault && (
+                        <span className="text-xs bg-primary-100 text-primary-700 font-semibold px-2 py-0.5 rounded-full">Default</span>
+                      )}
+                    </div>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                      {(template.fields || []).length} fields
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-1">{template.fileName}</p>
+                  <p className="text-xs text-gray-400 mb-4">
+                    {template.pageCount || 1} page{(template.pageCount || 1) > 1 ? 's' : ''}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setMapperModal({ isOpen: true, template })}
+                    >
+                      Map Fields
+                    </Button>
+                    {!isDefault && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleSetDefault(template.id)}
+                      >
+                        Set as Default
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleDeleteTemplate(template)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-500 mb-1">{template.fileName}</p>
-                <p className="text-xs text-gray-400 mb-4">
-                  {template.pageCount || 1} page{(template.pageCount || 1) > 1 ? 's' : ''}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => setMapperModal({ isOpen: true, template })}
-                  >
-                    Map Fields
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => handleDeleteTemplate(template)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

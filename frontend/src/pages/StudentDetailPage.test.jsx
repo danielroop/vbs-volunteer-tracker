@@ -6,13 +6,14 @@ import StudentDetailPage from './StudentDetailPage';
 
 // Mock Firebase
 vi.mock('../utils/firebase', () => ({
-  db: {}
+  db: {},
+  storage: {},
 }));
 
 // Mock Firestore functions
 vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(),
-  doc: vi.fn(() => ({ id: 'entry123' })),
+  collection: vi.fn((db, path) => ({ _collPath: path })),
+  doc: vi.fn((db, ...args) => ({ _isDoc: true, id: args[args.length - 1] })),
   getDoc: vi.fn(() => Promise.resolve({
     exists: () => true,
     id: 'student123',
@@ -24,45 +25,65 @@ vi.mock('firebase/firestore', () => ({
       gradYear: '2028'
     })
   })),
-  onSnapshot: vi.fn((query, callback) => {
-    // Simulate time entries data
-    callback({
-      docs: [
-        {
-          id: 'entry1',
-          data: () => ({
-            studentId: 'student123',
-            activityId: 'activity1',
-            checkInTime: { toDate: () => new Date('2026-01-31T08:00:00'), seconds: 1738314000 },
-            checkOutTime: { toDate: () => new Date('2026-01-31T12:00:00'), seconds: 1738328400 },
-            hoursWorked: 4,
-            flags: [],
-            changeLog: []
-          })
-        },
-        {
-          id: 'entry2',
-          data: () => ({
-            studentId: 'student123',
-            activityId: 'activity1',
-            checkInTime: { toDate: () => new Date('2026-01-30T08:30:00'), seconds: 1738229400 },
-            checkOutTime: null,
-            hoursWorked: null,
-            flags: ['early_arrival'],
-            changeLog: []
-          })
-        }
-      ]
-    });
+  onSnapshot: vi.fn((queryOrRef, callback) => {
+    if (queryOrRef?._isDoc) {
+      // Document snapshot (settings/pdfDefaults)
+      callback({ exists: () => false, data: () => null });
+    } else if (queryOrRef?._collPath === 'pdfTemplates') {
+      callback({ docs: [] });
+    } else {
+      // timeEntries collection
+      callback({
+        docs: [
+          {
+            id: 'entry1',
+            data: () => ({
+              studentId: 'student123',
+              activityId: 'activity1',
+              checkInTime: { toDate: () => new Date('2026-01-31T08:00:00'), seconds: 1738314000 },
+              checkOutTime: { toDate: () => new Date('2026-01-31T12:00:00'), seconds: 1738328400 },
+              hoursWorked: 4,
+              flags: [],
+              changeLog: []
+            })
+          },
+          {
+            id: 'entry2',
+            data: () => ({
+              studentId: 'student123',
+              activityId: 'activity1',
+              checkInTime: { toDate: () => new Date('2026-01-30T08:30:00'), seconds: 1738229400 },
+              checkOutTime: null,
+              hoursWorked: null,
+              flags: ['early_arrival'],
+              changeLog: []
+            })
+          }
+        ]
+      });
+    }
     return vi.fn(); // unsubscribe function
   }),
-  query: vi.fn(),
-  where: vi.fn(),
-  orderBy: vi.fn(),
+  query: vi.fn((ref) => ref),
+  where: vi.fn(() => ({})),
+  orderBy: vi.fn(() => ({})),
   Timestamp: {
     fromDate: (date) => ({ toDate: () => date, seconds: Math.floor(date.getTime() / 1000) })
   },
   updateDoc: vi.fn()
+}));
+
+// Mock Firebase Storage
+vi.mock('firebase/storage', () => ({
+  ref: vi.fn(),
+  getDownloadURL: vi.fn(() => Promise.resolve('https://storage.example.com/template.pdf')),
+}));
+
+// Mock pdfTemplateUtils
+vi.mock('../utils/pdfTemplateUtils', () => ({
+  generateFilledPdf: vi.fn(() => Promise.resolve(new Uint8Array([1, 2, 3]))),
+  openPdfForPrinting: vi.fn(),
+  downloadPdf: vi.fn(),
 }));
 
 // Mock AuthContext
@@ -196,7 +217,7 @@ describe('StudentDetailPage', () => {
         // Desktop view has table headers, mobile view has "Service Log" heading
         // Check for either desktop table headers or mobile service log header
         const hasDesktopTable = screen.queryByText('Date') !== null;
-        const hasMobileServiceLog = screen.queryByText('Service Log') !== null;
+        const hasMobileServiceLog = screen.queryAllByText('Service Log').length > 0;
         expect(hasDesktopTable || hasMobileServiceLog).toBe(true);
 
         // Check for entry content that appears in both views

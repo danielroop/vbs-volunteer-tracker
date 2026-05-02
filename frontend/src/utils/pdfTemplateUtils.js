@@ -262,6 +262,38 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
 }
 
 /**
+ * Merges multiple PDF byte arrays into a single PDF document.
+ */
+export async function mergePdfs(pdfBytesArray) {
+  const mergedDoc = await PDFDocument.create();
+  for (const pdfBytes of pdfBytesArray) {
+    const srcDoc = await PDFDocument.load(pdfBytes);
+    const copiedPages = await mergedDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+    copiedPages.forEach(page => mergedDoc.addPage(page));
+  }
+  return mergedDoc.save();
+}
+
+/**
+ * Opens PDF bytes in a new browser tab so the user sees the native print dialog.
+ * Falls back to a download if the popup is blocked.
+ */
+export function openPdfForPrinting(pdfBytes, filename = 'service-log.pdf') {
+  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/**
  * Triggers a browser download of a PDF from bytes.
  */
 export function downloadPdf(pdfBytes, filename) {

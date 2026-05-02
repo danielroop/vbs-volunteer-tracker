@@ -7,7 +7,22 @@ import StudentsPage from './StudentsPage';
 // Mock Firebase
 vi.mock('../utils/firebase', () => ({
   db: {},
-  functions: {}
+  functions: {},
+  storage: {},
+}));
+
+// Mock Firebase Storage
+vi.mock('firebase/storage', () => ({
+  ref: vi.fn(),
+  getDownloadURL: vi.fn(() => Promise.resolve('https://storage.example.com/template.pdf')),
+}));
+
+// Mock pdfTemplateUtils
+vi.mock('../utils/pdfTemplateUtils', () => ({
+  generateFilledPdf: vi.fn(() => Promise.resolve(new Uint8Array([1, 2, 3]))),
+  mergePdfs: vi.fn((arr) => Promise.resolve(arr[0] || new Uint8Array([1, 2, 3]))),
+  openPdfForPrinting: vi.fn(),
+  downloadPdf: vi.fn(),
 }));
 
 // Mock data
@@ -26,51 +41,52 @@ const mockTimeEntries = [
 let studentsUnsubscribe = vi.fn();
 let entriesUnsubscribe = vi.fn();
 
-vi.mock('firebase/firestore', () => {
-  // Helper to determine which collection this is
-  const getCollectionPath = (queryOrRef) => {
-    if (queryOrRef?.path) return queryOrRef.path;
-    if (queryOrRef?._query?.path) return queryOrRef._query.path;
-    if (queryOrRef?._collectionPath) return queryOrRef._collectionPath;
-    return 'unknown';
-  };
+vi.mock('firebase/firestore', () => ({
+  collection: vi.fn((db, path) => ({ _collPath: path })),
+  doc: vi.fn((db, ...args) => ({ _isDoc: true })),
+  onSnapshot: vi.fn((queryOrRef, callback) => {
+    if (queryOrRef?._isDoc) {
+      // Document snapshot (settings/pdfDefaults)
+      callback({ exists: () => false, data: () => null });
+      return vi.fn();
+    }
 
-  return {
-    collection: vi.fn((db, path) => ({ path, _collectionPath: path })),
-    onSnapshot: vi.fn((queryOrRef, callback) => {
-      const path = getCollectionPath(queryOrRef);
+    const path = queryOrRef?._collPath;
 
-      if (path === 'students') {
-        // Simulate students data - use queueMicrotask for immediate async execution
-        queueMicrotask(() => {
-          callback({
-            docs: [
-              { id: 'student1', data: () => ({ id: 'student1', firstName: 'John', lastName: 'Doe', schoolName: 'Central High', gradeLevel: '10', gradYear: '2027', overrideHours: 0 }) },
-              { id: 'student2', data: () => ({ id: 'student2', firstName: 'Jane', lastName: 'Smith', schoolName: 'West High', gradeLevel: '11', gradYear: '2026', overrideHours: 0 }) },
-              { id: 'student3', data: () => ({ id: 'student3', firstName: 'Bob', lastName: 'Johnson', schoolName: 'East High', gradeLevel: '12', gradYear: '2025', overrideHours: 0 }) },
-            ]
-          });
+    if (path === 'pdfTemplates') {
+      callback({ docs: [] });
+      return vi.fn();
+    }
+
+    if (path === 'students') {
+      queueMicrotask(() => {
+        callback({
+          docs: [
+            { id: 'student1', data: () => ({ id: 'student1', firstName: 'John', lastName: 'Doe', schoolName: 'Central High', gradeLevel: '10', gradYear: '2027', overrideHours: 0 }) },
+            { id: 'student2', data: () => ({ id: 'student2', firstName: 'Jane', lastName: 'Smith', schoolName: 'West High', gradeLevel: '11', gradYear: '2026', overrideHours: 0 }) },
+            { id: 'student3', data: () => ({ id: 'student3', firstName: 'Bob', lastName: 'Johnson', schoolName: 'East High', gradeLevel: '12', gradYear: '2025', overrideHours: 0 }) },
+          ]
         });
-        return vi.fn();
-      } else {
-        // Simulate time entries data
-        queueMicrotask(() => {
-          callback({
-            docs: [
-              { id: 'entry0', data: () => ({ studentId: 'student1', eventId: 'event123', activityId: 'activity1', checkInTime: { seconds: 1704096000, toDate: () => new Date('2024-01-01T08:00:00') }, checkOutTime: { seconds: 1704110400, toDate: () => new Date('2024-01-01T12:00:00') } }) },
-              { id: 'entry1', data: () => ({ studentId: 'student2', eventId: 'event123', activityId: 'activity1', checkInTime: { seconds: 1704096000, toDate: () => new Date('2024-01-01T08:00:00') }, checkOutTime: { seconds: 1704110400, toDate: () => new Date('2024-01-01T12:00:00') } }) },
-            ]
-          });
-        });
-        return vi.fn();
-      }
-    }),
-    query: vi.fn((ref) => ({ ...ref, _query: ref, _collectionPath: ref.path || ref._collectionPath })),
-    where: vi.fn(),
-    addDoc: vi.fn().mockResolvedValue({ id: 'newStudent' }),
-    serverTimestamp: vi.fn(() => ({ seconds: Date.now() / 1000 }))
-  };
-});
+      });
+      return vi.fn();
+    }
+
+    // timeEntries or other
+    queueMicrotask(() => {
+      callback({
+        docs: [
+          { id: 'entry0', data: () => ({ studentId: 'student1', eventId: 'event123', activityId: 'activity1', checkInTime: { seconds: 1704096000, toDate: () => new Date('2024-01-01T08:00:00') }, checkOutTime: { seconds: 1704110400, toDate: () => new Date('2024-01-01T12:00:00') } }) },
+          { id: 'entry1', data: () => ({ studentId: 'student2', eventId: 'event123', activityId: 'activity1', checkInTime: { seconds: 1704096000, toDate: () => new Date('2024-01-01T08:00:00') }, checkOutTime: { seconds: 1704110400, toDate: () => new Date('2024-01-01T12:00:00') } }) },
+        ]
+      });
+    });
+    return vi.fn();
+  }),
+  query: vi.fn((ref) => ref),
+  where: vi.fn(() => ({})),
+  addDoc: vi.fn().mockResolvedValue({ id: 'newStudent' }),
+  serverTimestamp: vi.fn(() => ({ seconds: Date.now() / 1000 })),
+}));
 
 // Mock AuthContext
 vi.mock('../contexts/AuthContext', () => ({

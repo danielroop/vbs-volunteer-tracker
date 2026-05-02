@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "bootstrap:local": "node bootstrap-local.js",
     "seed:local": "node generate-test-users.js && node generate-time-entries.js",
     "seed:prod": "NODE_ENV=production node generate-test-users.js && NODE_ENV=production node generate-time-entries.js",
     "setup-admin": "node setup-admin.js",

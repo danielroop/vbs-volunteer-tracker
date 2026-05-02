@@ -4,9 +4,16 @@ import { readFileSync } from 'fs';
 
 /**
  * generate-time-entries.js
+ * Generate test time entries (check-in/check-out records) for students
+ *
  * Usage:
- * Emulator:   node generate-time-entries.js
- * Production: NODE_ENV=production node generate-time-entries.js
+ * Emulator (default event):   node generate-time-entries.js
+ * Emulator (specific event):  node generate-time-entries.js <eventId>
+ * Production (default event): NODE_ENV=production node generate-time-entries.js
+ * Production (specific event): NODE_ENV=production node generate-time-entries.js <eventId>
+ *
+ * Example:
+ * node generate-time-entries.js qyJ9b9SOB0zzIrenV5ev
  */
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -36,7 +43,15 @@ if (!isProd) {
 
 const db = getFirestore();
 
-const EVENT_ID = 'qyJ9b9SOB0zzIrenV5ev';
+// Get EVENT_ID from command line argument or use default
+const EVENT_ID = process.argv[2] || 'qyJ9b9SOB0zzIrenV5ev';
+
+if (process.argv[2]) {
+  console.log(`📌 Using event ID: ${EVENT_ID}`);
+} else {
+  console.log(`📌 Using default event ID: ${EVENT_ID}`);
+  console.log(`💡 Tip: Pass event ID as argument: node generate-time-entries.js <eventId>`);
+}
 
 // Helper to add random minutes (positive or negative)
 const addRandomMinutes = (date, range = 15) => {

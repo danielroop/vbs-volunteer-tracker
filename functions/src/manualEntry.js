@@ -13,7 +13,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {string} request.data.startTime - Start time string (HH:MM)
  * @param {string} request.data.endTime - End time string (HH:MM)
  */
-export const createManualTimeEntry = onCall(async (request) => {
+export const createManualTimeEntry = onCall({ cors: true }, async (request) => {
   const { studentId, eventId, activityId, date, startTime, endTime } = request.data;
 
   // Validate required fields

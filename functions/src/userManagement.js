@@ -32,7 +32,7 @@ async function verifyAdmin(request) {
  * @param {string} request.data.name - User's display name
  * @param {string} request.data.role - User's role ('admin' or 'adult_volunteer')
  */
-export const createUser = onCall(async (request) => {
+export const createUser = onCall({ cors: true }, async (request) => {
   await verifyAdmin(request);
 
   const { email, password, name, role } = request.data;
@@ -108,7 +108,7 @@ export const createUser = onCall(async (request) => {
  * @param {boolean} [request.data.isActive] - Active status (optional)
  * @param {string} [request.data.name] - New name (optional)
  */
-export const updateUser = onCall(async (request) => {
+export const updateUser = onCall({ cors: true }, async (request) => {
   await verifyAdmin(request);
 
   const { userId, role, isActive, name } = request.data;
@@ -199,7 +199,7 @@ export const updateUser = onCall(async (request) => {
  * @param {Object} request.data
  * @param {string} request.data.userId - User's UID to delete
  */
-export const deleteUser = onCall(async (request) => {
+export const deleteUser = onCall({ cors: true }, async (request) => {
   await verifyAdmin(request);
 
   const { userId } = request.data;
@@ -247,7 +247,7 @@ export const deleteUser = onCall(async (request) => {
 /**
  * List all users (from both admins and users collections)
  */
-export const listUsers = onCall(async (request) => {
+export const listUsers = onCall({ cors: true }, async (request) => {
   await verifyAdmin(request);
 
   const db = getFirestore();
@@ -291,7 +291,7 @@ export const listUsers = onCall(async (request) => {
  * @param {string} request.data.userId - User's UID
  * @param {string} [request.data.newPassword] - New password (if not provided, generates random)
  */
-export const resetUserPassword = onCall(async (request) => {
+export const resetUserPassword = onCall({ cors: true }, async (request) => {
   await verifyAdmin(request);
 
   const { userId, newPassword } = request.data;

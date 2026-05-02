@@ -10,7 +10,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {string} request.data.entryId - Time entry ID to void
  * @param {string} request.data.voidReason - Reason for voiding (min 5 characters)
  */
-export const voidTimeEntry = onCall(async (request) => {
+export const voidTimeEntry = onCall({ cors: true }, async (request) => {
   const { entryId, voidReason } = request.data;
 
   // Validate required fields
@@ -90,7 +90,7 @@ export const voidTimeEntry = onCall(async (request) => {
  * @param {Object} request.data
  * @param {string} request.data.entryId - Time entry ID to restore
  */
-export const restoreTimeEntry = onCall(async (request) => {
+export const restoreTimeEntry = onCall({ cors: true }, async (request) => {
   const { entryId } = request.data;
 
   // Validate required fields

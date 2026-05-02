@@ -20,7 +20,7 @@ const toDate = (timestamp) => {
  * @param {string} request.data.checkOutTime - ISO timestamp for checkout
  * @param {string} request.data.reason - Reason for forced checkout (required)
  */
-export const forceCheckOut = onCall(async (request) => {
+export const forceCheckOut = onCall({ cors: true }, async (request) => {
   const { entryId, checkOutTime, reason } = request.data;
 
   // Validate required fields
@@ -136,7 +136,7 @@ export const forceCheckOut = onCall(async (request) => {
  * @param {string} request.data.date - Date (YYYY-MM-DD)
  * @param {string} request.data.reason - Reason for bulk forced checkout
  */
-export const forceAllCheckOut = onCall(async (request) => {
+export const forceAllCheckOut = onCall({ cors: true }, async (request) => {
   const { eventId, date, activityCheckOutTimes, checkOutTime, reason } = request.data;
 
   // Validate required fields
@@ -281,7 +281,7 @@ export const forceAllCheckOut = onCall(async (request) => {
  * @param {string} request.data.eventId - Event ID
  * @param {string} request.data.date - Date (YYYY-MM-DD)
  */
-export const getDailyReviewSummary = onCall(async (request) => {
+export const getDailyReviewSummary = onCall({ cors: true }, async (request) => {
   const { eventId, date } = request.data;
 
   if (!eventId || !date) {

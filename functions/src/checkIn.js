@@ -11,7 +11,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {string} request.data.activityId - Activity ID
  * @param {string} request.data.scannedBy - Who scanned (e.g., 'av_scan')
  */
-export const checkIn = onCall(async (request) => {
+export const checkIn = onCall({ cors: true }, async (request) => {
   const { studentId, eventId, activityId, scannedBy } = request.data;
 
   // Validate required fields

@@ -10,7 +10,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {string} request.data.eventId - Event ID
  * @param {string} request.data.method - Check-out method: 'self_scan' | 'av_scan'
  */
-export const checkOut = onCall(async (request) => {
+export const checkOut = onCall({ cors: true }, async (request) => {
   const { studentId, eventId, activityId, method } = request.data;
 
   // Validate required fields

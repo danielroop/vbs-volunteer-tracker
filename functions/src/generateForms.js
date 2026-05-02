@@ -13,7 +13,7 @@ import { getFirestore } from 'firebase-admin/firestore';
  * @param {string[]} request.data.studentIds - Array of student IDs (or empty for all)
  * @param {string} request.data.formType - Optional: Filter by form type
  */
-export const generateForms = onCall(async (request) => {
+export const generateForms = onCall({ cors: true }, async (request) => {
   const { eventId, studentIds, formType } = request.data;
 
   // Validate required fields

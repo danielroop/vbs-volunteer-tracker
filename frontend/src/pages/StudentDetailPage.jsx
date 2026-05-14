@@ -5,11 +5,12 @@ import { formatTime, formatHours } from '../utils/hourCalculations';
 import { generateFilledPdf, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 
 import { db, functions, storage } from '../utils/firebase';
-import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc, getDocs } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 
 import { useEvent } from '../contexts/EventContext';
+import { Link } from 'react-router-dom';
 import { buildEditChangeDescription } from '../utils/changeDescriptions';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
@@ -25,6 +26,7 @@ export default function StudentDetailPage() {
     const [student, setStudent] = useState(null);
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [eventHistory, setEventHistory] = useState([]); // [{eventId, eventName, totalHours}]
     const [printMode, setPrintMode] = useState(null);
     const [notesModal, setNotesModal] = useState({ isOpen: false, entry: null });
 
@@ -90,6 +92,38 @@ export default function StudentDetailPage() {
             }
         }
         if (studentId) fetchStudent();
+    }, [studentId]);
+
+    // Load cross-event history for this student
+    useEffect(() => {
+        if (!studentId) return;
+
+        async function loadEventHistory() {
+            const [entriesSnap, eventsSnap] = await Promise.all([
+                getDocs(query(collection(db, 'timeEntries'), where('studentId', '==', studentId))),
+                getDocs(collection(db, 'events')),
+            ]);
+
+            const eventsMap = {};
+            eventsSnap.docs.forEach(d => { eventsMap[d.id] = d.data().name || d.id; });
+
+            const hoursByEvent = {};
+            entriesSnap.docs.forEach(d => {
+                const data = d.data();
+                if (data.isVoided || !data.checkOutTime) return;
+                const diff = (data.checkOutTime.seconds - data.checkInTime.seconds) / 3600;
+                const rounded = Math.round(diff * 4) / 4;
+                hoursByEvent[data.eventId] = (hoursByEvent[data.eventId] || 0) + rounded;
+            });
+
+            setEventHistory(
+                Object.entries(hoursByEvent)
+                    .map(([eventId, totalHours]) => ({ eventId, eventName: eventsMap[eventId] || eventId, totalHours }))
+                    .sort((a, b) => a.eventName.localeCompare(b.eventName))
+            );
+        }
+
+        loadEventHistory();
     }, [studentId]);
 
     // Fetch PDF templates and default template setting
@@ -649,7 +683,8 @@ export default function StudentDetailPage() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 no-print">
-                    <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border p-6 h-fit">
+                    <div className="lg:col-span-1 space-y-4">
+                        <div className="bg-white rounded-2xl shadow-sm border p-6">
                         <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Summary</h3>
                         <div className="space-y-4">
                             {activityLog.map(act => (
@@ -668,6 +703,28 @@ export default function StudentDetailPage() {
                                 )}
                             </div>
                         </div>
+                        </div>
+
+                        {eventHistory.length > 0 && (
+                            <div className="bg-white rounded-2xl shadow-sm border p-6">
+                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Event History</h3>
+                                <div className="space-y-2">
+                                    {eventHistory.map(ev => (
+                                        <div key={ev.eventId} className="flex justify-between items-center">
+                                            <Link
+                                                to={`/admin/settings/events/${ev.eventId}/students`}
+                                                className="text-sm font-semibold text-primary-700 hover:underline truncate"
+                                            >
+                                                {ev.eventName}
+                                            </Link>
+                                            <span className="text-sm font-black text-gray-900 bg-gray-100 px-3 py-1 rounded-lg ml-2 shrink-0">
+                                                {ev.totalHours.toFixed(2)} hrs
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="lg:col-span-3">

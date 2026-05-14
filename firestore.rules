@@ -65,5 +65,10 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read, write: if isAdmin();
     }
+
+    // Event-student associations: Admin only
+    match /eventStudents/{docId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

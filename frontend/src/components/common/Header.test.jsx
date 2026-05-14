@@ -60,10 +60,11 @@ describe('Header', () => {
     renderWithRouter(<Header />);
 
     expect(screen.getAllByRole('link', { name: 'Dashboard' }).some(link => link.getAttribute('href') === '/admin')).toBe(true);
-    expect(screen.getAllByRole('link', { name: 'Students' }).some(link => link.getAttribute('href') === '/admin/students')).toBe(true);
     expect(screen.getAllByRole('link', { name: 'Daily Review' }).some(link => link.getAttribute('href') === '/admin/daily-review')).toBe(true);
     expect(screen.getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/admin/settings');
     expect(screen.queryByRole('link', { name: 'Events' })).not.toBeInTheDocument();
+    // Students is now under Settings, not in the Operations nav
+    expect(screen.queryByRole('link', { name: 'Students' })).not.toBeInTheDocument();
   });
 
   it('highlights settings when a settings route is active', () => {
@@ -73,10 +74,10 @@ describe('Header', () => {
   });
 
   it('highlights active operational links', () => {
-    renderWithRouter(<Header />, { route: '/admin/students' });
+    renderWithRouter(<Header />, { route: '/admin/daily-review' });
 
-    const studentsLinks = screen.getAllByRole('link', { name: 'Students' });
-    expect(studentsLinks.some(link => link.classList.contains('bg-primary-50'))).toBe(true);
+    const dailyReviewLinks = screen.getAllByRole('link', { name: 'Daily Review' });
+    expect(dailyReviewLinks.some(link => link.classList.contains('bg-primary-50'))).toBe(true);
   });
 
   it('switches the active event from the context switcher', async () => {
@@ -100,7 +101,6 @@ describe('Header', () => {
     renderWithRouter(<Header showNavTabs={false} />);
 
     expect(screen.queryByRole('link', { name: 'Daily Review' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Students' })).not.toBeInTheDocument();
   });
 
   it('hides event indicator text when showEventIndicator is false', () => {
@@ -132,7 +132,7 @@ describe('Header', () => {
     await user.click(screen.getByRole('button', { name: /open menu/i }));
     expect(screen.getByRole('button', { name: /close menu/i })).toHaveAttribute('aria-expanded', 'true');
 
-    await user.click(screen.getAllByRole('link', { name: 'Students' })[0]);
+    await user.click(screen.getAllByRole('link', { name: 'Daily Review' })[0]);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();

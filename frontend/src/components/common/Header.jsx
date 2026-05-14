@@ -40,7 +40,6 @@ export default function Header({
 
   const operationsNav = [
     { path: '/admin', label: 'Dashboard', exact: true },
-    { path: '/admin/students', label: 'Students' },
     { path: '/admin/daily-review', label: 'Daily Review' },
   ];
 

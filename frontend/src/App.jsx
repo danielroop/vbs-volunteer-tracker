@@ -16,6 +16,7 @@ import CreateEventPage from './pages/CreateEventPage';
 import StudentDetailPage from './pages/StudentDetailPage';
 import UsersPage from './pages/UsersPage';
 import PdfTemplatesPage from './pages/PdfTemplatesPage';
+import EventStudentsPage from './pages/EventStudentsPage';
 
 // Loading Spinner Component
 function LoadingSpinner() {
@@ -106,6 +107,7 @@ function AdminLayout() {
 function SettingsLayout() {
   const location = useLocation();
   const tabs = [
+    { path: '/admin/settings/students', label: 'Students' },
     { path: '/admin/settings/events', label: 'Events' },
     { path: '/admin/settings/users', label: 'Users' },
     { path: '/admin/settings/pdf-templates', label: 'PDF Templates' },
@@ -179,15 +181,18 @@ function App() {
               <Route index element={<AdminDashboardPage />} />
               <Route path="daily-review" element={<DailyReviewPage />} />
               <Route path="forms" element={<FormGenerationPage />} />
-              <Route path="students" element={<StudentsPage />} />
-              <Route path="students/:studentId" element={<StudentDetailPage />} />
+              <Route path="students" element={<Navigate to="/admin/settings/students" replace />} />
+              <Route path="students/:studentId" element={<Navigate to="/admin/settings/students/:studentId" replace />} />
               <Route path="events" element={<Navigate to="/admin/settings/events" replace />} />
               <Route path="events/new" element={<Navigate to="/admin/settings/events/new" replace />} />
               <Route path="users" element={<Navigate to="/admin/settings/users" replace />} />
               <Route path="settings" element={<SettingsLayout />}>
-                <Route index element={<Navigate to="events" replace />} />
+                <Route index element={<Navigate to="students" replace />} />
+                <Route path="students" element={<StudentsPage />} />
+                <Route path="students/:studentId" element={<StudentDetailPage />} />
                 <Route path="events" element={<EventsPage />} />
                 <Route path="events/new" element={<CreateEventPage />} />
+                <Route path="events/:eventId/students" element={<EventStudentsPage />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="pdf-templates" element={<PdfTemplatesPage />} />
               </Route>

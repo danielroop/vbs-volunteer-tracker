@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { db } from '../utils/firebase';
 import { collection, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { useEvent } from '../contexts/EventContext';
@@ -152,7 +153,7 @@ export default function EventsPage() {
                                     className="text-xs font-bold"
                                     onClick={() => handleEditConfig(event)}
                                 >
-                                    View Detail
+                                    Edit Config
                                 </Button>
 
                                 {!isActive ? (
@@ -170,13 +171,19 @@ export default function EventsPage() {
                                 )}
                             </div>
 
-                            <div className="flex items-center justify-center border-t pt-4">
+                            <div className="flex items-center justify-between border-t pt-4">
                                 <button
                                     onClick={() => handleEditConfig(event)}
                                     className="text-[10px] font-black text-gray-400 hover:text-primary-600 transition-colors uppercase tracking-widest"
                                 >
                                     Edit Configuration
                                 </button>
+                                <Link
+                                    to={`/admin/settings/events/${event.id}/students`}
+                                    className="text-[10px] font-black text-primary-500 hover:text-primary-700 transition-colors uppercase tracking-widest"
+                                >
+                                    View Students →
+                                </Link>
                             </div>
                         </div>
                     );

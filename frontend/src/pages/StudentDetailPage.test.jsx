@@ -67,6 +67,7 @@ vi.mock('firebase/firestore', () => ({
   query: vi.fn((ref) => ref),
   where: vi.fn(() => ({})),
   orderBy: vi.fn(() => ({})),
+  getDocs: vi.fn(() => Promise.resolve({ docs: [] })),
   Timestamp: {
     fromDate: (date) => ({ toDate: () => date, seconds: Math.floor(date.getTime() / 1000) })
   },

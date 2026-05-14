@@ -55,6 +55,10 @@ vi.mock('../contexts/AuthContext', () => ({
     useAuth: () => ({ user: { uid: 'admin123' } }),
 }));
 
+vi.mock('../contexts/EventContext', () => ({
+    useEvent: () => ({ currentEvent: { id: 'event123', name: 'VBS 2026' } }),
+}));
+
 const renderPage = () => render(
     <MemoryRouter initialEntries={['/admin/settings/events/event123/students']}>
         <Routes>

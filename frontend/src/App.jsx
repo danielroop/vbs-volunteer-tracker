@@ -181,8 +181,7 @@ function App() {
               <Route index element={<AdminDashboardPage />} />
               <Route path="daily-review" element={<DailyReviewPage />} />
               <Route path="forms" element={<FormGenerationPage />} />
-              <Route path="students" element={<Navigate to="/admin/settings/students" replace />} />
-              <Route path="students/:studentId" element={<Navigate to="/admin/settings/students/:studentId" replace />} />
+              <Route path="students" element={<EventStudentsPage />} />
               <Route path="events" element={<Navigate to="/admin/settings/events" replace />} />
               <Route path="events/new" element={<Navigate to="/admin/settings/events/new" replace />} />
               <Route path="users" element={<Navigate to="/admin/settings/users" replace />} />

@@ -11,12 +11,18 @@ import {
     serverTimestamp,
 } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 
 export default function EventStudentsPage() {
-    const { eventId } = useParams();
+    const { eventId: paramEventId } = useParams();
+    const { currentEvent } = useEvent();
     const { user } = useAuth();
+
+    // Use URL param when navigating from event card; fall back to the selected event in Operations
+    const eventId = paramEventId || currentEvent?.id;
+    const isOperationsView = !paramEventId;
 
     const [event, setEvent] = useState(null);
     const [allStudents, setAllStudents] = useState([]);
@@ -33,15 +39,19 @@ export default function EventStudentsPage() {
     const [importSelected, setImportSelected] = useState(new Set());
     const [importSaving, setImportSaving] = useState(false);
 
-    // Load event
+    // Load event — use context if available (Operations nav), otherwise fetch from Firestore
     useEffect(() => {
+        if (isOperationsView && currentEvent) {
+            setEvent(currentEvent);
+            return;
+        }
         if (!eventId) return;
         const unsub = onSnapshot(collection(db, 'events'), snap => {
             const found = snap.docs.find(d => d.id === eventId);
             if (found) setEvent({ id: found.id, ...found.data() });
         });
         return () => unsub();
-    }, [eventId]);
+    }, [eventId, isOperationsView, currentEvent]);
 
     // Load all students
     useEffect(() => {
@@ -163,13 +173,15 @@ export default function EventStudentsPage() {
             {/* Page header */}
             <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">
-                        <Link to="/admin/settings/events" className="hover:text-primary-600">Events</Link>
-                        <span>/</span>
-                        <span className="text-gray-600">{event?.name || eventId}</span>
-                        <span>/</span>
-                        <span className="text-gray-600">Students</span>
-                    </div>
+                    {!isOperationsView && (
+                        <div className="flex items-center gap-2 text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">
+                            <Link to="/admin/settings/events" className="hover:text-primary-600">Events</Link>
+                            <span>/</span>
+                            <span className="text-gray-600">{event?.name || eventId}</span>
+                            <span>/</span>
+                            <span className="text-gray-600">Students</span>
+                        </div>
+                    )}
                     <h2 className="text-2xl font-black text-gray-900 tracking-tight">
                         {event?.name || 'Event'} — Students
                     </h2>

@@ -21,8 +21,10 @@ let addDocMock;
 
 vi.mock('firebase/firestore', () => ({
     collection: vi.fn((db, path) => ({ _collPath: path })),
+    doc: vi.fn((db, col, id) => ({ _docPath: `${col}/${id}` })),
     query: vi.fn((ref) => ref),
     where: vi.fn(() => ({})),
+    deleteDoc: vi.fn().mockResolvedValue(undefined),
     onSnapshot: vi.fn((queryOrRef, callback) => {
         const path = queryOrRef?._collPath;
 
@@ -31,7 +33,7 @@ vi.mock('firebase/firestore', () => ({
         } else if (path === 'students') {
             queueMicrotask(() => callback({ docs: mockStudents.map(s => ({ id: s.id, data: () => s })) }));
         } else if (path === 'eventStudents') {
-            // Only student1 explicitly added to event
+            // student1 explicitly added to event; student2 only has time entries
             queueMicrotask(() => callback({ docs: [{ id: 'es1', data: () => ({ eventId: 'event123', studentId: 'student1' }) }] }));
         } else if (path === 'timeEntries') {
             // student2 checked in via time entries
@@ -211,6 +213,40 @@ describe('EventStudentsPage', () => {
         act(() => { fireEvent.change(searchInput, { target: { value: 'Alice' } }); });
 
         expect(screen.getByText(/1 of 2 students/i)).toBeInTheDocument();
+    });
+
+    it('shows a Remove button for explicitly added students with no time entries', async () => {
+        renderPage();
+        await waitFor(() => {
+            expect(screen.getByText('Alice Adams')).toBeInTheDocument();
+        });
+
+        const removeButton = screen.getByRole('button', { name: /^Remove$/ });
+        expect(removeButton).toBeInTheDocument();
+        expect(removeButton).not.toBeDisabled();
+    });
+
+    it('does not show an active Remove button for students with time entries', async () => {
+        renderPage();
+        await waitFor(() => {
+            expect(screen.getByText('Bob Brown')).toBeInTheDocument();
+        });
+
+        expect(screen.getAllByRole('button', { name: /^Remove$/ })).toHaveLength(1);
+        expect(screen.getByTitle('Cannot remove a student with time entries')).toBeInTheDocument();
+    });
+
+    it('deletes the eventStudents association when Remove is clicked', async () => {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+
+        renderPage();
+        await waitFor(() => screen.getByRole('button', { name: /^Remove$/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Remove$/ }));
+
+        await waitFor(() => {
+            expect(doc).toHaveBeenCalledWith({}, 'eventStudents', 'es1');
+            expect(deleteDoc).toHaveBeenCalledTimes(1);
+        });
     });
 
     it('submitting Add Student form calls addDoc twice (student + eventStudents)', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import EventStudentsPage from './EventStudentsPage';
@@ -164,6 +164,45 @@ describe('EventStudentsPage', () => {
         await waitFor(() => {
             expect(screen.queryByText('Charlie Clark')).not.toBeInTheDocument();
         });
+    });
+
+    it('renders a search input', async () => {
+        renderPage();
+        await waitFor(() => {
+            expect(screen.getByRole('searchbox', { name: /Search students/i })).toBeInTheDocument();
+        });
+    });
+
+    it('filters students by search term', async () => {
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        const searchInput = screen.getByRole('searchbox', { name: /Search students/i });
+        act(() => { fireEvent.change(searchInput, { target: { value: 'Alice' } }); });
+
+        expect(screen.getByText('Alice Adams')).toBeInTheDocument();
+        expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
+    });
+
+    it('shows no-results message when search matches nothing', async () => {
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        const searchInput = screen.getByRole('searchbox', { name: /Search students/i });
+        act(() => { fireEvent.change(searchInput, { target: { value: 'zzz-no-match' } }); });
+
+        expect(screen.getByText(/No students match your search/i)).toBeInTheDocument();
+        expect(screen.queryByText('Alice Adams')).not.toBeInTheDocument();
+    });
+
+    it('shows filtered count in subtitle when searching', async () => {
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        const searchInput = screen.getByRole('searchbox', { name: /Search students/i });
+        act(() => { fireEvent.change(searchInput, { target: { value: 'Alice' } }); });
+
+        expect(screen.getByText(/1 of 2 students/i)).toBeInTheDocument();
     });
 
     it('submitting Add Student form calls addDoc twice (student + eventStudents)', async () => {

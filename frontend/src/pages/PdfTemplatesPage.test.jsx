@@ -561,7 +561,7 @@ describe('PdfTemplatesPage', () => {
       expect(capturedAnchor.download).toMatch(/ocps_form.*\.json/);
     });
 
-    it('should trigger download when Export All is clicked', async () => {
+    it('should trigger download of a zip when Export All is clicked', async () => {
       const user = userEvent.setup();
       renderPage();
 
@@ -572,9 +572,11 @@ describe('PdfTemplatesPage', () => {
 
       await user.click(screen.getByRole('button', { name: /Export All/i }));
 
-      expect(capturedAnchor).not.toBeNull();
-      expect(capturedAnchor.click).toHaveBeenCalled();
-      expect(capturedAnchor.download).toBe('vbs_pdf_templates_export.json');
+      await waitFor(() => {
+        expect(capturedAnchor).not.toBeNull();
+        expect(capturedAnchor.click).toHaveBeenCalled();
+        expect(capturedAnchor.download).toBe('vbs_pdf_templates_export.zip');
+      });
     });
 
     it('should include fields in exported JSON', async () => {

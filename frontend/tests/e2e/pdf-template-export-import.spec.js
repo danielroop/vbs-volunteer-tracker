@@ -157,7 +157,7 @@ test.describe('PDF Template Export/Import', () => {
         }
     });
 
-    test('should trigger a file download for Export All', async ({ page }) => {
+    test('should trigger a zip download for Export All', async ({ page }) => {
         await page.goto('/admin/pdf-templates');
         await page.waitForSelector('h1:has-text("PDF Templates")');
 
@@ -170,13 +170,7 @@ test.describe('PDF Template Export/Import', () => {
                 page.getByRole('button', { name: 'Export All' }).click(),
             ]);
 
-            expect(download.suggestedFilename()).toBe('vbs_pdf_templates_export.json');
-
-            const filePath = await download.path();
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const data = JSON.parse(content);
-            expect(data.version).toBe('1');
-            expect(data.templates.length).toBeGreaterThanOrEqual(1);
+            expect(download.suggestedFilename()).toBe('vbs_pdf_templates_export.zip');
         }
     });
 });

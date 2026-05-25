@@ -6,6 +6,7 @@ import { FIELD_KEY_OPTIONS, ACTIVITY_COLUMN_OPTIONS, DETAIL_COLUMN_OPTIONS, getP
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import Spinner from '../components/common/Spinner';
+import JSZip from 'jszip';
 
 const EXPORT_VERSION = '1';
 
@@ -78,9 +79,20 @@ export default function PdfTemplatesPage() {
     downloadJson(payload, `${safeName}_mapping.json`);
   };
 
-  const handleExportAll = () => {
-    const payload = buildExportPayload(templates);
-    downloadJson(payload, 'vbs_pdf_templates_export.json');
+  const handleExportAll = async () => {
+    const zip = new JSZip();
+    for (const t of templates) {
+      const payload = buildExportPayload([t]);
+      const safeName = t.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      zip.file(`${safeName}_mapping.json`, JSON.stringify(payload, null, 2));
+    }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vbs_pdf_templates_export.zip';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleDeleteTemplate = async (template) => {

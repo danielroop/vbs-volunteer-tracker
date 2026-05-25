@@ -46,6 +46,17 @@ function parseImportFile(text) {
   return data;
 }
 
+function buildTableColumn(option, index, isDetail) {
+  return {
+    key: option.key,
+    label: option.label,
+    xPercent: isDetail ? 3 + (index * 16) : 5 + (index * 23),
+    fontSize: 10,
+    maxWidth: isDetail ? 15 : 20,
+    enabled: true,
+  };
+}
+
 export default function PdfTemplatesPage() {
   const [templates, setTemplates] = useState([]);
   const [defaultTemplateId, setDefaultTemplateId] = useState(null);
@@ -586,28 +597,14 @@ function FieldMapperModal({ isOpen, template, onClose }) {
   const [atRowHeight, setAtRowHeight] = useState(3);
   const [atMaxRows, setAtMaxRows] = useState(5);
   const [atColumns, setAtColumns] = useState(
-    ACTIVITY_COLUMN_OPTIONS.map((opt, i) => ({
-      key: opt.key,
-      label: opt.label,
-      xPercent: 5 + (i * 23),
-      fontSize: 10,
-      maxWidth: 20,
-      enabled: true,
-    }))
+    ACTIVITY_COLUMN_OPTIONS.map((opt, i) => buildTableColumn(opt, i, false))
   );
 
   // Detail table config state
   const [dtRowHeight, setDtRowHeight] = useState(3);
   const [dtMaxRows, setDtMaxRows] = useState(10);
   const [dtColumns, setDtColumns] = useState(
-    DETAIL_COLUMN_OPTIONS.map((opt, i) => ({
-      key: opt.key,
-      label: opt.label,
-      xPercent: 3 + (i * 16),
-      fontSize: 10,
-      maxWidth: 15,
-      enabled: true,
-    }))
+    DETAIL_COLUMN_OPTIONS.map((opt, i) => buildTableColumn(opt, i, true))
   );
 
   // Custom static field config state
@@ -1384,6 +1381,7 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
   const colBgSelected = isDetail ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-300' : 'bg-green-100 text-green-800 ring-1 ring-green-300';
   const colBgDefault = isDetail ? 'bg-purple-50 text-purple-700' : 'bg-green-50 text-green-700';
   const columnOptions = isDetail ? DETAIL_COLUMN_OPTIONS : ACTIVITY_COLUMN_OPTIONS;
+  const tableLabelOffset = 'calc(-100% - 32px)';
 
   return (
     <>
@@ -1398,7 +1396,8 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
         onMouseDown={(e) => onMouseDown(e, null)}
       >
         <div className={`inline-flex items-center gap-1 ${isSelected ? `ring-2 ${tableRingColor} rounded` : ''}`}
-          style={{ transform: 'translateY(calc(-100% - 14px))' }}
+          style={{ transform: `translateY(${tableLabelOffset})` }}
+          data-testid={`${field.id}-table-anchor-label`}
         >
           <span className={`${tableBgColor} text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap`}>
             {tableLabel} ({field.maxRows} rows)
@@ -1424,6 +1423,7 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
             {/* Column drag handle at first row position */}
             <div
               className={`absolute ${isColDragging ? 'cursor-grabbing' : 'cursor-col-resize'}`}
+              data-testid={`${field.id}-${col.key}-column-marker`}
               style={{
                 left: `${col.xPercent}%`,
                 top: `${field.yPercent}%`,
@@ -1491,6 +1491,23 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
     const colTextColor = isDetail ? 'text-purple-800' : 'text-green-800';
     const colBorderColor = isDetail ? 'border-purple-100' : 'border-green-100';
     const title = isDetail ? 'Edit Detail Table' : 'Edit Activity Table (Summary)';
+    const columnOptions = isDetail ? DETAIL_COLUMN_OPTIONS : ACTIVITY_COLUMN_OPTIONS;
+    const columns = field.columns || [];
+    const columnsByKey = new Map(columns.map(col => [col.key, col]));
+
+    const toggleColumn = (option, optionIndex, enabled) => {
+      if (!enabled) {
+        onUpdate({ columns: columns.filter(col => col.key !== option.key) });
+        return;
+      }
+
+      if (columnsByKey.has(option.key)) return;
+
+      const nextColumns = [...columns, buildTableColumn(option, optionIndex, isDetail)];
+      const optionOrder = new Map(columnOptions.map((opt, index) => [opt.key, index]));
+      nextColumns.sort((a, b) => (optionOrder.get(a.key) ?? 999) - (optionOrder.get(b.key) ?? 999));
+      onUpdate({ columns: nextColumns });
+    };
 
     return (
       <div className={`p-4 ${bgColor} border ${borderColor} rounded-lg space-y-3`}>
@@ -1537,51 +1554,69 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
         </div>
         <div className="space-y-2">
           <p className={`text-xs font-bold ${labelColor} uppercase`}>Columns (drag on PDF to position, or edit X% below)</p>
-          {(field.columns || []).map((col, idx) => (
-            <div key={col.key} className={`flex items-center gap-2 text-sm bg-white p-2 rounded border ${colBorderColor}`}>
-              <span className={`w-40 ${colTextColor} font-medium`}>{col.label}</span>
-              <label className={`text-xs ${colLabelColor}`}>X%:</label>
-              <input
-                type="number"
-                value={col.xPercent}
-                onChange={(e) => {
-                  const updated = [...field.columns];
-                  updated[idx] = { ...updated[idx], xPercent: Number(e.target.value) };
-                  onUpdate({ columns: updated });
-                }}
-                min={0}
-                max={100}
-                step={0.5}
-                className="input-field text-sm w-16"
-              />
-              <label className={`text-xs ${colLabelColor}`}>Font:</label>
-              <input
-                type="number"
-                value={col.fontSize}
-                onChange={(e) => {
-                  const updated = [...field.columns];
-                  updated[idx] = { ...updated[idx], fontSize: Number(e.target.value) };
-                  onUpdate({ columns: updated });
-                }}
-                min={6}
-                max={24}
-                className="input-field text-sm w-14"
-              />
-              <label className={`text-xs ${colLabelColor}`}>MaxW%:</label>
-              <input
-                type="number"
-                value={col.maxWidth || 0}
-                onChange={(e) => {
-                  const updated = [...field.columns];
-                  updated[idx] = { ...updated[idx], maxWidth: Number(e.target.value) || 0 };
-                  onUpdate({ columns: updated });
-                }}
-                min={0}
-                max={100}
-                className="input-field text-sm w-14"
-              />
-            </div>
-          ))}
+          {columnOptions.map((option, optionIndex) => {
+            const col = columnsByKey.get(option.key);
+            const enabled = Boolean(col);
+            const columnIndex = columns.findIndex(item => item.key === option.key);
+
+            return (
+              <div key={option.key} className={`flex items-center gap-2 text-sm bg-white p-2 rounded border ${colBorderColor}`}>
+                <label className={`flex w-40 items-center gap-2 ${colTextColor} font-medium`}>
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={(e) => toggleColumn(option, optionIndex, e.target.checked)}
+                    className="rounded"
+                  />
+                  {option.label}
+                </label>
+                {enabled && (
+                  <>
+                    <label className={`text-xs ${colLabelColor}`}>X%:</label>
+                    <input
+                      type="number"
+                      value={col.xPercent}
+                      onChange={(e) => {
+                        const updated = [...columns];
+                        updated[columnIndex] = { ...updated[columnIndex], xPercent: Number(e.target.value) };
+                        onUpdate({ columns: updated });
+                      }}
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      className="input-field text-sm w-16"
+                    />
+                    <label className={`text-xs ${colLabelColor}`}>Font:</label>
+                    <input
+                      type="number"
+                      value={col.fontSize}
+                      onChange={(e) => {
+                        const updated = [...columns];
+                        updated[columnIndex] = { ...updated[columnIndex], fontSize: Number(e.target.value) };
+                        onUpdate({ columns: updated });
+                      }}
+                      min={6}
+                      max={24}
+                      className="input-field text-sm w-14"
+                    />
+                    <label className={`text-xs ${colLabelColor}`}>MaxW%:</label>
+                    <input
+                      type="number"
+                      value={col.maxWidth || 0}
+                      onChange={(e) => {
+                        const updated = [...columns];
+                        updated[columnIndex] = { ...updated[columnIndex], maxWidth: Number(e.target.value) || 0 };
+                        onUpdate({ columns: updated });
+                      }}
+                      min={0}
+                      max={100}
+                      className="input-field text-sm w-14"
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     );

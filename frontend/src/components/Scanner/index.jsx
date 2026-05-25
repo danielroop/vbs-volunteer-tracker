@@ -8,9 +8,12 @@ import ScannerHeader from '../common/ScannerHeader';
 import Spinner from '../common/Spinner';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { parseQRData } from '../../utils/qrCodeGenerator';
+import { useAuth } from '../../contexts/AuthContext';
+
 export default function Scanner() {
   const { eventId: urlEventId, activityId: urlActivityId, action: urlAction } = useParams();
   const navigate = useNavigate();
+  const { user, userProfile } = useAuth();
 
   const [localEvent, setLocalEvent] = useState(null);
   const [allEvents, setAllEvents] = useState([]);
@@ -19,6 +22,8 @@ export default function Scanner() {
   const isStarting = useRef(false);
   const isProcessing = useRef(false);
   const pauseAfterValidScan = 2000;
+  const scannerId = user?.uid || userProfile?.id || 'av_scan';
+  const scannerName = userProfile?.name || user?.displayName || user?.email || '';
 
   useEffect(() => {
     async function fetchData() {
@@ -87,7 +92,9 @@ export default function Scanner() {
           studentId,
           eventId: urlEventId,
           activityId: urlActivityId,
-          scannedBy: 'av_scan'
+          scannedBy: scannerId,
+          scannedByName: scannerName,
+          method: 'av_scan'
         });
 
         if (result.data.success) {

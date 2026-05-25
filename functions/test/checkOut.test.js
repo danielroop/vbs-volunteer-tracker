@@ -72,7 +72,7 @@ jest.unstable_mockModule('firebase-admin/firestore', () => ({
 }));
 
 jest.unstable_mockModule('firebase-functions/v2/https', () => ({
-  onCall: (handler) => handler,
+  onCall: (...args) => args[args.length - 1],
   HttpsError: class HttpsError extends Error {
     constructor(code, message) {
       super(message);
@@ -191,8 +191,10 @@ describe('checkOut Cloud Function', () => {
           eventId: 'event456',
           activityId: 'activity1',
           method: 'av_scan',
+          scannedBy: 'client_fallback',
+          scannedByName: 'Client Fallback',
         },
-        auth: { uid: 'av_user_123' },
+        auth: { uid: 'av_user_123', token: { name: 'Adult Volunteer' } },
       };
 
       await checkOut(request);
@@ -202,7 +204,33 @@ describe('checkOut Cloud Function', () => {
           checkOutTime: expect.anything(),
           hoursWorked: 6,
           rawMinutes: 360,
+          checkOutBy: 'av_user_123',
+          checkOutByName: 'Adult Volunteer',
           checkOutMethod: 'av_scan',
+        })
+      );
+    });
+
+    it('should preserve student_self logging for self-scan check-out', async () => {
+      const request = {
+        data: {
+          studentId: 'student123',
+          eventId: 'event456',
+          activityId: 'activity1',
+          method: 'self_scan',
+          scannedBy: 'av_user_123',
+          scannedByName: 'Adult Volunteer',
+        },
+        auth: { uid: 'av_user_123', token: { name: 'Adult Volunteer' } },
+      };
+
+      await checkOut(request);
+
+      expect(mockEntryDoc.ref.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkOutBy: 'student_self',
+          checkOutByName: null,
+          checkOutMethod: 'self_scan',
         })
       );
     });

@@ -18,6 +18,8 @@ let mockCanAccessAdmin = vi.fn(() => true);
 
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
+    user: { email: 'fallback@test.com', displayName: 'Fallback User' },
+    userProfile: { name: 'Scanner Person', email: 'scanner@test.com', role: 'adult_volunteer' },
     signOut: mockSignOut,
     canAccessAdmin: mockCanAccessAdmin,
   }),
@@ -42,6 +44,7 @@ describe('ScannerHeader', () => {
 
     expect(screen.getByText('Scan Mode')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'VBS Volunteer Tracker' })).toBeInTheDocument();
+    expect(screen.getByText('Signed in as Scanner Person')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Exit Scan Mode' })).toBeInTheDocument();
   });
 

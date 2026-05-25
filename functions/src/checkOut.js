@@ -9,9 +9,11 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {string} request.data.studentId - Student ID
  * @param {string} request.data.eventId - Event ID
  * @param {string} request.data.method - Check-out method: 'self_scan' | 'av_scan'
+ * @param {string} request.data.scannedBy - Fallback scanner user ID
+ * @param {string} request.data.scannedByName - Fallback scanner display name
  */
 export const checkOut = onCall({ cors: true }, async (request) => {
-  const { studentId, eventId, activityId, method } = request.data;
+  const { studentId, eventId, activityId, method, scannedBy, scannedByName } = request.data;
 
   // Validate required fields
   if (!studentId || !eventId || !activityId) {
@@ -63,12 +65,20 @@ export const checkOut = onCall({ cors: true }, async (request) => {
     // Combine existing flags with checkout flags
     const checkOutFlags = getFlagsForCheckOut(checkOutTime.toDate(), event.typicalEndTime || '15:00');
     const allFlags = [...(entry.flags || []), ...checkOutFlags];
+    const checkOutMethod = method || 'self_scan';
+    const scannerId = checkOutMethod === 'self_scan'
+      ? 'student_self'
+      : (request.auth?.uid || scannedBy || 'av');
+    const scannerName = checkOutMethod === 'self_scan'
+      ? null
+      : (request.auth?.token?.name || scannedByName || null);
 
     // Update entry
     await entryDoc.ref.update({
       checkOutTime,
-      checkOutBy: method === 'self_scan' ? 'student_self' : (request.auth?.uid || 'av'),
-      checkOutMethod: method || 'self_scan',
+      checkOutBy: scannerId,
+      checkOutByName: scannerName,
+      checkOutMethod,
       hoursWorked: rounded,
       rawMinutes: minutes,
       flags: allFlags,

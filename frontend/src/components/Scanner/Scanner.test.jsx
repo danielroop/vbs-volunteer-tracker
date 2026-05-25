@@ -7,6 +7,7 @@ import Scanner from './index';
 // Mock useQRScanner hook
 const mockStartScanning = vi.fn().mockResolvedValue(undefined);
 const mockStopScanning = vi.fn().mockResolvedValue(undefined);
+const mockScanCallable = vi.hoisted(() => vi.fn());
 
 vi.mock('../../hooks/useQRScanner', () => ({
   __esModule: true,
@@ -79,9 +80,7 @@ vi.mock('firebase/firestore', () => {
 });
 
 vi.mock('firebase/functions', () => ({
-  httpsCallable: vi.fn(() => vi.fn().mockResolvedValue({
-    data: { success: true, studentName: 'Test Student' },
-  })),
+  httpsCallable: vi.fn(() => mockScanCallable),
 }));
 
 // Mock parseQRData
@@ -105,6 +104,7 @@ vi.mock('../../hooks/useOfflineSync', () => ({
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
+    user: { uid: 'admin123', email: 'test@test.com', displayName: 'Auth Test User' },
     userProfile: { name: 'Test User', email: 'test@test.com', role: 'admin' },
     signOut: vi.fn(),
     canAccessAdmin: () => true,
@@ -129,6 +129,9 @@ describe('Scanner', () => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mockUseQRScannerOptions = null;
+    mockScanCallable.mockResolvedValue({
+      data: { success: true, studentName: 'Test Student' },
+    });
   });
 
   afterEach(() => {
@@ -245,6 +248,58 @@ describe('Scanner', () => {
         expect(screen.getByText('VBS 2026')).toBeInTheDocument();
         expect(screen.getByText('General')).toBeInTheDocument();
       });
+    });
+
+    it('should display the signed-in scanner name', async () => {
+      renderScanner('/scan/event1/general/checkin');
+
+      await waitFor(() => {
+        expect(screen.getByText('Signed in as Test User')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('scan logging identity', () => {
+    it('should send signed-in scanner identity on check-in', async () => {
+      renderScanner('/scan/event1/general/checkin');
+
+      await waitFor(() => {
+        expect(mockUseQRScannerOptions).not.toBeNull();
+      });
+
+      await mockUseQRScannerOptions.onSuccess('valid-qr');
+
+      expect(mockScanCallable).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId: 'student1',
+          eventId: 'event1',
+          activityId: 'general',
+          scannedBy: 'admin123',
+          scannedByName: 'Test User',
+          method: 'av_scan',
+        })
+      );
+    });
+
+    it('should send av_scan method and signed-in scanner identity on check-out', async () => {
+      renderScanner('/scan/event1/general/checkout');
+
+      await waitFor(() => {
+        expect(mockUseQRScannerOptions).not.toBeNull();
+      });
+
+      await mockUseQRScannerOptions.onSuccess('valid-qr');
+
+      expect(mockScanCallable).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId: 'student1',
+          eventId: 'event1',
+          activityId: 'general',
+          scannedBy: 'admin123',
+          scannedByName: 'Test User',
+          method: 'av_scan',
+        })
+      );
     });
   });
 });

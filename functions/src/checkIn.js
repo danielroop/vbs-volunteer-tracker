@@ -9,10 +9,11 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
  * @param {string} request.data.studentId - Student ID
  * @param {string} request.data.eventId - Event ID
  * @param {string} request.data.activityId - Activity ID
- * @param {string} request.data.scannedBy - Who scanned (e.g., 'av_scan')
+ * @param {string} request.data.scannedBy - Fallback scanner user ID
+ * @param {string} request.data.scannedByName - Fallback scanner display name
  */
 export const checkIn = onCall({ cors: true }, async (request) => {
-  const { studentId, eventId, activityId, scannedBy } = request.data;
+  const { studentId, eventId, activityId, scannedBy, scannedByName } = request.data;
 
   // Validate required fields
   if (!studentId || !eventId || !activityId) {
@@ -59,6 +60,8 @@ export const checkIn = onCall({ cors: true }, async (request) => {
     // Create time entry
     const checkInTime = Timestamp.now();
     const flags = getFlagsForCheckIn(checkInTime.toDate(), event.typicalStartTime || '09:00');
+    const scannerId = request.auth?.uid || scannedBy || 'av_scan';
+    const scannerName = request.auth?.token?.name || scannedByName || null;
 
     const entry = {
       studentId,
@@ -66,7 +69,8 @@ export const checkIn = onCall({ cors: true }, async (request) => {
       activityId,
       date: today,
       checkInTime,
-      checkInBy: scannedBy || 'av_scan',
+      checkInBy: scannerId,
+      checkInByName: scannerName,
       checkInMethod: 'av_scan',
       checkOutTime: null,
       checkOutBy: null,

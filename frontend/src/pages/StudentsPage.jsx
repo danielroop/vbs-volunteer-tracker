@@ -409,7 +409,7 @@ export default function StudentsPage() {
   };
 
   const handleViewDetail = (studentId) => {
-    navigate(`/admin/students/${studentId}`);
+    navigate(`/admin/settings/students/${studentId}`);
   };
 
   if (loading) return (
@@ -612,18 +612,18 @@ export default function StudentsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">First Name</label>
-                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                  <input className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
                     value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Last Name</label>
-                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                  <input className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
                     value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">School Name</label>
-                <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                <input className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
                   value={formData.schoolName} onChange={e => setFormData({...formData, schoolName: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -671,18 +671,18 @@ export default function StudentsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">First Name</label>
-                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                  <input className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
                     value={editFormData.firstName} onChange={e => setEditFormData({...editFormData, firstName: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Last Name</label>
-                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                  <input className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
                     value={editFormData.lastName} onChange={e => setEditFormData({...editFormData, lastName: e.target.value})} />
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">School Name</label>
-                <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                <input className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
                   value={editFormData.schoolName} onChange={e => setEditFormData({...editFormData, schoolName: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">

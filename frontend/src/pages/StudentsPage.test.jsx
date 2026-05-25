@@ -481,7 +481,7 @@ describe('StudentsPage', () => {
       await user.click(viewDetailButtons[0]);
 
       // Should navigate to student detail page
-      expect(mockNavigate).toHaveBeenCalledWith('/admin/students/student1');
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/settings/students/student1');
     });
   });
 
@@ -721,7 +721,7 @@ describe('StudentsPage', () => {
 
       if (johnCard) {
         await user.click(johnCard);
-        expect(mockNavigate).toHaveBeenCalledWith('/admin/students/student1');
+        expect(mockNavigate).toHaveBeenCalledWith('/admin/settings/students/student1');
       }
     });
 

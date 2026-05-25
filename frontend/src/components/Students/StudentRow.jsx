@@ -13,7 +13,8 @@ export default function StudentRow({
   student,
   isSelected,
   onToggleSelection,
-  onViewDetail
+  onViewDetail,
+  onEdit
 }) {
   const hasHours = student.eventTotal > 0;
 
@@ -58,12 +59,22 @@ export default function StudentRow({
         </span>
       </td>
       <td className="px-6 py-4 text-right">
-        <button
-          onClick={() => onViewDetail(student.id)}
-          className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-4 py-1.5 rounded-lg hover:bg-primary-600 hover:text-white transition-all shadow-sm"
-        >
-          View Detail →
-        </button>
+        <div className="flex gap-2 justify-end">
+          {onEdit && (
+            <button
+              onClick={() => onEdit(student)}
+              className="text-gray-600 font-bold text-xs bg-white border border-gray-200 px-4 py-1.5 rounded-lg hover:bg-gray-100 transition-all shadow-sm"
+            >
+              Edit
+            </button>
+          )}
+          <button
+            onClick={() => onViewDetail(student.id)}
+            className="text-primary-600 font-bold text-xs bg-white border border-primary-200 px-4 py-1.5 rounded-lg hover:bg-primary-600 hover:text-white transition-all shadow-sm"
+          >
+            View Detail →
+          </button>
+        </div>
       </td>
     </tr>
   );

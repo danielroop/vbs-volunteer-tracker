@@ -85,6 +85,7 @@ vi.mock('firebase/firestore', () => ({
   query: vi.fn((ref) => ref),
   where: vi.fn(() => ({})),
   addDoc: vi.fn().mockResolvedValue({ id: 'newStudent' }),
+  updateDoc: vi.fn().mockResolvedValue(undefined),
   serverTimestamp: vi.fn(() => ({ seconds: Date.now() / 1000 })),
 }));
 
@@ -480,7 +481,7 @@ describe('StudentsPage', () => {
       await user.click(viewDetailButtons[0]);
 
       // Should navigate to student detail page
-      expect(mockNavigate).toHaveBeenCalledWith('/admin/students/student1');
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/settings/students/student1');
     });
   });
 
@@ -720,7 +721,7 @@ describe('StudentsPage', () => {
 
       if (johnCard) {
         await user.click(johnCard);
-        expect(mockNavigate).toHaveBeenCalledWith('/admin/students/student1');
+        expect(mockNavigate).toHaveBeenCalledWith('/admin/settings/students/student1');
       }
     });
 
@@ -741,6 +742,107 @@ describe('StudentsPage', () => {
         const studentList = screen.getByRole('list', { name: /Student list/i });
         const johnCard = studentList.querySelector('article');
         expect(johnCard).toHaveClass('border-primary-400', 'bg-primary-50');
+      });
+    });
+
+    it('should show Edit button on student cards', async () => {
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByRole('button', { name: /Edit John Doe/i });
+      expect(editButtons.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('edit student modal', () => {
+    it('should open edit modal when Edit button is clicked on desktop row', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByRole('button', { name: /Edit$/i });
+      await user.click(editButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByText('Edit Volunteer')).toBeInTheDocument();
+      });
+    });
+
+    it('should pre-populate edit modal with student data', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByRole('button', { name: /Edit$/i });
+      await user.click(editButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByText('Edit Volunteer')).toBeInTheDocument();
+      });
+
+      const firstNameInput = screen.getByDisplayValue('John');
+      const lastNameInput = screen.getByDisplayValue('Doe');
+      expect(firstNameInput).toBeInTheDocument();
+      expect(lastNameInput).toBeInTheDocument();
+    });
+
+    it('should call updateDoc when edit form is submitted', async () => {
+      const { updateDoc } = await import('firebase/firestore');
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByRole('button', { name: /Edit$/i });
+      await user.click(editButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByText('Edit Volunteer')).toBeInTheDocument();
+      });
+
+      const firstNameInput = screen.getByDisplayValue('John');
+      await user.clear(firstNameInput);
+      await user.type(firstNameInput, 'Jonathan');
+
+      const saveButton = screen.getByRole('button', { name: /Save Changes/i });
+      await user.click(saveButton);
+
+      await waitFor(() => {
+        expect(updateDoc).toHaveBeenCalled();
+      });
+    });
+
+    it('should close edit modal when Cancel is clicked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StudentsPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Doe, John')[0]).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByRole('button', { name: /Edit$/i });
+      await user.click(editButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByText('Edit Volunteer')).toBeInTheDocument();
+      });
+
+      const cancelButton = screen.getByRole('button', { name: /Cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Edit Volunteer')).not.toBeInTheDocument();
       });
     });
   });

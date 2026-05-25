@@ -10,8 +10,9 @@ import { useAuth } from '../../contexts/AuthContext';
  * to provide a streamlined experience during check-in/check-out operations.
  */
 export default function ScannerHeader() {
-  const { signOut, canAccessAdmin } = useAuth();
+  const { user, userProfile, signOut, canAccessAdmin } = useAuth();
   const navigate = useNavigate();
+  const displayName = userProfile?.name || user?.displayName || user?.email || 'Signed-in user';
 
   const handleSignOut = async () => {
     await signOut();
@@ -33,6 +34,7 @@ export default function ScannerHeader() {
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-primary-600">Scan Mode</p>
           <h1 className="text-sm font-black text-gray-950">VBS Volunteer Tracker</h1>
+          <p className="mt-0.5 text-xs font-medium text-gray-500">Signed in as {displayName}</p>
         </div>
 
         <button

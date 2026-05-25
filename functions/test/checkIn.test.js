@@ -61,7 +61,7 @@ jest.unstable_mockModule('firebase-admin/firestore', () => ({
 }));
 
 jest.unstable_mockModule('firebase-functions/v2/https', () => ({
-  onCall: (handler) => handler,
+  onCall: (...args) => args[args.length - 1],
   HttpsError: class HttpsError extends Error {
     constructor(code, message) {
       super(message);
@@ -179,6 +179,28 @@ describe('checkIn Cloud Function', () => {
 
       const addCall = mockAdd.mock.calls[0][0];
       expect(addCall.checkInMethod).toBe('av_scan');
+    });
+
+    it('should log the authenticated scanner user on the time entry', async () => {
+      const request = {
+        data: {
+          studentId: 'student123',
+          eventId: 'event456',
+          activityId: 'activity1',
+          scannedBy: 'client_fallback',
+          scannedByName: 'Client Fallback',
+        },
+        auth: {
+          uid: 'auth_scanner_123',
+          token: { name: 'Authenticated Scanner' },
+        },
+      };
+
+      await checkIn(request);
+
+      const addCall = mockAdd.mock.calls[0][0];
+      expect(addCall.checkInBy).toBe('auth_scanner_123');
+      expect(addCall.checkInByName).toBe('Authenticated Scanner');
     });
 
     it('should set correct initial status for flagged entries', async () => {

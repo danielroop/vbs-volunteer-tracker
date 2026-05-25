@@ -424,6 +424,123 @@ describe('PdfTemplatesPage', () => {
         expect(screen.getByText('Detail Table')).toBeInTheDocument();
       });
     });
+
+    it('should position the detail table handle above column markers', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user, {
+        name: 'Detail Handle Test',
+        fields: [
+          {
+            id: 'dt1',
+            type: 'detailTable',
+            label: 'Detail Table',
+            xPercent: 5,
+            yPercent: 30,
+            rowHeight: 3,
+            maxRows: 10,
+            columns: [
+              { key: 'detailDate', label: 'Date', xPercent: 5, fontSize: 10 },
+            ],
+            page: 0,
+          },
+        ],
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dt1-table-anchor-label')).toHaveStyle({
+          transform: 'translateY(calc(-100% - 32px))',
+        });
+        expect(screen.getByTestId('dt1-detailDate-column-marker')).toHaveStyle({
+          transform: 'translateY(-100%)',
+        });
+      });
+    });
+
+    it('should turn off a column from an already placed detail table', async () => {
+      const { updateDoc } = await import('firebase/firestore');
+      const user = userEvent.setup();
+      await openFieldMapper(user, {
+        name: 'Detail Column Remove Test',
+        fields: [
+          {
+            id: 'dt1',
+            type: 'detailTable',
+            label: 'Detail Table',
+            xPercent: 5,
+            yPercent: 30,
+            rowHeight: 3,
+            maxRows: 10,
+            columns: [
+              { key: 'detailDate', label: 'Date', xPercent: 5, fontSize: 10 },
+              { key: 'detailHours', label: 'Hours', xPercent: 40, fontSize: 10 },
+            ],
+            page: 0,
+          },
+        ],
+      });
+
+      await user.click(screen.getByText(/10 rows, 2 cols/));
+      await user.click(screen.getByRole('checkbox', { name: 'Date' }));
+      await user.click(screen.getByRole('button', { name: /Save Mappings/i }));
+
+      await waitFor(() => {
+        expect(updateDoc).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            fields: [
+              expect.objectContaining({
+                columns: [
+                  expect.objectContaining({ key: 'detailHours' }),
+                ],
+              }),
+            ],
+          })
+        );
+      });
+    });
+
+    it('should turn on a missing column for an already placed detail table', async () => {
+      const { updateDoc } = await import('firebase/firestore');
+      const user = userEvent.setup();
+      await openFieldMapper(user, {
+        name: 'Detail Column Add Test',
+        fields: [
+          {
+            id: 'dt1',
+            type: 'detailTable',
+            label: 'Detail Table',
+            xPercent: 5,
+            yPercent: 30,
+            rowHeight: 3,
+            maxRows: 10,
+            columns: [
+              { key: 'detailDate', label: 'Date', xPercent: 5, fontSize: 10 },
+            ],
+            page: 0,
+          },
+        ],
+      });
+
+      await user.click(screen.getByText(/10 rows, 1 cols/));
+      await user.click(screen.getByRole('checkbox', { name: 'Start Time' }));
+      await user.click(screen.getByRole('button', { name: /Save Mappings/i }));
+
+      await waitFor(() => {
+        expect(updateDoc).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            fields: [
+              expect.objectContaining({
+                columns: [
+                  expect.objectContaining({ key: 'detailDate' }),
+                  expect.objectContaining({ key: 'detailStartTime', label: 'Start Time' }),
+                ],
+              }),
+            ],
+          })
+        );
+      });
+    });
   });
 
   describe('default template', () => {

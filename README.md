@@ -201,6 +201,33 @@ npm run deploy
 npm run logs
 ```
 
+### Import VBS Registrations
+
+The VBS registration importer adds student volunteers to an existing event and
+creates adult volunteer Auth users when they do not already exist. Export the
+Excel workbook as CSV before importing.
+
+```bash
+cd scripts
+npm run import:vbs -- "./VBS 2026 Volunteer Registrations Final.csv" --emulator --event-id abc123 --dry-run
+npm run import:vbs -- "./VBS 2026 Volunteer Registrations Final.csv" --emulator --event-id abc123
+```
+
+If `--event-id` is omitted in an interactive terminal, the script lists available
+events and prompts for a numbered selection. Non-interactive runs must pass
+`--event-id`. Use `--service-account path/to/service-account.json --project
+project-id` for a production import.
+
+Matching rules:
+
+- Student rows are `RegistrationType` values for middle school or high school registrants.
+- Adult rows are `RegistrationType` value `18+ Registrant`.
+- Existing students are matched by normalized first/last name plus grad year, then first/last name plus school, then first/last name.
+- Existing adults are matched by email in Firebase Auth.
+- Extra registration columns are ignored except for mapped fields such as name, email, phone, school, grade, and grad year.
+- Students do not receive a per-student PDF template during import; the app's configured default PDF template remains the fallback.
+- Newly created adult volunteer passwords are printed once at the end of the import.
+
 ## Key Components
 
 ### AV Scanner (`/scan/:eventId`)

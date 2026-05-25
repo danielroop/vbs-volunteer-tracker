@@ -7,6 +7,8 @@ import {
     collection,
     onSnapshot,
     addDoc,
+    deleteDoc,
+    doc,
     query,
     where,
     serverTimestamp,
@@ -29,10 +31,11 @@ export default function EventStudentsPage() {
     const [event, setEvent] = useState(null);
     const [allStudents, setAllStudents] = useState([]);
     const [eventEntries, setEventEntries] = useState([]);
-    const [eventStudentIds, setEventStudentIds] = useState(new Set());
+    const [eventStudentDocIds, setEventStudentDocIds] = useState({});
     const [checkedInStudentIds, setCheckedInStudentIds] = useState(new Set());
     const [loading, setLoading] = useState(true);
     const [printingReports, setPrintingReports] = useState(false);
+    const [removingStudentId, setRemovingStudentId] = useState(null);
 
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -72,7 +75,11 @@ export default function EventStudentsPage() {
         if (!eventId) return;
         const q = query(collection(db, 'eventStudents'), where('eventId', '==', eventId));
         const unsub = onSnapshot(q, snap => {
-            setEventStudentIds(new Set(snap.docs.map(d => d.data().studentId)));
+            const docIds = {};
+            snap.docs.forEach(d => {
+                docIds[d.data().studentId] = d.id;
+            });
+            setEventStudentDocIds(docIds);
         });
         return () => unsub();
     }, [eventId]);
@@ -93,6 +100,11 @@ export default function EventStudentsPage() {
         });
         return () => unsub();
     }, [eventId]);
+
+    const eventStudentIds = useMemo(
+        () => new Set(Object.keys(eventStudentDocIds)),
+        [eventStudentDocIds]
+    );
 
     // Students visible in this event: explicitly added OR checked in at least once
     const eventStudents = useMemo(() => {
@@ -118,6 +130,20 @@ export default function EventStudentsPage() {
             })
             .sort((a, b) => a.lastName.localeCompare(b.lastName));
     }, [allStudents, eventStudentIds, checkedInStudentIds, importSearch]);
+
+    const handleRemoveStudent = async (studentId) => {
+        const eventStudentDocId = eventStudentDocIds[studentId];
+        if (!eventStudentDocId) return;
+
+        setRemovingStudentId(studentId);
+        try {
+            await deleteDoc(doc(db, 'eventStudents', eventStudentDocId));
+        } catch (err) {
+            console.error('Error removing student:', err);
+        } finally {
+            setRemovingStudentId(null);
+        }
+    };
 
     const handleAddStudent = async (e) => {
         e.preventDefault();
@@ -443,12 +469,29 @@ export default function EventStudentsPage() {
                                         )}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Link
-                                            to={`/admin/settings/students/${s.id}`}
-                                            className="text-xs font-bold text-primary-600 hover:underline"
-                                        >
-                                            View Details
-                                        </Link>
+                                        <div className="flex items-center justify-end gap-4">
+                                            <Link
+                                                to={`/admin/settings/students/${s.id}`}
+                                                className="text-xs font-bold text-primary-600 hover:underline"
+                                            >
+                                                View Details
+                                            </Link>
+                                            {eventStudentDocIds[s.id] && !checkedInStudentIds.has(s.id) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveStudent(s.id)}
+                                                    disabled={removingStudentId === s.id}
+                                                    className="text-xs font-bold text-red-500 hover:text-red-700 disabled:opacity-50"
+                                                >
+                                                    {removingStudentId === s.id ? 'Removing...' : 'Remove'}
+                                                </button>
+                                            )}
+                                            {checkedInStudentIds.has(s.id) && (
+                                                <span className="text-xs text-gray-300" title="Cannot remove a student with time entries">
+                                                    Remove
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

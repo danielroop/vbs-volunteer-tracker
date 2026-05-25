@@ -6,6 +6,45 @@ import { FIELD_KEY_OPTIONS, ACTIVITY_COLUMN_OPTIONS, DETAIL_COLUMN_OPTIONS, getP
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import Spinner from '../components/common/Spinner';
+import JSZip from 'jszip';
+
+const EXPORT_VERSION = '1';
+
+function downloadJson(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildExportPayload(templateList) {
+  return {
+    version: EXPORT_VERSION,
+    exportedAt: new Date().toISOString(),
+    templates: templateList.map(t => ({
+      name: t.name,
+      fileName: t.fileName,
+      pageWidth: t.pageWidth || 612,
+      pageHeight: t.pageHeight || 792,
+      pageCount: t.pageCount || 1,
+      fields: t.fields || [],
+    })),
+  };
+}
+
+function parseImportFile(text) {
+  const data = JSON.parse(text);
+  if (data.version !== EXPORT_VERSION) throw new Error(`Unsupported export version: ${data.version}`);
+  if (!Array.isArray(data.templates) || data.templates.length === 0) throw new Error('No templates found in export file');
+  for (const t of data.templates) {
+    if (!t.name) throw new Error('Template missing required "name" field');
+    if (!Array.isArray(t.fields)) throw new Error(`Template "${t.name}" has invalid fields`);
+  }
+  return data;
+}
 
 export default function PdfTemplatesPage() {
   const [templates, setTemplates] = useState([]);
@@ -13,6 +52,7 @@ export default function PdfTemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [uploadModal, setUploadModal] = useState({ isOpen: false });
   const [mapperModal, setMapperModal] = useState({ isOpen: false, template: null });
+  const [importModal, setImportModal] = useState({ isOpen: false });
 
   useEffect(() => {
     const unsubTemplates = onSnapshot(collection(db, 'pdfTemplates'), (snapshot) => {
@@ -31,6 +71,28 @@ export default function PdfTemplatesPage() {
     } catch (err) {
       alert('Failed to set default template: ' + err.message);
     }
+  };
+
+  const handleExportTemplate = (template) => {
+    const payload = buildExportPayload([template]);
+    const safeName = template.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    downloadJson(payload, `${safeName}_mapping.json`);
+  };
+
+  const handleExportAll = async () => {
+    const zip = new JSZip();
+    for (const t of templates) {
+      const payload = buildExportPayload([t]);
+      const safeName = t.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      zip.file(`${safeName}_mapping.json`, JSON.stringify(payload, null, 2));
+    }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vbs_pdf_templates_export.zip';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleDeleteTemplate = async (template) => {
@@ -65,9 +127,19 @@ export default function PdfTemplatesPage() {
             <h1 className="text-2xl font-black text-gray-900">PDF Templates</h1>
             <p className="text-sm text-gray-500 mt-1">Upload PDF forms and map data fields for volunteer hour printing</p>
           </div>
-          <Button onClick={() => setUploadModal({ isOpen: true })} variant="primary">
-            Upload Template
-          </Button>
+          <div className="flex gap-2">
+            {templates.length > 0 && (
+              <Button onClick={handleExportAll} variant="secondary">
+                Export All
+              </Button>
+            )}
+            <Button onClick={() => setImportModal({ isOpen: true })} variant="secondary">
+              Import Mapping
+            </Button>
+            <Button onClick={() => setUploadModal({ isOpen: true })} variant="primary">
+              Upload Template
+            </Button>
+          </div>
         </div>
 
         {templates.length === 0 ? (
@@ -115,6 +187,13 @@ export default function PdfTemplatesPage() {
                     )}
                     <Button
                       size="sm"
+                      variant="secondary"
+                      onClick={() => handleExportTemplate(template)}
+                    >
+                      Export
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="danger"
                       onClick={() => handleDeleteTemplate(template)}
                     >
@@ -130,6 +209,12 @@ export default function PdfTemplatesPage() {
         <UploadModal
           isOpen={uploadModal.isOpen}
           onClose={() => setUploadModal({ isOpen: false })}
+        />
+
+        <ImportMappingModal
+          isOpen={importModal.isOpen}
+          onClose={() => setImportModal({ isOpen: false })}
+          existingTemplates={templates}
         />
 
         {mapperModal.isOpen && mapperModal.template && (
@@ -234,6 +319,243 @@ function UploadModal({ isOpen, onClose }) {
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
           />
         </div>
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Modal for importing a previously exported mapping JSON.
+ * Supports applying mappings to an existing template or creating a new entry
+ * (optionally with a PDF file).
+ */
+function ImportMappingModal({ isOpen, onClose, existingTemplates }) {
+  const [jsonFile, setJsonFile] = useState(null);
+  const [parsedData, setParsedData] = useState(null);
+  const [selectedTemplateIdx, setSelectedTemplateIdx] = useState(0);
+  const [targetMode, setTargetMode] = useState('existing'); // 'existing' | 'new'
+  const [existingTargetId, setExistingTargetId] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState(null);
+  const [parseError, setParseError] = useState(null);
+
+  const reset = () => {
+    setJsonFile(null);
+    setParsedData(null);
+    setSelectedTemplateIdx(0);
+    setTargetMode('existing');
+    setExistingTargetId('');
+    setPdfFile(null);
+    setError(null);
+    setParseError(null);
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  const handleJsonChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setJsonFile(file);
+    setParsedData(null);
+    setParseError(null);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target.result;
+        const data = parseImportFile(text);
+        setParsedData(data);
+        setSelectedTemplateIdx(0);
+        const firstName = data.templates[0]?.name;
+        const match = existingTemplates.find(t => t.name === firstName);
+        if (match) {
+          setTargetMode('existing');
+          setExistingTargetId(match.id);
+        } else {
+          setTargetMode('new');
+          setExistingTargetId('');
+        }
+      } catch (err) {
+        setParseError('Invalid export file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImport = async () => {
+    if (!parsedData) return;
+    const tpl = parsedData.templates[selectedTemplateIdx];
+    setImporting(true);
+    setError(null);
+
+    try {
+      if (targetMode === 'existing') {
+        if (!existingTargetId) throw new Error('Please select a template to apply mappings to');
+        await updateDoc(doc(db, 'pdfTemplates', existingTargetId), { fields: tpl.fields });
+      } else {
+        // Create new template entry
+        let storagePath = null;
+        let downloadURL = null;
+        let pageWidth = tpl.pageWidth || 612;
+        let pageHeight = tpl.pageHeight || 792;
+        let pageCount = tpl.pageCount || 1;
+
+        if (pdfFile) {
+          if (pdfFile.type !== 'application/pdf') throw new Error('Only PDF files are supported');
+          storagePath = `pdfTemplates/${Date.now()}_${pdfFile.name}`;
+          const storageRef = ref(storage, storagePath);
+          await uploadBytes(storageRef, pdfFile);
+          downloadURL = await getDownloadURL(storageRef);
+
+          const arrayBuffer = await pdfFile.arrayBuffer();
+          const dims = await getPdfPageDimensions(arrayBuffer);
+          if (dims) {
+            pageWidth = dims.width;
+            pageHeight = dims.height;
+            pageCount = dims.pageCount;
+          }
+        }
+
+        await addDoc(collection(db, 'pdfTemplates'), {
+          name: tpl.name,
+          fileName: tpl.fileName || (pdfFile?.name ?? 'imported.pdf'),
+          storagePath,
+          downloadURL,
+          pageWidth,
+          pageHeight,
+          pageCount,
+          fields: tpl.fields,
+          createdAt: new Date(),
+        });
+      }
+      handleClose();
+    } catch (err) {
+      setError('Import failed: ' + err.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const selectedTpl = parsedData?.templates[selectedTemplateIdx];
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Import PDF Mapping"
+      size="md"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose} disabled={importing}>Cancel</Button>
+          <Button variant="primary" onClick={handleImport} loading={importing} disabled={!parsedData}>
+            Import
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Mapping Export File (.json)</label>
+          <input
+            type="file"
+            accept=".json,application/json"
+            data-testid="import-json-input"
+            onChange={handleJsonChange}
+            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+          />
+          {parseError && <p className="text-red-600 text-sm mt-1">{parseError}</p>}
+        </div>
+
+        {parsedData && (
+          <>
+            {parsedData.templates.length > 1 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Template to Import</label>
+                <select
+                  value={selectedTemplateIdx}
+                  onChange={(e) => setSelectedTemplateIdx(Number(e.target.value))}
+                  className="input-field w-full"
+                >
+                  {parsedData.templates.map((t, i) => (
+                    <option key={i} value={i}>{t.name} ({(t.fields || []).length} fields)</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {selectedTpl && (
+              <div className="p-3 bg-gray-50 rounded-lg text-sm space-y-1">
+                <p className="font-semibold text-gray-800">{selectedTpl.name}</p>
+                <p className="text-gray-500">{(selectedTpl.fields || []).length} field(s) &middot; {selectedTpl.pageCount || 1} page(s) &middot; {selectedTpl.pageWidth || 612}&times;{selectedTpl.pageHeight || 792}pt</p>
+                <p className="text-gray-400 text-xs">Original file: {selectedTpl.fileName}</p>
+              </div>
+            )}
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Apply to</p>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="targetMode"
+                    value="existing"
+                    checked={targetMode === 'existing'}
+                    onChange={() => setTargetMode('existing')}
+                  />
+                  <span className="text-sm text-gray-700">Existing template (replace its field mappings)</span>
+                </label>
+                {targetMode === 'existing' && (
+                  <div className="ml-6">
+                    {existingTemplates.length === 0 ? (
+                      <p className="text-sm text-gray-400">No existing templates. Upload a PDF template first.</p>
+                    ) : (
+                      <select
+                        value={existingTargetId}
+                        onChange={(e) => setExistingTargetId(e.target.value)}
+                        className="input-field w-full text-sm"
+                        data-testid="existing-template-select"
+                      >
+                        <option value="">-- Select a template --</option>
+                        {existingTemplates.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="targetMode"
+                    value="new"
+                    checked={targetMode === 'new'}
+                    onChange={() => setTargetMode('new')}
+                  />
+                  <span className="text-sm text-gray-700">New template entry</span>
+                </label>
+                {targetMode === 'new' && (
+                  <div className="ml-6 space-y-2">
+                    <p className="text-xs text-gray-500">Optionally attach a PDF file. You can also upload one later via "Upload Template".</p>
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      data-testid="import-pdf-input"
+                      onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
         {error && <p className="text-red-600 text-sm">{error}</p>}
       </div>
     </Modal>

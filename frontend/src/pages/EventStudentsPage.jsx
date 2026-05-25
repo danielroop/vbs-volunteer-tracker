@@ -34,6 +34,8 @@ export default function EventStudentsPage() {
     const [loading, setLoading] = useState(true);
     const [printingReports, setPrintingReports] = useState(false);
 
+    const [searchTerm, setSearchTerm] = useState('');
+
     const [addStudentModal, setAddStudentModal] = useState(false);
     const [addForm, setAddForm] = useState({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '' });
     const [addingSaving, setAddingSaving] = useState(false);
@@ -98,6 +100,13 @@ export default function EventStudentsPage() {
             .filter(s => eventStudentIds.has(s.id) || checkedInStudentIds.has(s.id))
             .sort((a, b) => a.lastName.localeCompare(b.lastName));
     }, [allStudents, eventStudentIds, checkedInStudentIds]);
+
+    const filteredStudents = useMemo(() => {
+        if (!searchTerm.trim()) return eventStudents;
+        return eventStudents.filter(s =>
+            `${s.firstName} ${s.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [eventStudents, searchTerm]);
 
     // Students not yet associated with this event (for import modal)
     const importableStudents = useMemo(() => {
@@ -345,9 +354,21 @@ export default function EventStudentsPage() {
                         {event?.name || 'Event'} — Students
                     </h2>
                     <p className="text-gray-500 text-sm font-medium mt-1">
-                        {eventStudents.length} student{eventStudents.length !== 1 ? 's' : ''} associated with this event
+                        {searchTerm.trim()
+                            ? `${filteredStudents.length} of ${eventStudents.length} student${eventStudents.length !== 1 ? 's' : ''}`
+                            : `${eventStudents.length} student${eventStudents.length !== 1 ? 's' : ''}`
+                        } associated with this event
                     </p>
                 </div>
+                <div className="flex flex-wrap gap-2 shrink-0 items-center">
+                    <input
+                        type="search"
+                        placeholder="Search students…"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="border border-gray-200 rounded-xl px-4 py-2 text-sm w-52 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
+                        aria-label="Search students"
+                    />
                 <div className="flex flex-wrap gap-2 shrink-0">
                     <Button variant="secondary" onClick={handlePrintBadges} disabled={eventStudents.length === 0}>
                         Print Badges
@@ -394,7 +415,14 @@ export default function EventStudentsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {eventStudents.map(s => (
+                            {filteredStudents.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                                        <p className="font-bold">No students match your search</p>
+                                        <p className="text-sm mt-1">Try a different name.</p>
+                                    </td>
+                                </tr>
+                            ) : filteredStudents.map(s => (
                                 <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-6 py-4 font-bold text-gray-900">
                                         {s.firstName} {s.lastName}

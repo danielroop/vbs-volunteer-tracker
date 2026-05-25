@@ -123,6 +123,14 @@ describe('EventStudentsPage', () => {
         });
     });
 
+    it('shows event-scoped print buttons', async () => {
+        renderPage();
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Print Badges/i })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /Print Reports/i })).toBeInTheDocument();
+        });
+    });
+
     it('opens Add Student modal on button click', async () => {
         const user = userEvent.setup();
         renderPage();

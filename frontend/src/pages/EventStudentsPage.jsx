@@ -228,8 +228,8 @@ export default function EventStudentsPage() {
 
     const handlePrintBadges = () => {
         const pages = [];
-        for (let i = 0; i < eventStudents.length; i += 8) {
-            pages.push(eventStudents.slice(i, i + 8));
+        for (let i = 0; i < filteredStudents.length; i += 8) {
+            pages.push(filteredStudents.slice(i, i + 8));
         }
 
         const body = pages.map((pageStudents, pageIndex) => (
@@ -314,7 +314,7 @@ export default function EventStudentsPage() {
     const handlePrintReports = () => {
         setPrintingReports(true);
         try {
-            const formsHtml = eventStudents.map(student => {
+            const formsHtml = filteredStudents.map(student => {
                 const activityLog = getStudentActivityLog(student.id);
                 const totalCalc = activityLog.reduce((sum, activity) => sum + parseFloat(activity.totalHours), 0);
                 const grandTotal = totalCalc + parseFloat(student.overrideHours || 0);
@@ -369,29 +369,30 @@ export default function EventStudentsPage() {
                         className="border border-gray-200 rounded-xl px-4 py-2 text-sm w-52 outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
                         aria-label="Search students"
                     />
-                <div className="flex flex-wrap gap-2 shrink-0">
-                    <Button variant="secondary" onClick={handlePrintBadges} disabled={eventStudents.length === 0}>
-                        Print Badges
-                    </Button>
-                    <Button
-                        variant="secondary"
-                        onClick={handlePrintReports}
-                        disabled={eventStudents.length === 0 || printingReports}
-                        loading={printingReports}
-                    >
-                        {printingReports ? 'Generating...' : 'Print Reports'}
-                    </Button>
-                    {allStudents.length > eventStudents.length && (
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                        <Button variant="secondary" onClick={handlePrintBadges} disabled={filteredStudents.length === 0}>
+                            Print Badges
+                        </Button>
                         <Button
                             variant="secondary"
-                            onClick={() => { setImportModal(true); setImportSearch(''); setImportSelected(new Set()); }}
+                            onClick={handlePrintReports}
+                            disabled={filteredStudents.length === 0 || printingReports}
+                            loading={printingReports}
                         >
-                            Import from System
+                            {printingReports ? 'Generating...' : 'Print Reports'}
                         </Button>
-                    )}
-                    <Button variant="primary" onClick={() => setAddStudentModal(true)}>
-                        + Add Student
-                    </Button>
+                        {allStudents.length > eventStudents.length && (
+                            <Button
+                                variant="secondary"
+                                onClick={() => { setImportModal(true); setImportSearch(''); setImportSelected(new Set()); }}
+                            >
+                                Import from System
+                            </Button>
+                        )}
+                        <Button variant="primary" onClick={() => setAddStudentModal(true)}>
+                            + Add Student
+                        </Button>
+                    </div>
                 </div>
             </div>
 

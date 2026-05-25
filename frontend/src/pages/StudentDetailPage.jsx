@@ -661,24 +661,6 @@ export default function StudentDetailPage() {
                             Print Service Log
                         </Button>
                         <Button onClick={() => handlePrint('badge')} variant="primary" className="flex-1 sm:flex-none min-h-[44px]">Print Badge</Button>
-                        {pdfTemplates.length > 0 && (
-                            <select
-                                value={selectedTemplateId || ''}
-                                onChange={(e) => handleTemplateChange(e.target.value)}
-                                className="input-field text-sm min-h-[44px]"
-                                aria-label="PDF Template Override"
-                                title={defaultTemplateId ? 'Override the default template for this student' : 'Assign a template to this student'}
-                            >
-                                <option value="">
-                                    {defaultTemplateId
-                                        ? `Default: ${pdfTemplates.find(t => t.id === defaultTemplateId)?.name || 'Default'}`
-                                        : 'Select Template Override...'}
-                                </option>
-                                {pdfTemplates.map(t => (
-                                    <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                            </select>
-                        )}
                     </div>
                 </div>
 

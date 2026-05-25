@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { db, storage } from '../utils/firebase';
-import { collection, onSnapshot, addDoc, serverTimestamp, query, where, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, query, where, doc, updateDoc } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 import { useEvent } from '../contexts/EventContext';
@@ -31,7 +31,19 @@ export default function StudentsPage() {
     lastName: '',
     schoolName: '',
     gradeLevel: '',
-    gradYear: ''
+    gradYear: '',
+    pdfTemplateId: ''
+  });
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editStudentId, setEditStudentId] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    firstName: '',
+    lastName: '',
+    schoolName: '',
+    gradeLevel: '',
+    gradYear: '',
+    pdfTemplateId: ''
   });
 
   // Watch for badgePrintMode changes and reset after print dialog closes
@@ -95,14 +107,37 @@ export default function StudentsPage() {
   const handleCreateStudent = async (e) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'students'), {
-        ...formData,
-        overrideHours: 0,
-        createdAt: serverTimestamp()
-      });
+      const data = { ...formData, overrideHours: 0, createdAt: serverTimestamp() };
+      if (!data.pdfTemplateId) delete data.pdfTemplateId;
+      await addDoc(collection(db, 'students'), data);
       setIsModalOpen(false);
-      setFormData({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '' });
+      setFormData({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '', pdfTemplateId: '' });
     } catch (err) { console.error("Error adding student:", err); }
+  };
+
+  const openEditModal = (student) => {
+    setEditStudentId(student.id);
+    setEditFormData({
+      firstName: student.firstName || '',
+      lastName: student.lastName || '',
+      schoolName: student.schoolName || '',
+      gradeLevel: student.gradeLevel || '',
+      gradYear: student.gradYear || '',
+      pdfTemplateId: student.pdfTemplateId || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditStudent = async (e) => {
+    e.preventDefault();
+    if (!editStudentId) return;
+    try {
+      const data = { ...editFormData };
+      if (!data.pdfTemplateId) data.pdfTemplateId = null;
+      await updateDoc(doc(db, 'students', editStudentId), data);
+      setIsEditModalOpen(false);
+      setEditStudentId(null);
+    } catch (err) { console.error("Error updating student:", err); }
   };
 
   const filteredStudents = studentsWithHours.filter(s =>
@@ -509,6 +544,7 @@ export default function StudentsPage() {
                 isSelected={selectedStudents.has(student.id)}
                 onToggleSelection={toggleStudentSelection}
                 onViewDetail={handleViewDetail}
+                onEdit={openEditModal}
               />
             ))}
           </tbody>
@@ -553,6 +589,7 @@ export default function StudentsPage() {
               isSelected={selectedStudents.has(student.id)}
               onToggleSelection={toggleStudentSelection}
               onViewDetail={handleViewDetail}
+              onEdit={openEditModal}
             />
           ))}
         </ul>
@@ -603,9 +640,81 @@ export default function StudentsPage() {
                     value={formData.gradYear} onChange={e => setFormData({...formData, gradYear: e.target.value})} />
                 </div>
               </div>
+              {pdfTemplates.length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Volunteer Form Template</label>
+                  <select className="w-full border border-gray-200 rounded-xl p-3 outline-none" value={formData.pdfTemplateId} onChange={e => setFormData({...formData, pdfTemplateId: e.target.value})}>
+                    <option value="">
+                      {defaultTemplateId
+                        ? `Default: ${pdfTemplates.find(t => t.id === defaultTemplateId)?.name || 'Default'}`
+                        : 'Use default template'}
+                    </option>
+                    {pdfTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="flex gap-3 pt-6">
                 <Button type="submit" className="flex-1 py-3">Add Student</Button>
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT STUDENT MODAL */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm no-print">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8">
+            <h2 className="text-2xl font-black text-gray-900 mb-6">Edit Volunteer</h2>
+            <form onSubmit={handleEditStudent} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">First Name</label>
+                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                    value={editFormData.firstName} onChange={e => setEditFormData({...editFormData, firstName: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Last Name</label>
+                  <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                    value={editFormData.lastName} onChange={e => setEditFormData({...editFormData, lastName: e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">School Name</label>
+                <input required className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                  value={editFormData.schoolName} onChange={e => setEditFormData({...editFormData, schoolName: e.target.value})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grade</label>
+                  <select className="w-full border border-gray-200 rounded-xl p-3 outline-none" value={editFormData.gradeLevel} onChange={e => setEditFormData({...editFormData, gradeLevel: e.target.value})}>
+                    <option value="">Select...</option>
+                    {[9, 10, 11, 12].map(g => <option key={g} value={g}>{g}th Grade</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grad Year</label>
+                  <input placeholder="2027" className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary-500"
+                    value={editFormData.gradYear} onChange={e => setEditFormData({...editFormData, gradYear: e.target.value})} />
+                </div>
+              </div>
+              {pdfTemplates.length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Volunteer Form Template</label>
+                  <select className="w-full border border-gray-200 rounded-xl p-3 outline-none" value={editFormData.pdfTemplateId} onChange={e => setEditFormData({...editFormData, pdfTemplateId: e.target.value})}>
+                    <option value="">
+                      {defaultTemplateId
+                        ? `Default: ${pdfTemplates.find(t => t.id === defaultTemplateId)?.name || 'Default'}`
+                        : 'Use default template'}
+                    </option>
+                    {pdfTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="flex gap-3 pt-6">
+                <Button type="submit" className="flex-1 py-3">Save Changes</Button>
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-6 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
               </div>
             </form>
           </div>

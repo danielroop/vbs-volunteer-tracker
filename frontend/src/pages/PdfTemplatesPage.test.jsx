@@ -490,4 +490,345 @@ describe('PdfTemplatesPage', () => {
       confirmSpy.mockRestore();
     });
   });
+
+  describe('export mapping', () => {
+    let capturedAnchor;
+    let createElementSpy;
+    const originalCreateElement = document.createElement.bind(document);
+
+    const readBlob = (blob) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsText(blob);
+    });
+
+    beforeEach(() => {
+      capturedAnchor = null;
+      createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+        if (tag === 'a') {
+          capturedAnchor = { href: '', download: '', click: vi.fn() };
+          return capturedAnchor;
+        }
+        return originalCreateElement(tag);
+      });
+    });
+
+    afterEach(() => {
+      createElementSpy.mockRestore();
+    });
+
+    it('should show Export button for each template', async () => {
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Form', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      expect(screen.getByRole('button', { name: /^Export$/i })).toBeInTheDocument();
+    });
+
+    it('should show Export All button when templates exist', async () => {
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Form', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      expect(screen.getByRole('button', { name: /Export All/i })).toBeInTheDocument();
+    });
+
+    it('should not show Export All button when no templates', async () => {
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /Export All/i })).not.toBeInTheDocument();
+      });
+    });
+
+    it('should trigger download with correct filename when Export is clicked', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Form', fileName: 'ocps.pdf', fields: [{ id: 'f1', type: 'static', fieldKey: 'studentName' }], pageCount: 1 }),
+      ]);
+
+      await user.click(screen.getByRole('button', { name: /^Export$/i }));
+
+      expect(capturedAnchor).not.toBeNull();
+      expect(capturedAnchor.click).toHaveBeenCalled();
+      expect(capturedAnchor.download).toMatch(/ocps_form.*\.json/);
+    });
+
+    it('should trigger download when Export All is clicked', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Form', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+        makeTemplateDoc('tmpl2', { name: 'NJHS Form', fileName: 'njhs.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      await user.click(screen.getByRole('button', { name: /Export All/i }));
+
+      expect(capturedAnchor).not.toBeNull();
+      expect(capturedAnchor.click).toHaveBeenCalled();
+      expect(capturedAnchor.download).toBe('vbs_pdf_templates_export.json');
+    });
+
+    it('should include fields in exported JSON', async () => {
+      const user = userEvent.setup();
+      let capturedBlob = null;
+      URL.createObjectURL.mockImplementation((blob) => {
+        capturedBlob = blob;
+        return 'blob:mock-url';
+      });
+
+      renderPage();
+
+      const fields = [{ id: 'f1', type: 'static', fieldKey: 'studentName', xPercent: 10, yPercent: 20 }];
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'Test Form', fileName: 'test.pdf', fields, pageCount: 1, pageWidth: 612, pageHeight: 792 }),
+      ]);
+
+      await user.click(screen.getByRole('button', { name: /^Export$/i }));
+
+      expect(capturedBlob).not.toBeNull();
+      const text = await readBlob(capturedBlob);
+      const data = JSON.parse(text);
+      expect(data.version).toBe('1');
+      expect(data.templates).toHaveLength(1);
+      expect(data.templates[0].name).toBe('Test Form');
+      expect(data.templates[0].fields).toEqual(fields);
+    });
+
+    it('should not include storagePath or downloadURL in export', async () => {
+      const user = userEvent.setup();
+      let capturedBlob = null;
+      URL.createObjectURL.mockImplementation((blob) => {
+        capturedBlob = blob;
+        return 'blob:mock-url';
+      });
+
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', {
+          name: 'Test Form',
+          fileName: 'test.pdf',
+          fields: [],
+          pageCount: 1,
+          storagePath: 'pdfTemplates/secret.pdf',
+          downloadURL: 'https://storage.example.com/secret.pdf',
+        }),
+      ]);
+
+      await user.click(screen.getByRole('button', { name: /^Export$/i }));
+
+      expect(capturedBlob).not.toBeNull();
+      const text = await readBlob(capturedBlob);
+      const data = JSON.parse(text);
+      expect(data.templates[0].storagePath).toBeUndefined();
+      expect(data.templates[0].downloadURL).toBeUndefined();
+    });
+  });
+
+  describe('import mapping modal', () => {
+    it('should show Import Mapping button', async () => {
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Import Mapping/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should open import modal when Import Mapping is clicked', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Import PDF Mapping')).toBeInTheDocument();
+      });
+    });
+
+    it('should show JSON file input in import modal', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('import-json-input')).toBeInTheDocument();
+      });
+    });
+
+    it('should show error for invalid JSON file', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+
+      await waitFor(() => expect(screen.getByTestId('import-json-input')).toBeInTheDocument());
+
+      const invalidJson = new File(['not valid json'], 'bad.json', { type: 'application/json' });
+      await user.upload(screen.getByTestId('import-json-input'), invalidJson);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Invalid export file/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should show error for JSON missing templates array', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+      await waitFor(() => expect(screen.getByTestId('import-json-input')).toBeInTheDocument());
+
+      const badFile = new File([JSON.stringify({ version: '1', templates: [] })], 'bad.json', { type: 'application/json' });
+      await user.upload(screen.getByTestId('import-json-input'), badFile);
+
+      await waitFor(() => {
+        expect(screen.getByText(/No templates found/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should show template preview after valid JSON is loaded', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+      await waitFor(() => expect(screen.getByTestId('import-json-input')).toBeInTheDocument());
+
+      const exportData = {
+        version: '1',
+        exportedAt: new Date().toISOString(),
+        templates: [{
+          name: 'OCPS Service Log',
+          fileName: 'ocps.pdf',
+          pageWidth: 612,
+          pageHeight: 792,
+          pageCount: 2,
+          fields: [{ id: 'f1', type: 'static', fieldKey: 'studentName' }],
+        }],
+      };
+      const goodFile = new File([JSON.stringify(exportData)], 'export.json', { type: 'application/json' });
+      await user.upload(screen.getByTestId('import-json-input'), goodFile);
+
+      await waitFor(() => {
+        expect(screen.getByText('OCPS Service Log')).toBeInTheDocument();
+        expect(screen.getByText(/1 field\(s\)/)).toBeInTheDocument();
+      });
+    });
+
+    it('should auto-select existing template mode when name matches', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Service Log', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+      await waitFor(() => expect(screen.getByTestId('import-json-input')).toBeInTheDocument());
+
+      const exportData = {
+        version: '1',
+        exportedAt: new Date().toISOString(),
+        templates: [{
+          name: 'OCPS Service Log',
+          fileName: 'ocps.pdf',
+          pageWidth: 612,
+          pageHeight: 792,
+          pageCount: 1,
+          fields: [],
+        }],
+      };
+      const file = new File([JSON.stringify(exportData)], 'export.json', { type: 'application/json' });
+      await user.upload(screen.getByTestId('import-json-input'), file);
+
+      await waitFor(() => {
+        const existingRadio = screen.getByRole('radio', { name: /existing template/i });
+        expect(existingRadio).toBeChecked();
+      });
+    });
+
+    it('should call updateDoc when importing to existing template', async () => {
+      const { updateDoc } = await import('firebase/firestore');
+      const user = userEvent.setup();
+      renderPage();
+
+      await simulateTemplates([
+        makeTemplateDoc('tmpl1', { name: 'OCPS Service Log', fileName: 'ocps.pdf', fields: [], pageCount: 1 }),
+      ]);
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+      await waitFor(() => expect(screen.getByTestId('import-json-input')).toBeInTheDocument());
+
+      const exportFields = [{ id: 'f1', type: 'static', fieldKey: 'studentName', xPercent: 10, yPercent: 10, fontSize: 12, page: 0 }];
+      const exportData = {
+        version: '1',
+        exportedAt: new Date().toISOString(),
+        templates: [{ name: 'OCPS Service Log', fileName: 'ocps.pdf', pageWidth: 612, pageHeight: 792, pageCount: 1, fields: exportFields }],
+      };
+      const file = new File([JSON.stringify(exportData)], 'export.json', { type: 'application/json' });
+      await user.upload(screen.getByTestId('import-json-input'), file);
+
+      await waitFor(() => expect(screen.getByTestId('existing-template-select')).toBeInTheDocument());
+
+      await user.click(screen.getByRole('button', { name: /^Import$/i }));
+
+      await waitFor(() => {
+        expect(updateDoc).toHaveBeenCalledWith(
+          expect.anything(),
+          { fields: exportFields }
+        );
+      });
+    });
+
+    it('should call addDoc when creating new template entry', async () => {
+      const { addDoc } = await import('firebase/firestore');
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+      await waitFor(() => expect(screen.getByTestId('import-json-input')).toBeInTheDocument());
+
+      const exportData = {
+        version: '1',
+        exportedAt: new Date().toISOString(),
+        templates: [{ name: 'New Template', fileName: 'new.pdf', pageWidth: 612, pageHeight: 792, pageCount: 1, fields: [] }],
+      };
+      const file = new File([JSON.stringify(exportData)], 'export.json', { type: 'application/json' });
+      await user.upload(screen.getByTestId('import-json-input'), file);
+
+      // Should default to "new" since no matching template
+      await waitFor(() => {
+        const newRadio = screen.getByRole('radio', { name: /new template entry/i });
+        expect(newRadio).toBeChecked();
+      });
+
+      await user.click(screen.getByRole('button', { name: /^Import$/i }));
+
+      await waitFor(() => {
+        expect(addDoc).toHaveBeenCalled();
+      });
+    });
+
+    it('should close import modal when Cancel is clicked', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: /Import Mapping/i }));
+      await waitFor(() => expect(screen.getByText('Import PDF Mapping')).toBeInTheDocument());
+
+      await user.click(screen.getByRole('button', { name: /Cancel/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Import PDF Mapping')).not.toBeInTheDocument();
+      });
+    });
+  });
 });

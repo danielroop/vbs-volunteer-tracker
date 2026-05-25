@@ -45,7 +45,14 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Mock URL object methods needed for file download tests
+global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+global.URL.revokeObjectURL = vi.fn();
+
 // Reset mocks between tests
 beforeEach(() => {
   vi.clearAllMocks();
+  // Re-assign after clearAllMocks resets the implementations
+  global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+  global.URL.revokeObjectURL = vi.fn();
 });

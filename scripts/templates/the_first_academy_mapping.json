@@ -1,0 +1,102 @@
+{
+  "version": "1",
+  "exportedAt": "2026-05-25T14:56:01.338Z",
+  "templates": [
+    {
+      "name": "The First Academy",
+      "fileName": "Community Service Form.pdf",
+      "pageWidth": 792,
+      "pageHeight": 612,
+      "pageCount": 1,
+      "fields": [
+        {
+          "fieldKey": "firstName",
+          "page": 0,
+          "preview": "Jane",
+          "label": "First Name",
+          "xPercent": 54.48,
+          "yPercent": 39.69,
+          "fontSize": 12,
+          "id": "field_1770572155132",
+          "type": "static"
+        },
+        {
+          "page": 0,
+          "fieldKey": "lastName",
+          "preview": "Smith",
+          "label": "Last Name",
+          "id": "field_1770572161856",
+          "type": "static",
+          "yPercent": 39.78,
+          "fontSize": 12,
+          "xPercent": 29.17
+        },
+        {
+          "type": "customStatic",
+          "id": "field_1770572176336",
+          "customValue": "2/8/2026",
+          "fontSize": 12,
+          "yPercent": 40.09,
+          "label": "Today's Date",
+          "xPercent": 10.56,
+          "page": 0
+        },
+        {
+          "preview": "10",
+          "fieldKey": "gradeLevel",
+          "page": 0,
+          "label": "Grade Level",
+          "xPercent": 86.79,
+          "id": "field_1770572187662",
+          "type": "static",
+          "yPercent": 40.4,
+          "fontSize": 12
+        },
+        {
+          "xPercent": 5.52,
+          "columns": [
+            {
+              "key": "activityOrg",
+              "fontSize": 10,
+              "maxWidth": 20,
+              "label": "Organization + Activity",
+              "enabled": true,
+              "xPercent": 13
+            },
+            {
+              "fontSize": 8,
+              "maxWidth": 10,
+              "key": "activityDates",
+              "enabled": true,
+              "xPercent": 3.27,
+              "label": "Date(s) of Service"
+            },
+            {
+              "enabled": true,
+              "xPercent": 61.32,
+              "label": "Contact Name",
+              "key": "activityContact",
+              "maxWidth": 20,
+              "fontSize": 8
+            },
+            {
+              "fontSize": 10,
+              "maxWidth": 20,
+              "key": "activityHours",
+              "label": "Hours Completed",
+              "enabled": true,
+              "xPercent": 51.07
+            }
+          ],
+          "yPercent": 55.94,
+          "type": "activityTable",
+          "id": "field_1770572200906",
+          "maxRows": 3,
+          "rowHeight": 12,
+          "page": 0,
+          "label": "Activity Table (Summary)"
+        }
+      ]
+    }
+  ]
+}

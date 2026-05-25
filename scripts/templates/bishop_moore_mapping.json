@@ -1,0 +1,130 @@
+{
+  "version": "1",
+  "exportedAt": "2026-05-25T14:56:01.338Z",
+  "templates": [
+    {
+      "name": "Bishop Moore",
+      "fileName": "Community Service Verification Form 25-26.pdf",
+      "pageWidth": 612,
+      "pageHeight": 792,
+      "pageCount": 1,
+      "fields": [
+        {
+          "type": "static",
+          "id": "field_1770572297005",
+          "yPercent": 25.69,
+          "fontSize": 12,
+          "xPercent": 13.8,
+          "fieldKey": "studentName",
+          "preview": "Jane Smith",
+          "page": 0,
+          "label": "Student Full Name"
+        },
+        {
+          "yPercent": 25.05,
+          "fontSize": 12,
+          "type": "static",
+          "id": "field_1770572304258",
+          "xPercent": 78.99,
+          "fieldKey": "gradeLevel",
+          "preview": "10",
+          "page": 0,
+          "label": "Grade Level"
+        },
+        {
+          "label": "Non-Profit Organization",
+          "fieldKey": "nonprofitName",
+          "preview": "First Baptist Church",
+          "page": 0,
+          "id": "field_1770572331286",
+          "type": "static",
+          "fontSize": 12,
+          "yPercent": 34.88,
+          "xPercent": 11.53
+        },
+        {
+          "label": "Contact Person",
+          "xPercent": 12.24,
+          "page": 0,
+          "fontSize": 12,
+          "customValue": "Heidi Estep",
+          "yPercent": 38.69,
+          "id": "field_1770572348336",
+          "type": "customStatic"
+        },
+        {
+          "xPercent": 74.07,
+          "label": "Contact Number",
+          "page": 0,
+          "type": "customStatic",
+          "id": "field_1770572365943",
+          "fontSize": 12,
+          "customValue": "(555) 555-5555",
+          "yPercent": 38.78
+        },
+        {
+          "page": 0,
+          "label": "Service Detail",
+          "xPercent": 11.76,
+          "id": "field_1770572382255",
+          "type": "customStatic",
+          "yPercent": 42.77,
+          "fontSize": 12,
+          "customValue": "Volunteer Leader overseeing children for summer programming"
+        },
+        {
+          "label": "Detail Table",
+          "rowHeight": 2.3,
+          "page": 0,
+          "maxRows": 10,
+          "type": "detailTable",
+          "id": "field_1770572410864",
+          "yPercent": 58.45,
+          "columns": [
+            {
+              "key": "detailDate",
+              "fontSize": 10,
+              "maxWidth": 15,
+              "label": "Date",
+              "xPercent": 9.44,
+              "enabled": true
+            },
+            {
+              "key": "detailStartTime",
+              "fontSize": 10,
+              "maxWidth": 15,
+              "xPercent": 27.28,
+              "enabled": true,
+              "label": "Start Time"
+            },
+            {
+              "label": "End Time",
+              "xPercent": 38,
+              "enabled": true,
+              "maxWidth": 15,
+              "fontSize": 10,
+              "key": "detailEndTime"
+            },
+            {
+              "key": "detailHours",
+              "maxWidth": 15,
+              "fontSize": 10,
+              "label": "Hours",
+              "xPercent": 54.96,
+              "enabled": true
+            },
+            {
+              "key": "detailContact",
+              "maxWidth": 15,
+              "fontSize": 10,
+              "enabled": true,
+              "xPercent": 72,
+              "label": "Contact Name"
+            }
+          ],
+          "xPercent": 8.88
+        }
+      ]
+    }
+  ]
+}

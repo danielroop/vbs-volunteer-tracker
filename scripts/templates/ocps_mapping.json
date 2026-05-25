@@ -1,0 +1,103 @@
+{
+  "version": "1",
+  "exportedAt": "2026-05-25T14:56:01.336Z",
+  "templates": [
+    {
+      "name": "OCPS",
+      "fileName": "2024-2025_community_service_form_2.pdf",
+      "pageWidth": 612,
+      "pageHeight": 792,
+      "pageCount": 1,
+      "fields": [
+        {
+          "label": "School Name",
+          "page": 0,
+          "fieldKey": "schoolName",
+          "preview": "West Orange HS",
+          "fontSize": 12,
+          "yPercent": 15.13,
+          "id": "field_1770502029774",
+          "type": "static",
+          "xPercent": 19.15
+        },
+        {
+          "label": "Student Full Name",
+          "preview": "Jane Smith",
+          "fieldKey": "studentName",
+          "page": 0,
+          "xPercent": 52.28,
+          "id": "field_1770502046688",
+          "type": "static",
+          "fontSize": 12,
+          "yPercent": 12.62
+        },
+        {
+          "label": "Graduation Year",
+          "page": 0,
+          "fieldKey": "gradYear",
+          "preview": "2028",
+          "fontSize": 12,
+          "yPercent": 14.84,
+          "type": "static",
+          "id": "field_1770502054597",
+          "xPercent": 85.29
+        },
+        {
+          "preview": "VBS 2026",
+          "page": 0,
+          "fieldKey": "eventName",
+          "label": "Event Name",
+          "type": "static",
+          "id": "field_1770502069302",
+          "yPercent": 22.45,
+          "fontSize": 12,
+          "xPercent": 37.04
+        },
+        {
+          "label": "Activity Table",
+          "page": 0,
+          "rowHeight": 3,
+          "yPercent": 31.91,
+          "id": "field_1770502082336",
+          "maxRows": 7,
+          "type": "activityTable",
+          "columns": [
+            {
+              "maxWidth": 20,
+              "fontSize": 10,
+              "key": "activityOrg",
+              "enabled": true,
+              "xPercent": 6.92,
+              "label": "Organization + Activity"
+            },
+            {
+              "key": "activityDates",
+              "maxWidth": 20,
+              "fontSize": 10,
+              "xPercent": 27.64,
+              "label": "Date(s) of Service",
+              "enabled": true
+            },
+            {
+              "xPercent": 47.4,
+              "label": "Contact Name",
+              "enabled": true,
+              "key": "activityContact",
+              "fontSize": 10,
+              "maxWidth": 20
+            },
+            {
+              "xPercent": 87.33,
+              "label": "Hours Completed",
+              "enabled": true,
+              "key": "activityHours",
+              "fontSize": 10,
+              "maxWidth": 20
+            }
+          ],
+          "xPercent": 0.36
+        }
+      ]
+    }
+  ]
+}

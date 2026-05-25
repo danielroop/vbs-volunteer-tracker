@@ -7,6 +7,7 @@
     "seed:local": "node generate-test-users.js && node generate-time-entries.js",
     "seed:prod": "NODE_ENV=production node generate-test-users.js && NODE_ENV=production node generate-time-entries.js",
     "setup-admin": "node setup-admin.js",
+    "import:vbs": "node import-vbs-registrations.js",
     "generate-qr": "node generate-test-qr.js"
   },
   "dependencies": {

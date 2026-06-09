@@ -17,6 +17,7 @@ import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import PrintableBadge from '../components/common/PrintableBadge';
 import { ServiceLogEntry } from '../components/ServiceLog';
+import { GRADE_LEVEL_OPTIONS } from '../utils/grades';
 
 export default function StudentDetailPage() {
     const { studentId } = useParams();
@@ -1286,7 +1287,9 @@ export default function StudentDetailPage() {
                                         <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grade</label>
                                         <select className="w-full border border-gray-200 rounded-xl p-3 outline-none" value={editStudentForm.gradeLevel} onChange={e => setEditStudentForm(f => ({...f, gradeLevel: e.target.value}))}>
                                             <option value="">Select...</option>
-                                            {[9, 10, 11, 12].map(g => <option key={g} value={g}>{g}th Grade</option>)}
+                                            {GRADE_LEVEL_OPTIONS.map(grade => (
+                                                <option key={grade.value} value={grade.value}>{grade.label}</option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div>

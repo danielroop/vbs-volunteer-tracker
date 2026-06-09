@@ -18,6 +18,7 @@ import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
+import { GRADE_LEVEL_OPTIONS } from '../utils/grades';
 
 export default function EventStudentsPage() {
     const { eventId: paramEventId } = useParams();
@@ -537,14 +538,16 @@ export default function EventStudentsPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grade Level</label>
-                                    <input
+                                    <select
                                         className="w-full border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none"
                                         value={addForm.gradeLevel}
                                         onChange={e => setAddForm(f => ({ ...f, gradeLevel: e.target.value }))}
-                                        type="number"
-                                        min="9"
-                                        max="12"
-                                    />
+                                    >
+                                        <option value="">Select...</option>
+                                        {GRADE_LEVEL_OPTIONS.map(grade => (
+                                            <option key={grade.value} value={grade.value}>{grade.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grad Year</label>

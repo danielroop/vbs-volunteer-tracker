@@ -10,6 +10,7 @@ import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
 import { StudentCard, StudentRow } from '../components/Students';
+import { GRADE_LEVEL_OPTIONS } from '../utils/grades';
 
 export default function StudentsPage() {
   const navigate = useNavigate();
@@ -631,7 +632,9 @@ export default function StudentsPage() {
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grade</label>
                   <select className="w-full border border-gray-200 rounded-xl p-3 outline-none" value={formData.gradeLevel} onChange={e => setFormData({...formData, gradeLevel: e.target.value})}>
                     <option value="">Select...</option>
-                    {[9, 10, 11, 12].map(g => <option key={g} value={g}>{g}th Grade</option>)}
+                    {GRADE_LEVEL_OPTIONS.map(grade => (
+                      <option key={grade.value} value={grade.value}>{grade.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -690,7 +693,9 @@ export default function StudentsPage() {
                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Grade</label>
                   <select className="w-full border border-gray-200 rounded-xl p-3 outline-none" value={editFormData.gradeLevel} onChange={e => setEditFormData({...editFormData, gradeLevel: e.target.value})}>
                     <option value="">Select...</option>
-                    {[9, 10, 11, 12].map(g => <option key={g} value={g}>{g}th Grade</option>)}
+                    {GRADE_LEVEL_OPTIONS.map(grade => (
+                      <option key={grade.value} value={grade.value}>{grade.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>

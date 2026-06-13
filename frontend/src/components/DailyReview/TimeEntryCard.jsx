@@ -29,7 +29,9 @@ export default function TimeEntryCard({
   const studentName = `${entry.student.lastName}, ${entry.student.firstName}`;
   const activityName = entry.activity?.name || '--';
   const checkInTimeDisplay = entry.checkInTime ? formatTime(entry.checkInTime) : '--';
-  const checkOutTimeDisplay = entry.checkOutTime
+  const checkOutTimeDisplay = entry.isNoCheckIn
+    ? '--'
+    : entry.checkOutTime
     ? formatTime(entry.checkOutTime)
     : 'Not checked out';
   const hoursDisplay = entry.hoursWorked !== null && entry.hoursWorked !== undefined
@@ -40,6 +42,7 @@ export default function TimeEntryCard({
     : entry.date;
 
   const isVoided = entry.isVoided;
+  const isNoCheckIn = entry.isNoCheckIn;
 
   return (
     <article
@@ -48,7 +51,7 @@ export default function TimeEntryCard({
           ? 'bg-gray-100 border-gray-300 opacity-50'
           : 'bg-white border-gray-200'
       }`}
-      aria-label={`Time entry for ${entry.student.firstName} ${entry.student.lastName}${isVoided ? ' (voided)' : ''}`}
+      aria-label={`Time entry for ${entry.student.firstName} ${entry.student.lastName}${isVoided ? ' (voided)' : ''}${isNoCheckIn ? ' (not checked in)' : ''}`}
       title={isVoided ? `Voided: ${entry.voidReason}` : undefined}
     >
       {/* Header: Name and Status */}
@@ -98,7 +101,7 @@ export default function TimeEntryCard({
         <div>
           <span className="block text-xs text-gray-500 uppercase" aria-hidden="true">Check-Out</span>
           <span
-            className={entry.checkOutTime ? 'text-gray-900' : (isVoided ? 'text-gray-400' : 'text-red-600 font-medium')}
+            className={entry.checkOutTime || isNoCheckIn ? 'text-gray-900' : (isVoided ? 'text-gray-400' : 'text-red-600 font-medium')}
             aria-label={`Check-out time: ${checkOutTimeDisplay}`}
           >
             {checkOutTimeDisplay}
@@ -138,7 +141,9 @@ export default function TimeEntryCard({
 
       {/* Actions */}
       <div className="flex gap-2 pt-2 border-t border-gray-100">
-        {isVoided ? (
+        {isNoCheckIn ? (
+          <span className="text-sm text-gray-500">No entry</span>
+        ) : isVoided ? (
           <Button
             size="sm"
             variant="secondary"

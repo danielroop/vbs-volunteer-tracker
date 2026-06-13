@@ -24,6 +24,7 @@ export default function DailyReview() {
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [timeEntries, setTimeEntries] = useState([]);
   const [students, setStudents] = useState([]);
+  const [eventStudentIds, setEventStudentIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -79,6 +80,28 @@ export default function DailyReview() {
     return () => unsubscribe();
   }, []);
 
+  // Load students explicitly associated with the selected event
+  useEffect(() => {
+    if (!currentEvent?.id) {
+      setEventStudentIds(new Set());
+      return;
+    }
+
+    const q = query(
+      collection(db, 'eventStudents'),
+      where('eventId', '==', currentEvent.id)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setEventStudentIds(new Set(snapshot.docs.map(doc => doc.data().studentId)));
+    }, (error) => {
+      console.error('Error loading event students:', error);
+      setEventStudentIds(new Set());
+    });
+
+    return () => unsubscribe();
+  }, [currentEvent?.id]);
+
   // Load time entries for selected date
   useEffect(() => {
     if (!currentEvent?.id) {
@@ -131,14 +154,47 @@ export default function DailyReview() {
     return map;
   }, [currentEvent?.activities]);
 
-  // Merge entries with student data and apply filters
-  const filteredEntries = useMemo(() => {
-    return timeEntries
+  // Merge entries with student data and include roster students who have not checked in
+  const reviewRows = useMemo(() => {
+    const entryRows = timeEntries
       .map(entry => ({
         ...entry,
         student: studentMap[entry.studentId] || { firstName: 'Unknown', lastName: 'Student' },
         activity: activityMap[entry.activityId] || { name: 'Unknown', endTime: '15:00' }
-      }))
+      }));
+
+    const checkedInStudentIds = new Set(
+      timeEntries
+        .filter(entry => !entry.isVoided)
+        .map(entry => entry.studentId)
+    );
+
+    const noCheckInRows = [...eventStudentIds]
+      .filter(studentId => !checkedInStudentIds.has(studentId))
+      .map(studentId => {
+        const student = studentMap[studentId];
+        if (!student) return null;
+
+        return {
+          id: `no-checkin-${studentId}`,
+          studentId,
+          date: selectedDate,
+          checkInTime: null,
+          checkOutTime: null,
+          hoursWorked: null,
+          flags: [],
+          isNoCheckIn: true,
+          student,
+          activity: { name: '--' }
+        };
+      })
+      .filter(Boolean);
+
+    return [...entryRows, ...noCheckInRows];
+  }, [timeEntries, studentMap, activityMap, eventStudentIds, selectedDate]);
+
+  const filteredEntries = useMemo(() => {
+    return reviewRows
       .filter(entry => {
         // Search filter
         const fullName = `${entry.student.firstName} ${entry.student.lastName}`.toLowerCase();
@@ -148,27 +204,31 @@ export default function DailyReview() {
 
         // Status filter
         if (statusFilter === 'flagged' && (!entry.flags || entry.flags.length === 0)) return false;
-        if (statusFilter === 'no-checkout' && entry.checkOutTime) return false;
+        if (statusFilter === 'no-checkout' && (entry.isNoCheckIn || entry.checkOutTime)) return false;
+        if (statusFilter === 'not-checked-in' && !entry.isNoCheckIn) return false;
         if (statusFilter === 'modified' && !entry.modificationReason && !entry.forcedCheckoutReason) return false;
         if (statusFilter === 'voided' && !entry.isVoided) return false;
-        if (statusFilter === 'active' && entry.isVoided) return false;
+        if (statusFilter === 'active' && (entry.isVoided || entry.isNoCheckIn)) return false;
 
         return true;
       })
       .sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
-  }, [timeEntries, studentMap, activityMap, searchTerm, statusFilter]);
+  }, [reviewRows, searchTerm, statusFilter]);
 
   // Calculate summary stats
   const stats = useMemo(() => {
     const activeEntries = timeEntries.filter(e => !e.isVoided);
+    const checkedInStudentIds = new Set(activeEntries.map(e => e.studentId));
+    const noCheckIn = [...eventStudentIds].filter(studentId => !checkedInStudentIds.has(studentId)).length;
     return {
       total: timeEntries.length,
       flagged: activeEntries.filter(e => e.flags && e.flags.length > 0).length,
       noCheckout: activeEntries.filter(e => !e.checkOutTime).length,
+      noCheckIn,
       modified: activeEntries.filter(e => e.modificationReason || e.forcedCheckoutReason).length,
       voided: timeEntries.filter(e => e.isVoided).length
     };
-  }, [timeEntries]);
+  }, [timeEntries, eventStudentIds]);
 
   // Get activity end time for a given entry
   const getActivityEndTime = (entry) => {
@@ -639,6 +699,7 @@ export default function DailyReview() {
 
   // Helper functions for display
   const getStatusDisplay = (entry) => {
+    if (entry.isNoCheckIn) return 'Not Checked In';
     if (entry.isVoided) return 'VOIDED';
     if (!entry.checkOutTime) return '🔴 No Checkout';
     if (entry.forcedCheckoutReason) return '⚡ Forced';
@@ -648,6 +709,7 @@ export default function DailyReview() {
   };
 
   const getStatusClass = (entry) => {
+    if (entry.isNoCheckIn) return 'text-gray-500';
     if (entry.isVoided) return 'text-gray-400';
     if (!entry.checkOutTime) return 'text-red-600';
     if (entry.forcedCheckoutReason || entry.modificationReason) return 'text-blue-600';
@@ -720,6 +782,11 @@ export default function DailyReview() {
                 🔴 <span className="font-bold">{stats.noCheckout}</span> no checkout
               </div>
             )}
+            {stats.noCheckIn > 0 && (
+              <div className="text-gray-600">
+                <span className="font-bold">{stats.noCheckIn}</span> not checked in
+              </div>
+            )}
             {stats.modified > 0 && (
               <div className="text-blue-600">
                 ✏️ <span className="font-bold">{stats.modified}</span> modified
@@ -750,6 +817,7 @@ export default function DailyReview() {
               <option value="active">Active Only</option>
               <option value="flagged">Flagged Only</option>
               <option value="no-checkout">No Checkout</option>
+              <option value="not-checked-in">Not Checked In</option>
               <option value="modified">Modified Only</option>
               <option value="voided">Voided Only</option>
             </select>
@@ -816,7 +884,9 @@ export default function DailyReview() {
                       {entry.checkInTime ? formatTime(entry.checkInTime) : '--'}
                     </td>
                     <td className={`px-4 py-3 text-sm ${entry.isVoided ? 'line-through' : ''}`}>
-                      {entry.checkOutTime ? (
+                      {entry.isNoCheckIn ? (
+                        <span className="text-gray-500">--</span>
+                      ) : entry.checkOutTime ? (
                         <span className="text-gray-600">{formatTime(entry.checkOutTime)}</span>
                       ) : (
                         <span className={`font-medium ${entry.isVoided ? 'text-gray-400' : 'text-red-600'}`}>Not checked out</span>
@@ -841,7 +911,9 @@ export default function DailyReview() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
-                        {entry.isVoided ? (
+                        {entry.isNoCheckIn ? (
+                          <span className="text-sm text-gray-500">No entry</span>
+                        ) : entry.isVoided ? (
                           <Button
                             size="sm"
                             variant="secondary"

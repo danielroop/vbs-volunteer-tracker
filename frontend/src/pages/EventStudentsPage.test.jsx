@@ -16,6 +16,8 @@ const mockEvents = [
     { id: 'event123', name: 'VBS 2026', organizationName: 'Church' },
 ];
 
+const mockCurrentEvent = { id: 'event123', name: 'VBS 2026' };
+
 let onSnapshotCalls = [];
 let addDocMock;
 
@@ -58,7 +60,7 @@ vi.mock('../contexts/AuthContext', () => ({
 }));
 
 vi.mock('../contexts/EventContext', () => ({
-    useEvent: () => ({ currentEvent: { id: 'event123', name: 'VBS 2026' } }),
+    useEvent: () => ({ currentEvent: mockCurrentEvent }),
 }));
 
 const renderPage = () => render(

@@ -74,7 +74,7 @@ jest.unstable_mockModule('firebase-admin/firestore', () => ({
 }));
 
 jest.unstable_mockModule('firebase-functions/v2/https', () => ({
-  onCall: (handler) => handler,
+  onCall: (...args) => args.at(-1),
   HttpsError: class HttpsError extends Error {
     constructor(code, message) {
       super(message);
@@ -229,7 +229,7 @@ describe('forceCheckOut Cloud Function', () => {
       const request = {
         data: {
           entryId: 'entry123',
-          checkOutTime: '2026-06-15T15:00:00Z',
+          checkOutTime: '2026-06-15T15:00:00',
           reason: 'Forgot to check out, confirmed with parent',
         },
         auth: { uid: 'admin123' },

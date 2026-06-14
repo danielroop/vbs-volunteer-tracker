@@ -36,7 +36,7 @@ jest.unstable_mockModule('firebase-admin/firestore', () => ({
 }));
 
 jest.unstable_mockModule('firebase-functions/v2/https', () => ({
-  onCall: (handler) => handler,
+  onCall: (...args) => args.at(-1),
   HttpsError: class HttpsError extends Error {
     constructor(code, message) {
       super(message);

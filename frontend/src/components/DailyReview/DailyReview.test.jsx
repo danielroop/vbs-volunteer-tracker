@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import DailyReview from './index';
 
+const mockFirestoreData = vi.hoisted(() => ({
+  students: [],
+  eventStudents: [],
+  timeEntries: []
+}));
+
 // Mock Firebase
 vi.mock('../../utils/firebase', () => ({
   db: {},
@@ -12,13 +18,21 @@ vi.mock('../../utils/firebase', () => ({
 
 // Mock Firestore functions
 vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(),
-  onSnapshot: vi.fn((query, callback) => {
-    // Simulate empty data initially
-    callback({ docs: [] });
+  collection: vi.fn((db, path) => ({ _collPath: path })),
+  onSnapshot: vi.fn((queryOrRef, callback) => {
+    const path = queryOrRef?._collPath;
+    const data = mockFirestoreData[path] || [];
+
+    callback({
+      docs: data.map(item => ({
+        id: item.id,
+        data: () => item
+      }))
+    });
+
     return vi.fn(); // unsubscribe function
   }),
-  query: vi.fn(),
+  query: vi.fn((ref) => ref),
   where: vi.fn(),
   doc: vi.fn(),
   updateDoc: vi.fn()
@@ -94,6 +108,9 @@ describe('DailyReview', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFirestoreData.students = [];
+    mockFirestoreData.eventStudents = [];
+    mockFirestoreData.timeEntries = [];
 
     // Mock URL methods for CSV export
     mockCreateObjectURL = vi.fn().mockReturnValue('blob:test-url');
@@ -181,6 +198,7 @@ describe('DailyReview', () => {
 
       // Check for filter options
       expect(screen.getByText('All Entries')).toBeInTheDocument();
+      expect(screen.getByText('Not Checked In')).toBeInTheDocument();
     });
 
     it('should allow typing in search input', async () => {
@@ -191,6 +209,105 @@ describe('DailyReview', () => {
       await user.type(searchInput, 'John');
 
       expect(searchInput).toHaveValue('John');
+    });
+
+    it('should include event roster students who have not checked in', async () => {
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Alice', lastName: 'Adams' },
+        { id: 'student2', firstName: 'Bob', lastName: 'Brown' }
+      ];
+      mockFirestoreData.eventStudents = [
+        { id: 'eventStudent1', eventId: 'event123', studentId: 'student1' },
+        { id: 'eventStudent2', eventId: 'event123', studentId: 'student2' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student2',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: new Date('2026-01-31T12:00:00'),
+          hoursWorked: 4,
+          flags: []
+        }
+      ];
+
+      renderWithRouter(<DailyReview />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Brown, Bob').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Not Checked In').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('No entry').length).toBeGreaterThanOrEqual(1);
+      });
+    });
+
+    it('should filter to event roster students who have not checked in', async () => {
+      const user = userEvent.setup();
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Alice', lastName: 'Adams' },
+        { id: 'student2', firstName: 'Bob', lastName: 'Brown' }
+      ];
+      mockFirestoreData.eventStudents = [
+        { id: 'eventStudent1', eventId: 'event123', studentId: 'student1' },
+        { id: 'eventStudent2', eventId: 'event123', studentId: 'student2' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student2',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: null,
+          hoursWorked: null,
+          flags: []
+        }
+      ];
+
+      renderWithRouter(<DailyReview />);
+      await waitFor(() => expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1));
+
+      await user.selectOptions(screen.getByRole('combobox'), 'not-checked-in');
+
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('Brown, Bob')).not.toBeInTheDocument();
+    });
+
+    it('should keep no checkout separate from not checked in', async () => {
+      const user = userEvent.setup();
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Alice', lastName: 'Adams' },
+        { id: 'student2', firstName: 'Bob', lastName: 'Brown' }
+      ];
+      mockFirestoreData.eventStudents = [
+        { id: 'eventStudent1', eventId: 'event123', studentId: 'student1' },
+        { id: 'eventStudent2', eventId: 'event123', studentId: 'student2' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student2',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: null,
+          hoursWorked: null,
+          flags: []
+        }
+      ];
+
+      renderWithRouter(<DailyReview />);
+      await waitFor(() => expect(screen.getAllByText('Brown, Bob').length).toBeGreaterThanOrEqual(1));
+
+      await user.selectOptions(screen.getByRole('combobox'), 'no-checkout');
+
+      expect(screen.getAllByText('Brown, Bob').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('Adams, Alice')).not.toBeInTheDocument();
     });
   });
 

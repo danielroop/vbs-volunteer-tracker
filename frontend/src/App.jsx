@@ -17,6 +17,7 @@ import StudentDetailPage from './pages/StudentDetailPage';
 import UsersPage from './pages/UsersPage';
 import PdfTemplatesPage from './pages/PdfTemplatesPage';
 import EventStudentsPage from './pages/EventStudentsPage';
+import CheckHoursPage from './pages/CheckHoursPage';
 
 // Loading Spinner Component
 function LoadingSpinner() {
@@ -158,6 +159,8 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/hours" element={<CheckHoursPage />} />
+            <Route path="/check-hours" element={<Navigate to="/hours" replace />} />
 
             {/* Scanner Routes - Protected (admin or adult volunteer) */}
             <Route

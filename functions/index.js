@@ -27,3 +27,5 @@ export { voidTimeEntry, restoreTimeEntry } from './src/voidEntry.js';
 // Manual Entry
 export { createManualTimeEntry } from './src/manualEntry.js';
 
+// Public student hour lookup
+export { checkHoursLogged } from './src/checkHoursLogged.js';

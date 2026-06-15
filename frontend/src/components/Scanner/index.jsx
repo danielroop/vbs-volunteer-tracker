@@ -58,7 +58,9 @@ export default function Scanner() {
 
         if (urlEventId) {
           const match = eventsList.find(e => e.id === urlEventId);
-          if (match) setLocalEvent(match);
+          setLocalEvent(match || null);
+        } else {
+          setLocalEvent(null);
         }
       } catch (err) {
         console.error("Error loading scanner data:", err);

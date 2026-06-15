@@ -8,6 +8,18 @@ import Scanner from './index';
 const mockStartScanning = vi.fn().mockResolvedValue(undefined);
 const mockStopScanning = vi.fn().mockResolvedValue(undefined);
 const mockScanCallable = vi.hoisted(() => vi.fn());
+const mockEvents = vi.hoisted(() => ([
+  {
+    id: 'event1',
+    name: 'VBS 2026',
+    typicalStartTime: '09:00',
+    typicalEndTime: '15:00',
+    activities: [
+      { id: 'general', name: 'General' },
+      { id: 'crafts', name: 'Crafts Station' },
+    ],
+  },
+]));
 
 vi.mock('../../hooks/useQRScanner', () => ({
   __esModule: true,
@@ -50,32 +62,20 @@ vi.mock('../../utils/firebase', () => ({
 
 // Mock Firestore
 vi.mock('firebase/firestore', () => {
-  const events = [
-    {
-      id: 'event1',
-      name: 'VBS 2026',
-      typicalStartTime: '09:00',
-      typicalEndTime: '15:00',
-      activities: [
-        { id: 'general', name: 'General' },
-        { id: 'crafts', name: 'Crafts Station' },
-      ],
-    },
-  ];
   return {
     collection: vi.fn(),
     doc: vi.fn(),
-    getDoc: vi.fn().mockResolvedValue({
+    getDoc: vi.fn(() => Promise.resolve({
       exists: () => true,
-      data: () => events[0],
+      data: () => mockEvents[0],
       id: 'event1',
-    }),
-    getDocs: vi.fn().mockResolvedValue({
-      docs: events.map(e => ({
+    })),
+    getDocs: vi.fn(() => Promise.resolve({
+      docs: mockEvents.map(e => ({
         id: e.id,
         data: () => e,
       })),
-    }),
+    })),
   };
 });
 
@@ -128,6 +128,17 @@ describe('Scanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-01-31T12:00:00'));
+    mockEvents[0] = {
+      id: 'event1',
+      name: 'VBS 2026',
+      typicalStartTime: '09:00',
+      typicalEndTime: '15:00',
+      activities: [
+        { id: 'general', name: 'General' },
+        { id: 'crafts', name: 'Crafts Station' },
+      ],
+    };
     mockUseQRScannerOptions = null;
     mockScanCallable.mockResolvedValue({
       data: { success: true, studentName: 'Test Student' },
@@ -174,6 +185,58 @@ describe('Scanner', () => {
       await waitFor(() => {
         expect(screen.getByText('Select Event')).toBeInTheDocument();
         expect(screen.getByText('VBS 2026')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('activity selection', () => {
+    it('should show active activities first and dated backup activities separately', async () => {
+      mockEvents[0].activities = [
+        {
+          id: 'training',
+          name: 'Training',
+          startDate: '2026-01-30',
+          endDate: '2026-01-30',
+        },
+        {
+          id: 'work-hours',
+          name: 'Work Hours',
+          startDate: '2026-01-31',
+          endDate: '2026-02-02',
+        },
+      ];
+
+      renderScanner('/scan/event1');
+
+      await waitFor(() => {
+        expect(screen.getByText('Active Today')).toBeInTheDocument();
+        expect(screen.getByText('Other Activities')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Work Hours/i })).toHaveAttribute('href', '/scan/event1/work-hours');
+        expect(screen.getByRole('link', { name: /Training/i })).toHaveAttribute('href', '/scan/event1/training');
+      });
+    });
+
+    it('should allow direct scanner access to a backup activity', async () => {
+      mockEvents[0].activities = [
+        {
+          id: 'training',
+          name: 'Training',
+          startDate: '2026-01-30',
+          endDate: '2026-01-30',
+        },
+        {
+          id: 'work-hours',
+          name: 'Work Hours',
+          startDate: '2026-01-31',
+          endDate: '2026-02-02',
+        },
+      ];
+
+      renderScanner('/scan/event1/training/checkin');
+
+      await waitFor(() => {
+        expect(screen.getByText('Training')).toBeInTheDocument();
+        expect(screen.getByText('Check-In Mode')).toBeInTheDocument();
       });
     });
   });

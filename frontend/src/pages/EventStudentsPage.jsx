@@ -9,9 +9,11 @@ import {
     addDoc,
     deleteDoc,
     doc,
+    getDocs,
     query,
     where,
     serverTimestamp,
+    writeBatch,
 } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
@@ -210,6 +212,9 @@ export default function EventStudentsPage() {
     const selectedPrintCount = eventStudents.filter(s => selectedStudents.has(s.id)).length;
     const printStudentCount = selectedStudents.size > 0 ? selectedPrintCount : filteredStudents.length;
 
+    const getEventEntriesForStudent = (studentId) =>
+        eventEntries.filter(entry => entry.studentId === studentId);
+
     // Students not yet associated with this event (for import modal)
     const importableStudents = useMemo(() => {
         return allStudents
@@ -222,14 +227,58 @@ export default function EventStudentsPage() {
     }, [allStudents, eventStudentIds, checkedInStudentIds, importSearch]);
 
     const handleRemoveStudent = async (studentId) => {
+        const student = allStudents.find(s => s.id === studentId);
+        const studentName = student ? `${student.firstName} ${student.lastName}`.trim() : 'this student';
+        const studentEventEntries = getEventEntriesForStudent(studentId);
         const eventStudentDocId = eventStudentDocIds[studentId];
-        if (!eventStudentDocId) return;
+
+        if (studentEventEntries.length > 0) {
+            const confirmed = window.confirm(
+                `${studentName} has ${studentEventEntries.length} activity ` +
+                `record${studentEventEntries.length === 1 ? '' : 's'} for this event. ` +
+                'Remove them from the event and delete those activity records?'
+            );
+            if (!confirmed) return;
+        } else if (!eventStudentDocId) {
+            return;
+        }
 
         setRemovingStudentId(studentId);
         try {
-            await deleteDoc(doc(db, 'eventStudents', eventStudentDocId));
+            if (studentEventEntries.length === 0 && eventStudentDocId) {
+                await deleteDoc(doc(db, 'eventStudents', eventStudentDocId));
+                setSelectedStudents(prev => {
+                    const next = new Set(prev);
+                    next.delete(studentId);
+                    return next;
+                });
+                return;
+            }
+
+            const entriesQuery = query(
+                collection(db, 'timeEntries'),
+                where('eventId', '==', eventId),
+                where('studentId', '==', studentId)
+            );
+            const entriesSnapshot = await getDocs(entriesQuery);
+            const batch = writeBatch(db);
+
+            if (eventStudentDocId) {
+                batch.delete(doc(db, 'eventStudents', eventStudentDocId));
+            }
+            entriesSnapshot.docs.forEach(entryDoc => {
+                batch.delete(entryDoc.ref);
+            });
+
+            await batch.commit();
+            setSelectedStudents(prev => {
+                const next = new Set(prev);
+                next.delete(studentId);
+                return next;
+            });
         } catch (err) {
             console.error('Error removing student:', err);
+            alert('Failed to remove student from event: ' + err.message);
         } finally {
             setRemovingStudentId(null);
         }
@@ -598,20 +647,19 @@ export default function EventStudentsPage() {
                                             >
                                                 View Details
                                             </Link>
-                                            {eventStudentDocIds[s.id] && !checkedInStudentIds.has(s.id) && (
+                                            {(eventStudentDocIds[s.id] || getEventEntriesForStudent(s.id).length > 0) && (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRemoveStudent(s.id)}
                                                     disabled={removingStudentId === s.id}
                                                     className="text-xs font-bold text-red-500 hover:text-red-700 disabled:opacity-50"
+                                                    title={getEventEntriesForStudent(s.id).length > 0
+                                                        ? 'Removes this student and deletes their event activity records'
+                                                        : 'Remove this student from the event'
+                                                    }
                                                 >
                                                     {removingStudentId === s.id ? 'Removing...' : 'Remove'}
                                                 </button>
-                                            )}
-                                            {checkedInStudentIds.has(s.id) && (
-                                                <span className="text-xs text-gray-300" title="Cannot remove a student with time entries">
-                                                    Remove
-                                                </span>
                                             )}
                                         </div>
                                     </td>

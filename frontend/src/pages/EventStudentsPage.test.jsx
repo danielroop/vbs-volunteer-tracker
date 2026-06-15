@@ -49,12 +49,14 @@ const defaultPdfTemplates = [
 let onSnapshotCalls = [];
 let addDocMock;
 let mockPdfTemplates = [...defaultPdfTemplates];
+let mockBatchDelete;
+let mockBatchCommit;
 
 vi.mock('firebase/firestore', () => ({
     collection: vi.fn((db, path) => ({ _collPath: path })),
     doc: vi.fn((db, col, id) => ({ _isDoc: true, _docPath: `${col}/${id}` })),
-    query: vi.fn((ref) => ref),
-    where: vi.fn(() => ({})),
+    query: vi.fn((ref, ...constraints) => ({ ...ref, _constraints: constraints })),
+    where: vi.fn((field, operator, value) => ({ field, operator, value })),
     deleteDoc: vi.fn().mockResolvedValue(undefined),
     onSnapshot: vi.fn((queryOrRef, callback) => {
         if (queryOrRef?._isDoc) {
@@ -99,8 +101,26 @@ vi.mock('firebase/firestore', () => ({
         return unsub;
     }),
     addDoc: vi.fn().mockResolvedValue({ id: 'newDoc' }),
-    getDocs: vi.fn().mockResolvedValue({ docs: [] }),
+    getDocs: vi.fn((queryRef) => {
+        const studentConstraint = queryRef?._constraints?.find(c => c.field === 'studentId');
+        if (queryRef?._collPath === 'timeEntries' && studentConstraint?.value === 'student2') {
+            return Promise.resolve({
+                docs: [
+                    { id: 'te1', ref: { _docPath: 'timeEntries/te1' } },
+                ],
+            });
+        }
+        return Promise.resolve({ docs: [] });
+    }),
     serverTimestamp: vi.fn(() => ({})),
+    writeBatch: vi.fn(() => {
+        mockBatchDelete = vi.fn();
+        mockBatchCommit = vi.fn().mockResolvedValue(undefined);
+        return {
+            delete: mockBatchDelete,
+            commit: mockBatchCommit,
+        };
+    }),
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -125,7 +145,10 @@ describe('EventStudentsPage', () => {
         vi.clearAllMocks();
         onSnapshotCalls = [];
         mockPdfTemplates = [...defaultPdfTemplates];
+        mockBatchDelete = vi.fn();
+        mockBatchCommit = vi.fn().mockResolvedValue(undefined);
         window.alert = vi.fn();
+        window.confirm = vi.fn(() => true);
         global.fetch = vi.fn(() => Promise.resolve({
             arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
         }));
@@ -364,31 +387,65 @@ describe('EventStudentsPage', () => {
             expect(screen.getByText('Alice Adams')).toBeInTheDocument();
         });
 
-        const removeButton = screen.getByRole('button', { name: /^Remove$/ });
+        const aliceRow = screen.getByText('Alice Adams').closest('tr');
+        const removeButton = within(aliceRow).getByRole('button', { name: /^Remove$/ });
         expect(removeButton).toBeInTheDocument();
         expect(removeButton).not.toBeDisabled();
     });
 
-    it('does not show an active Remove button for students with time entries', async () => {
+    it('shows an active Remove button for students with time entries', async () => {
         renderPage();
         await waitFor(() => {
             expect(screen.getByText('Bob Brown')).toBeInTheDocument();
         });
 
-        expect(screen.getAllByRole('button', { name: /^Remove$/ })).toHaveLength(1);
-        expect(screen.getByTitle('Cannot remove a student with time entries')).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /^Remove$/ })).toHaveLength(2);
+        expect(screen.getByTitle('Removes this student and deletes their event activity records')).toBeInTheDocument();
     });
 
     it('deletes the eventStudents association when Remove is clicked', async () => {
         const { deleteDoc, doc } = await import('firebase/firestore');
 
         renderPage();
-        await waitFor(() => screen.getByRole('button', { name: /^Remove$/ }));
-        fireEvent.click(screen.getByRole('button', { name: /^Remove$/ }));
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        const aliceRow = screen.getByText('Alice Adams').closest('tr');
+        fireEvent.click(within(aliceRow).getByRole('button', { name: /^Remove$/ }));
 
         await waitFor(() => {
             expect(doc).toHaveBeenCalledWith({}, 'eventStudents', 'es1');
             expect(deleteDoc).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    it('asks before removing a student with activity records', async () => {
+        const { getDocs } = await import('firebase/firestore');
+        window.confirm = vi.fn(() => false);
+
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Bob Brown')).toBeInTheDocument());
+
+        const bobRow = screen.getByText('Bob Brown').closest('tr');
+        fireEvent.click(within(bobRow).getByRole('button', { name: /^Remove$/ }));
+
+        expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Bob Brown has 1 activity record'));
+        expect(getDocs).not.toHaveBeenCalled();
+    });
+
+    it('deletes event-scoped time entries when confirmed', async () => {
+        const { getDocs, writeBatch } = await import('firebase/firestore');
+
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Bob Brown')).toBeInTheDocument());
+
+        const bobRow = screen.getByText('Bob Brown').closest('tr');
+        fireEvent.click(within(bobRow).getByRole('button', { name: /^Remove$/ }));
+
+        await waitFor(() => {
+            expect(getDocs).toHaveBeenCalledTimes(1);
+            expect(writeBatch).toHaveBeenCalledWith({});
+            expect(mockBatchDelete).toHaveBeenCalledWith({ _docPath: 'timeEntries/te1' });
+            expect(mockBatchCommit).toHaveBeenCalledTimes(1);
         });
     });
 

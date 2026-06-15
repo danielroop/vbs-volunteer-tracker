@@ -18,7 +18,7 @@ export default function EventsPage() {
         name: '',
         organizationName: '',
         contactName: '',
-        activities: [{ id: 'general', name: 'General Hours', startTime: '', endTime: '' }]
+        activities: [{ id: 'general', name: 'General Hours', startDate: '', endDate: '', startTime: '', endTime: '' }]
     };
 
     const [formData, setFormData] = useState(initialFormState);
@@ -48,6 +48,8 @@ export default function EventsPage() {
             contactName: event.contactName || '',
             activities: (event.activities || []).map(act => ({
                 ...act,
+                startDate: act.startDate || '',
+                endDate: act.endDate || '',
                 startTime: act.startTime || '',
                 endTime: act.endTime || ''
             }))
@@ -58,7 +60,7 @@ export default function EventsPage() {
     const handleAddActivity = () => {
         setFormData(prev => ({
             ...prev,
-            activities: [...prev.activities, { id: '', name: '' }]
+            activities: [...prev.activities, { id: '', name: '', startDate: '', endDate: '', startTime: '', endTime: '' }]
         }));
     };
 
@@ -140,6 +142,7 @@ export default function EventsPage() {
                                     {(event.activities || []).map(act => (
                                         <span key={act.id} className="px-2 py-1 bg-gray-50 text-gray-500 text-[10px] font-bold rounded border border-gray-100">
                                             {act.name}
+                                            {act.startDate && act.endDate ? ` (${act.startDate} to ${act.endDate})` : ''}
                                             {act.startTime && act.endTime ? ` (${act.startTime} - ${act.endTime})` : ''}
                                         </span>
                                     ))}
@@ -258,7 +261,27 @@ export default function EventsPage() {
                                                     onChange={e => handleActivityChange(index, 'id', e.target.value)}
                                                 />
                                             </div>
-                                            <div className="flex gap-4 mb-3">
+                                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                                <div>
+                                                    <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">Start Date</label>
+                                                    <input
+                                                        type="date"
+                                                        className="w-full bg-white border border-gray-200 rounded-lg p-1.5 text-xs font-medium focus:ring-1 focus:ring-primary-500 outline-none"
+                                                        value={activity.startDate || ''}
+                                                        onChange={e => handleActivityChange(index, 'startDate', e.target.value)}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">End Date</label>
+                                                    <input
+                                                        type="date"
+                                                        className="w-full bg-white border border-gray-200 rounded-lg p-1.5 text-xs font-medium focus:ring-1 focus:ring-primary-500 outline-none"
+                                                        value={activity.endDate || ''}
+                                                        onChange={e => handleActivityChange(index, 'endDate', e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mb-3">
                                                 <div className="flex-1">
                                                     <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">Start Time</label>
                                                     <input

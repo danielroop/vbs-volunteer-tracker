@@ -111,6 +111,10 @@ describe('DailyReview', () => {
     mockFirestoreData.students = [];
     mockFirestoreData.eventStudents = [];
     mockFirestoreData.timeEntries = [];
+    mockCurrentEvent.activities = [
+      { id: 'activity1', name: 'Morning Session', startTime: '08:00', endTime: '12:00' },
+      { id: 'activity2', name: 'Afternoon Session', startTime: '13:00', endTime: '17:00' }
+    ];
 
     // Mock URL methods for CSV export
     mockCreateObjectURL = vi.fn().mockReturnValue('blob:test-url');
@@ -169,7 +173,7 @@ describe('DailyReview', () => {
     it('should render status filter dropdown', () => {
       renderWithRouter(<DailyReview />);
 
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.getByLabelText('Status filter')).toBeInTheDocument();
       expect(screen.getByText('All Entries')).toBeInTheDocument();
     });
 
@@ -193,12 +197,16 @@ describe('DailyReview', () => {
     it('should have all filter options in dropdown', () => {
       renderWithRouter(<DailyReview />);
 
-      const dropdown = screen.getByRole('combobox');
-      expect(dropdown).toBeInTheDocument();
+      const activityDropdown = screen.getByLabelText('Activity filter');
+      const statusDropdown = screen.getByLabelText('Status filter');
+      expect(activityDropdown).toBeInTheDocument();
+      expect(statusDropdown).toBeInTheDocument();
 
       // Check for filter options
+      expect(screen.getByText('All Activities')).toBeInTheDocument();
       expect(screen.getByText('All Entries')).toBeInTheDocument();
-      expect(screen.getByText('Not Checked In')).toBeInTheDocument();
+      expect(screen.getAllByText('Checked Out').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Not Checked In').length).toBeGreaterThanOrEqual(1);
     });
 
     it('should allow typing in search input', async () => {
@@ -244,6 +252,35 @@ describe('DailyReview', () => {
       });
     });
 
+    it('should link student names to the student detail page', async () => {
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Alice', lastName: 'Adams' }
+      ];
+      mockFirestoreData.eventStudents = [
+        { id: 'eventStudent1', eventId: 'event123', studentId: 'student1' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student1',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: new Date('2026-01-31T12:00:00'),
+          hoursWorked: 4,
+          flags: []
+        }
+      ];
+
+      renderWithRouter(<DailyReview />);
+
+      await waitFor(() => {
+        const links = screen.getAllByRole('link', { name: 'Adams, Alice' });
+        expect(links[0]).toHaveAttribute('href', '/admin/settings/students/student1');
+      });
+    });
+
     it('should filter to event roster students who have not checked in', async () => {
       const user = userEvent.setup();
       mockFirestoreData.students = [
@@ -271,10 +308,11 @@ describe('DailyReview', () => {
       renderWithRouter(<DailyReview />);
       await waitFor(() => expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1));
 
-      await user.selectOptions(screen.getByRole('combobox'), 'not-checked-in');
+      await user.selectOptions(screen.getByLabelText('Activity filter'), 'activity1');
+      await user.selectOptions(screen.getByLabelText('Status filter'), 'not-checked-in');
 
       expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
-      expect(screen.queryByText('Brown, Bob')).not.toBeInTheDocument();
+      expect(screen.queryAllByText('Brown, Bob')).toHaveLength(0);
     });
 
     it('should keep no checkout separate from not checked in', async () => {
@@ -304,10 +342,149 @@ describe('DailyReview', () => {
       renderWithRouter(<DailyReview />);
       await waitFor(() => expect(screen.getAllByText('Brown, Bob').length).toBeGreaterThanOrEqual(1));
 
-      await user.selectOptions(screen.getByRole('combobox'), 'no-checkout');
+      await user.selectOptions(screen.getByLabelText('Status filter'), 'no-checkout');
 
       expect(screen.getAllByText('Brown, Bob').length).toBeGreaterThanOrEqual(1);
       expect(screen.queryByText('Adams, Alice')).not.toBeInTheDocument();
+    });
+
+    it('should filter a student row by activity and checked-out status', async () => {
+      const user = userEvent.setup();
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Alice', lastName: 'Adams' },
+        { id: 'student2', firstName: 'Bob', lastName: 'Brown' }
+      ];
+      mockFirestoreData.eventStudents = [
+        { id: 'eventStudent1', eventId: 'event123', studentId: 'student1' },
+        { id: 'eventStudent2', eventId: 'event123', studentId: 'student2' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student1',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: new Date('2026-01-31T12:00:00'),
+          hoursWorked: 4,
+          flags: []
+        },
+        {
+          id: 'entry2',
+          eventId: 'event123',
+          studentId: 'student2',
+          activityId: 'activity2',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T13:00:00'),
+          checkOutTime: null,
+          hoursWorked: null,
+          flags: []
+        }
+      ];
+
+      renderWithRouter(<DailyReview />);
+      await waitFor(() => expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1));
+
+      await user.selectOptions(screen.getByLabelText('Activity filter'), 'activity1');
+      await user.selectOptions(screen.getByLabelText('Status filter'), 'checked-out');
+
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('Brown, Bob')).not.toBeInTheDocument();
+    });
+
+    it('should display unique student counts by activity type', async () => {
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Alice', lastName: 'Adams' },
+        { id: 'student2', firstName: 'Bob', lastName: 'Brown' }
+      ];
+      mockFirestoreData.eventStudents = [
+        { id: 'eventStudent1', eventId: 'event123', studentId: 'student1' },
+        { id: 'eventStudent2', eventId: 'event123', studentId: 'student2' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student1',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: new Date('2026-01-31T12:00:00'),
+          hoursWorked: 4,
+          flags: []
+        },
+        {
+          id: 'entry2',
+          eventId: 'event123',
+          studentId: 'student1',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:15:00'),
+          checkOutTime: new Date('2026-01-31T12:15:00'),
+          hoursWorked: 4,
+          flags: []
+        },
+        {
+          id: 'entry3',
+          eventId: 'event123',
+          studentId: 'student2',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: null,
+          hoursWorked: null,
+          flags: []
+        }
+      ];
+
+      renderWithRouter(<DailyReview />);
+
+      await waitFor(() => {
+        const morningSummary = screen
+          .getAllByText('Morning Session')
+          .map(node => node.closest('.border'))
+          .find(node => node?.textContent?.includes('Not Checked In'));
+
+        expect(morningSummary).toHaveTextContent(/0\s*Not Checked In/);
+        expect(morningSummary).toHaveTextContent(/1\s*Checked In/);
+        expect(morningSummary).toHaveTextContent(/1\s*Checked Out/);
+      });
+    });
+
+    it('should only assume not checked in for activities scheduled on the selected date', async () => {
+      mockCurrentEvent.activities = [
+        {
+          id: 'training',
+          name: 'Training',
+          startDate: '2026-01-30',
+          endDate: '2026-01-30',
+          startTime: '08:00',
+          endTime: '12:00'
+        },
+        {
+          id: 'work-hours',
+          name: 'Work Hours',
+          startDate: '2026-01-31',
+          endDate: '2026-02-02',
+          startTime: '13:00',
+          endTime: '17:00'
+        }
+      ];
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Alice', lastName: 'Adams' }
+      ];
+      mockFirestoreData.eventStudents = [
+        { id: 'eventStudent1', eventId: 'event123', studentId: 'student1' }
+      ];
+
+      renderWithRouter(<DailyReview />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Work Hours').length).toBeGreaterThanOrEqual(1);
+        expect(screen.queryByText('Training')).not.toBeInTheDocument();
+        expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+      });
     });
   });
 
@@ -317,11 +494,7 @@ describe('DailyReview', () => {
 
       expect(screen.getByText('Date')).toBeInTheDocument();
       expect(screen.getByText('Name')).toBeInTheDocument();
-      expect(screen.getByText('Activity')).toBeInTheDocument();
-      expect(screen.getByText('Check-In')).toBeInTheDocument();
-      expect(screen.getByText('Check-Out')).toBeInTheDocument();
-      expect(screen.getByText('Hours')).toBeInTheDocument();
-      expect(screen.getByText('Status')).toBeInTheDocument();
+      expect(screen.getByText('Activity Details')).toBeInTheDocument();
       expect(screen.getByText('Actions')).toBeInTheDocument();
     });
 
@@ -428,7 +601,7 @@ describe('DailyReview Mobile Responsive Layout', () => {
       expect(table).toBeInTheDocument();
 
       // Mobile card view should exist (using list role)
-      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      const mobileList = screen.getByRole('list', { name: 'Daily student activity review' });
       expect(mobileList).toBeInTheDocument();
     });
 
@@ -436,13 +609,13 @@ describe('DailyReview Mobile Responsive Layout', () => {
       renderWithRouter(<DailyReview />);
 
       const table = screen.getByRole('table');
-      expect(table).toHaveAttribute('aria-label', 'Daily time entries');
+      expect(table).toHaveAttribute('aria-label', 'Daily student activity review');
     });
 
     it('should render mobile list with proper role and aria-label', () => {
       renderWithRouter(<DailyReview />);
 
-      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      const mobileList = screen.getByRole('list', { name: 'Daily student activity review' });
       expect(mobileList).toBeInTheDocument();
     });
 
@@ -497,7 +670,7 @@ describe('DailyReview Mobile Responsive Layout', () => {
       renderWithRouter(<DailyReview />);
 
       // Verify mobile list exists
-      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      const mobileList = screen.getByRole('list', { name: 'Daily student activity review' });
       expect(mobileList).toBeInTheDocument();
 
       // Verify the mobile container has responsive classes
@@ -520,7 +693,7 @@ describe('DailyReview Accessibility', () => {
       renderWithRouter(<DailyReview />);
 
       const headers = screen.getAllByRole('columnheader');
-      expect(headers).toHaveLength(8); // Date, Name, Activity, Check-In, Check-Out, Hours, Status, Actions
+      expect(headers).toHaveLength(4); // Date, Name, Activity Details, Actions
       headers.forEach(header => {
         expect(header).toHaveAttribute('scope', 'col');
       });
@@ -531,7 +704,7 @@ describe('DailyReview Accessibility', () => {
     it('should have mobile list container with role="list"', () => {
       renderWithRouter(<DailyReview />);
 
-      const mobileList = screen.getByRole('list', { name: 'Daily time entries' });
+      const mobileList = screen.getByRole('list', { name: 'Daily student activity review' });
       expect(mobileList).toBeInTheDocument();
     });
   });

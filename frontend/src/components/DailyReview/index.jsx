@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { db, functions } from '../../utils/firebase';
 import { collection, onSnapshot, query, where, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -8,7 +9,6 @@ import { buildEditChangeDescription } from '../../utils/changeDescriptions';
 import { printInNewWindow, createPrintDocument } from '../../utils/printUtils';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
-import TimeEntryCard from './TimeEntryCard';
 
 /**
  * Daily Review Component
@@ -27,6 +27,7 @@ export default function DailyReview() {
   const [eventStudentIds, setEventStudentIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activityFilter, setActivityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [exporting, setExporting] = useState(false);
 
@@ -165,66 +166,138 @@ export default function DailyReview() {
     return map;
   }, [currentEvent?.activities]);
 
-  // Merge entries with student data and include roster students who have not checked in
-  const reviewRows = useMemo(() => {
-    const entryRows = timeEntries
-      .map(entry => ({
-        ...entry,
-        student: studentMap[entry.studentId] || { firstName: 'Unknown', lastName: 'Student' },
-        activity: activityMap[entry.activityId] || { name: 'Unknown', endTime: '15:00' }
-      }));
+  const isActivityScheduledForDate = useCallback((activity, date) => {
+    if (!activity) return false;
+    if (activity.startDate && date < activity.startDate) return false;
+    if (activity.endDate && date > activity.endDate) return false;
+    return true;
+  }, []);
 
-    const checkedInStudentIds = new Set(
-      timeEntries
-        .filter(entry => !entry.isVoided)
-        .map(entry => entry.studentId)
-    );
+  const activityOptions = useMemo(() => {
+    const options = currentEvent?.activities
+      ? currentEvent.activities.filter(activity => isActivityScheduledForDate(activity, selectedDate))
+      : [];
+    const knownIds = new Set(options.map(activity => activity.id));
 
-    const noCheckInRows = [...eventStudentIds]
-      .filter(studentId => !checkedInStudentIds.has(studentId))
-      .map(studentId => {
-        const student = studentMap[studentId];
-        if (!student) return null;
+    timeEntries.forEach(entry => {
+      if (entry.activityId && !knownIds.has(entry.activityId)) {
+        knownIds.add(entry.activityId);
+        options.push({
+          id: entry.activityId,
+          name: activityMap[entry.activityId]?.name || 'Unknown Activity'
+        });
+      }
+    });
 
-        return {
-          id: `no-checkin-${studentId}`,
-          studentId,
-          date: selectedDate,
-          checkInTime: null,
-          checkOutTime: null,
-          hoursWorked: null,
-          flags: [],
-          isNoCheckIn: true,
-          student,
-          activity: { name: '--' }
-        };
-      })
-      .filter(Boolean);
+    return options;
+  }, [activityMap, currentEvent?.activities, isActivityScheduledForDate, selectedDate, timeEntries]);
 
-    return [...entryRows, ...noCheckInRows];
-  }, [timeEntries, studentMap, activityMap, eventStudentIds, selectedDate]);
+  const entryRows = useMemo(() => {
+    return timeEntries.map(entry => ({
+      ...entry,
+      student: studentMap[entry.studentId] || { firstName: 'Unknown', lastName: 'Student' },
+      activity: activityMap[entry.activityId] || { id: entry.activityId, name: 'Unknown Activity', endTime: '15:00' }
+    }));
+  }, [timeEntries, studentMap, activityMap]);
 
-  const filteredEntries = useMemo(() => {
-    return reviewRows
-      .filter(entry => {
-        // Search filter
-        const fullName = `${entry.student.firstName} ${entry.student.lastName}`.toLowerCase();
+  const matchesStatusFilter = useCallback((entry) => {
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'flagged') return !entry.isNoCheckIn && !entry.isVoided && entry.flags && entry.flags.length > 0;
+    if (statusFilter === 'no-checkout') return !entry.isNoCheckIn && !entry.isVoided && !entry.checkOutTime;
+    if (statusFilter === 'checked-out') return !entry.isNoCheckIn && !entry.isVoided && !!entry.checkOutTime;
+    if (statusFilter === 'not-checked-in') return entry.isNoCheckIn;
+    if (statusFilter === 'modified') return !entry.isNoCheckIn && !entry.isVoided && (entry.modificationReason || entry.forcedCheckoutReason);
+    if (statusFilter === 'voided') return entry.isVoided;
+    if (statusFilter === 'active') return !entry.isVoided && !entry.isNoCheckIn;
+    return true;
+  }, [statusFilter]);
+
+  const activitySummary = useMemo(() => {
+    return activityOptions.map(activity => {
+      const activeEntries = entryRows.filter(entry => entry.activityId === activity.id && !entry.isVoided);
+      const checkedOutIds = new Set(activeEntries.filter(entry => entry.checkOutTime).map(entry => entry.studentId));
+      const checkedInIds = new Set(activeEntries.filter(entry => !entry.checkOutTime).map(entry => entry.studentId));
+      const checkedInAnyIds = new Set(activeEntries.map(entry => entry.studentId));
+      const rosterIds = isActivityScheduledForDate(activity, selectedDate) && eventStudentIds.size > 0
+        ? eventStudentIds
+        : new Set([...checkedInAnyIds]);
+
+      return {
+        activity,
+        notCheckedIn: [...rosterIds].filter(studentId => !checkedInAnyIds.has(studentId)).length,
+        checkedIn: checkedInIds.size,
+        checkedOut: checkedOutIds.size
+      };
+    });
+  }, [activityOptions, entryRows, eventStudentIds, isActivityScheduledForDate, selectedDate]);
+
+  const studentRows = useMemo(() => {
+    const studentIds = new Set([...eventStudentIds]);
+    entryRows.forEach(entry => studentIds.add(entry.studentId));
+
+    return [...studentIds].map(studentId => {
+      const student = studentMap[studentId] || entryRows.find(entry => entry.studentId === studentId)?.student;
+      if (!student) return null;
+
+      const entriesForStudent = entryRows.filter(entry => entry.studentId === studentId);
+      const relevantActivities = activityFilter === 'all'
+        ? activityOptions
+        : activityOptions.filter(activity => activity.id === activityFilter);
+
+      const activityDetails = relevantActivities.flatMap(activity => {
+        const entriesForActivity = entriesForStudent.filter(entry => entry.activityId === activity.id);
+        const activeEntriesForActivity = entriesForActivity.filter(entry => !entry.isVoided);
+
+        if (
+          activeEntriesForActivity.length === 0 &&
+          eventStudentIds.has(studentId) &&
+          isActivityScheduledForDate(activity, selectedDate)
+        ) {
+          return [{
+            id: `no-checkin-${studentId}-${activity.id}`,
+            studentId,
+            activityId: activity.id,
+            date: selectedDate,
+            checkInTime: null,
+            checkOutTime: null,
+            hoursWorked: null,
+            flags: [],
+            isNoCheckIn: true,
+            student,
+            activity
+          }];
+        }
+
+        return entriesForActivity;
+      });
+
+      const visibleDetails = activityDetails.filter(matchesStatusFilter);
+
+      return {
+        id: studentId,
+        student,
+        details: visibleDetails
+      };
+    })
+      .filter(Boolean)
+      .filter(row => {
+        const fullName = `${row.student.firstName} ${row.student.lastName}`.toLowerCase();
         if (searchTerm && !fullName.includes(searchTerm.toLowerCase())) {
           return false;
         }
 
-        // Status filter
-        if (statusFilter === 'flagged' && (!entry.flags || entry.flags.length === 0)) return false;
-        if (statusFilter === 'no-checkout' && (entry.isNoCheckIn || entry.checkOutTime)) return false;
-        if (statusFilter === 'not-checked-in' && !entry.isNoCheckIn) return false;
-        if (statusFilter === 'modified' && !entry.modificationReason && !entry.forcedCheckoutReason) return false;
-        if (statusFilter === 'voided' && !entry.isVoided) return false;
-        if (statusFilter === 'active' && (entry.isVoided || entry.isNoCheckIn)) return false;
-
-        return true;
+        return row.details.length > 0;
       })
-      .sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
-  }, [reviewRows, searchTerm, statusFilter]);
+      .sort((a, b) => {
+        const lastNameCompare = a.student.lastName.localeCompare(b.student.lastName);
+        if (lastNameCompare !== 0) return lastNameCompare;
+        return a.student.firstName.localeCompare(b.student.firstName);
+      });
+  }, [activityFilter, activityOptions, entryRows, eventStudentIds, isActivityScheduledForDate, matchesStatusFilter, searchTerm, selectedDate, studentMap]);
+
+  const filteredEntries = useMemo(() => {
+    return studentRows.flatMap(row => row.details);
+  }, [studentRows]);
 
   // Calculate summary stats
   const stats = useMemo(() => {
@@ -233,10 +306,11 @@ export default function DailyReview() {
     const noCheckIn = [...eventStudentIds].filter(studentId => !checkedInStudentIds.has(studentId)).length;
     return {
       total: timeEntries.length,
-      flagged: activeEntries.filter(e => e.flags && e.flags.length > 0).length,
-      noCheckout: activeEntries.filter(e => !e.checkOutTime).length,
+      flagged: new Set(activeEntries.filter(e => e.flags && e.flags.length > 0).map(e => e.studentId)).size,
+      noCheckout: new Set(activeEntries.filter(e => !e.checkOutTime).map(e => e.studentId)).size,
+      noCheckoutEntries: activeEntries.filter(e => !e.checkOutTime).length,
       noCheckIn,
-      modified: activeEntries.filter(e => e.modificationReason || e.forcedCheckoutReason).length,
+      modified: new Set(activeEntries.filter(e => e.modificationReason || e.forcedCheckoutReason).map(e => e.studentId)).size,
       voided: timeEntries.filter(e => e.isVoided).length
     };
   }, [timeEntries, eventStudentIds]);
@@ -883,6 +957,32 @@ export default function DailyReview() {
             )}
           </div>
 
+          {activitySummary.length > 0 && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {activitySummary.map(({ activity, notCheckedIn, checkedIn, checkedOut }) => (
+                <div key={activity.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="font-semibold text-gray-900 truncate" title={activity.name}>
+                    {activity.name}
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <div className="font-bold text-gray-900">{notCheckedIn}</div>
+                      <div className="text-xs text-gray-500">Not Checked In</div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-red-600">{checkedIn}</div>
+                      <div className="text-xs text-gray-500">Checked In</div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-green-600">{checkedOut}</div>
+                      <div className="text-xs text-gray-500">Checked Out</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Filters */}
           <div className="mt-4 flex flex-wrap gap-4">
             <input
@@ -893,6 +993,20 @@ export default function DailyReview() {
               className="input-field flex-1 min-w-[200px]"
             />
             <select
+              aria-label="Activity filter"
+              value={activityFilter}
+              onChange={(e) => setActivityFilter(e.target.value)}
+              className="input-field w-56"
+            >
+              <option value="all">All Activities</option>
+              {activityOptions.map(activity => (
+                <option key={activity.id} value={activity.id}>
+                  {activity.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Status filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="input-field w-48"
@@ -901,6 +1015,7 @@ export default function DailyReview() {
               <option value="active">Active Only</option>
               <option value="flagged">Flagged Only</option>
               <option value="no-checkout">No Checkout</option>
+              <option value="checked-out">Checked Out</option>
               <option value="not-checked-in">Not Checked In</option>
               <option value="modified">Modified Only</option>
               <option value="voided">Voided Only</option>
@@ -910,139 +1025,127 @@ export default function DailyReview() {
 
         {/* Desktop Table View (md and up) */}
         <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="w-full" role="table" aria-label="Daily time entries">
+          <table className="w-full" role="table" aria-label="Daily student activity review">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-In</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check-Out</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity Details</th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
                     Loading...
                   </td>
                 </tr>
-              ) : filteredEntries.length === 0 ? (
+              ) : studentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
-                    {searchTerm || statusFilter !== 'all'
+                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                    {searchTerm || statusFilter !== 'all' || activityFilter !== 'all'
                       ? 'No entries match your filters'
                       : 'No entries for this date'}
                   </td>
                 </tr>
               ) : (
-                filteredEntries.map(entry => (
+                studentRows.map(row => (
                   <tr
-                    key={entry.id}
-                    className={`${entry.isVoided ? 'opacity-50 bg-gray-100' : 'hover:bg-gray-50'}`}
-                    title={entry.isVoided ? `Voided: ${entry.voidReason}` : undefined}
+                    key={row.id}
+                    className="hover:bg-gray-50 align-top"
                   >
-                    <td className={`px-4 py-3 text-sm text-gray-900 ${entry.isVoided ? 'line-through' : ''}`}>
-                      {entry.checkInTime ? new Date(entry.checkInTime).toLocaleDateString() : entry.date}
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {selectedDate}
                     </td>
                     <td className="px-4 py-3">
-                      <div
-                        className={`font-medium text-gray-900 truncate max-w-[200px] ${entry.isVoided ? 'line-through' : ''}`}
-                        title={`${entry.student.lastName}, ${entry.student.firstName}`}
+                      <Link
+                        to={`/admin/settings/students/${row.id}`}
+                        className="block font-medium text-primary-700 hover:text-primary-900 hover:underline truncate max-w-[200px]"
+                        title={`${row.student.lastName}, ${row.student.firstName}`}
                       >
-                        {entry.student.lastName}, {entry.student.firstName}
+                        {row.student.lastName}, {row.student.firstName}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-3">
+                        {row.details.map(entry => (
+                          <div key={entry.id} className={entry.isVoided ? 'opacity-50' : ''}>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span className={`uppercase font-bold text-[10px] text-blue-600 ${entry.isVoided ? 'line-through' : ''}`}>
+                                {entry.activity?.name || '--'}
+                              </span>
+                              <span className={`text-sm font-medium ${getStatusClass(entry)}`}>
+                                {getStatusDisplay(entry)}
+                              </span>
+                              <span className={`text-sm text-gray-600 ${entry.isVoided ? 'line-through' : ''}`}>
+                                In: {entry.checkInTime ? formatTime(entry.checkInTime) : '--'}
+                              </span>
+                              <span className={`text-sm ${entry.isVoided ? 'line-through text-gray-400' : 'text-gray-600'}`}>
+                                Out: {entry.isNoCheckIn ? '--' : entry.checkOutTime ? formatTime(entry.checkOutTime) : 'Not checked out'}
+                              </span>
+                              <span className={`text-sm text-gray-600 ${entry.isVoided ? 'line-through' : ''}`}>
+                                Hours: {entry.hoursWorked !== null && entry.hoursWorked !== undefined ? formatHours(entry.hoursWorked) : '--'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`uppercase font-bold text-[10px] text-blue-600 truncate block max-w-[120px] ${entry.isVoided ? 'line-through' : ''}`}
-                        title={entry.activity?.name || '--'}
-                      >
-                        {entry.activity?.name || '--'}
-                      </span>
-                    </td>
-                    <td className={`px-4 py-3 text-sm text-gray-600 ${entry.isVoided ? 'line-through' : ''}`}>
-                      {entry.checkInTime ? formatTime(entry.checkInTime) : '--'}
-                    </td>
-                    <td className={`px-4 py-3 text-sm ${entry.isVoided ? 'line-through' : ''}`}>
-                      {entry.isNoCheckIn ? (
-                        <span className="text-gray-500">--</span>
-                      ) : entry.checkOutTime ? (
-                        <span className="text-gray-600">{formatTime(entry.checkOutTime)}</span>
-                      ) : (
-                        <span className={`font-medium ${entry.isVoided ? 'text-gray-400' : 'text-red-600'}`}>Not checked out</span>
-                      )}
-                    </td>
-                    <td className={`px-4 py-3 text-sm text-gray-600 ${entry.isVoided ? 'line-through' : ''}`}>
-                      {entry.hoursWorked !== null && entry.hoursWorked !== undefined
-                        ? formatHours(entry.hoursWorked)
-                        : '--'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <span className={`text-sm font-medium ${getStatusClass(entry)}`}>
-                          {getStatusDisplay(entry)}
-                        </span>
-                        {entry.isVoided && entry.voidReason && (
-                          <p className="text-xs text-gray-400 mt-1 truncate max-w-[150px]" title={entry.voidReason}>
-                            {entry.voidReason}
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        {entry.isNoCheckIn ? (
-                          <Button
-                            size="sm"
-                            variant="success"
-                            onClick={() => openQuickCheckInModal(entry)}
-                            aria-label={`Check in ${entry.student.firstName} ${entry.student.lastName}`}
-                          >
-                            Check In
-                          </Button>
-                        ) : entry.isVoided ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => handleRestoreEntry(entry)}
-                            aria-label={`Restore voided entry for ${entry.student.firstName} ${entry.student.lastName}`}
-                          >
-                            Restore
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => openEditModal(entry)}
-                              aria-label={`Edit time entry for ${entry.student.firstName} ${entry.student.lastName}`}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => openVoidModal(entry)}
-                              aria-label={`Void time entry for ${entry.student.firstName} ${entry.student.lastName}`}
-                            >
-                              Void
-                            </Button>
-                            {!entry.checkOutTime && (
+                      <div className="space-y-2">
+                        {row.details.map(entry => (
+                          <div key={`${entry.id}-actions`} className="flex flex-wrap gap-2">
+                            {entry.isNoCheckIn ? (
                               <Button
                                 size="sm"
-                                variant="danger"
-                                onClick={() => openForceCheckoutModal(entry)}
-                                aria-label={`Checkout for ${entry.student.firstName} ${entry.student.lastName}`}
+                                variant="success"
+                                onClick={() => openQuickCheckInModal(entry)}
+                                aria-label={`Check in ${entry.student.firstName} ${entry.student.lastName} for ${entry.activity?.name || 'activity'}`}
                               >
-                                Checkout
+                                Check In
                               </Button>
+                            ) : entry.isVoided ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleRestoreEntry(entry)}
+                                aria-label={`Restore voided entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                              >
+                                Restore
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => openEditModal(entry)}
+                                  aria-label={`Edit time entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => openVoidModal(entry)}
+                                  aria-label={`Void time entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                                >
+                                  Void
+                                </Button>
+                                {!entry.checkOutTime && (
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={() => openForceCheckoutModal(entry)}
+                                    aria-label={`Checkout for ${entry.student.firstName} ${entry.student.lastName}`}
+                                  >
+                                    Checkout
+                                  </Button>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
+                          </div>
+                        ))}
                       </div>
                     </td>
                   </tr>
@@ -1053,33 +1156,110 @@ export default function DailyReview() {
         </div>
 
         {/* Mobile Card View (below md breakpoint) */}
-        <div className="block md:hidden" role="list" aria-label="Daily time entries">
+        <div className="block md:hidden" role="list" aria-label="Daily student activity review">
           {loading ? (
             <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
               Loading...
             </div>
-          ) : filteredEntries.length === 0 ? (
+          ) : studentRows.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
-              {searchTerm || statusFilter !== 'all'
+              {searchTerm || statusFilter !== 'all' || activityFilter !== 'all'
                 ? 'No entries match your filters'
                 : 'No entries for this date'}
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredEntries.map(entry => (
-                <TimeEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  formatTime={formatTime}
-                  formatHours={formatHours}
-                  getStatusDisplay={getStatusDisplay}
-                  getStatusClass={getStatusClass}
-                  onEdit={openEditModal}
-                  onQuickCheckIn={openQuickCheckInModal}
-                  onForceCheckout={openForceCheckoutModal}
-                  onVoid={openVoidModal}
-                  onRestore={handleRestoreEntry}
-                />
+              {studentRows.map(row => (
+                <article key={row.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+                  <Link
+                    to={`/admin/settings/students/${row.id}`}
+                    className="block font-medium text-primary-700 hover:text-primary-900 hover:underline"
+                  >
+                    {row.student.lastName}, {row.student.firstName}
+                  </Link>
+                  <div className="mt-3 space-y-3">
+                    {row.details.map(entry => (
+                      <div key={entry.id} className={entry.isVoided ? 'opacity-50' : ''}>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className={`uppercase font-bold text-[10px] text-blue-600 ${entry.isVoided ? 'line-through' : ''}`}>
+                            {entry.activity?.name || '--'}
+                          </span>
+                          <span className={`text-sm font-medium text-right ${getStatusClass(entry)}`}>
+                            {getStatusDisplay(entry)}
+                          </span>
+                        </div>
+                        <div className={`grid grid-cols-3 gap-2 text-sm mt-2 ${entry.isVoided ? 'line-through' : ''}`}>
+                          <div>
+                            <span className="block text-xs text-gray-500 uppercase">Check-In</span>
+                            <span className="text-gray-900">{entry.checkInTime ? formatTime(entry.checkInTime) : '--'}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs text-gray-500 uppercase">Check-Out</span>
+                            <span className={entry.checkOutTime || entry.isNoCheckIn ? 'text-gray-900' : 'text-red-600 font-medium'}>
+                              {entry.isNoCheckIn ? '--' : entry.checkOutTime ? formatTime(entry.checkOutTime) : 'Not checked out'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-xs text-gray-500 uppercase">Hours</span>
+                            <span className="text-gray-900">
+                              {entry.hoursWorked !== null && entry.hoursWorked !== undefined ? formatHours(entry.hoursWorked) : '--'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-2 mt-2 border-t border-gray-100">
+                          {entry.isNoCheckIn ? (
+                            <Button
+                              size="sm"
+                              variant="success"
+                              onClick={() => openQuickCheckInModal(entry)}
+                              aria-label={`Check in ${entry.student.firstName} ${entry.student.lastName}`}
+                            >
+                              Check In
+                            </Button>
+                          ) : entry.isVoided ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleRestoreEntry(entry)}
+                              aria-label={`Restore voided entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                            >
+                              Restore
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => openEditModal(entry)}
+                                aria-label={`Edit time entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => openVoidModal(entry)}
+                                aria-label={`Void time entry for ${entry.student.firstName} ${entry.student.lastName}`}
+                              >
+                                Void
+                              </Button>
+                              {!entry.checkOutTime && (
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => openForceCheckoutModal(entry)}
+                                  aria-label={`Checkout for ${entry.student.firstName} ${entry.student.lastName}`}
+                                >
+                                  Checkout
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
               ))}
             </div>
           )}
@@ -1103,12 +1283,12 @@ export default function DailyReview() {
               Export PDF
             </Button>
           </div>
-          {stats.noCheckout > 0 && (
+          {stats.noCheckoutEntries > 0 && (
             <Button
               variant="danger"
               onClick={openForceAllCheckoutModal}
             >
-              Force All Checkout ({stats.noCheckout})
+              Force All Checkout ({stats.noCheckoutEntries})
             </Button>
           )}
         </div>

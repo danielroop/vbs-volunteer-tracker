@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, act } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, act } from 'react';
 import { db, functions } from '../../utils/firebase';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -25,6 +25,30 @@ export default function Scanner() {
   const scannerId = user?.uid || userProfile?.id || 'av_scan';
   const scannerName = userProfile?.name || user?.displayName || user?.email || '';
 
+  const getTodayDateString = useCallback(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const isActivityActiveToday = useCallback((activity) => {
+    const today = getTodayDateString();
+    if (activity?.startDate && today < activity.startDate) return false;
+    if (activity?.endDate && today > activity.endDate) return false;
+    return true;
+  }, [getTodayDateString]);
+
+  const activeActivities = useMemo(
+    () => localEvent?.activities?.filter(isActivityActiveToday) || [],
+    [isActivityActiveToday, localEvent?.activities]
+  );
+  const backupActivities = useMemo(
+    () => localEvent?.activities?.filter(activity => !isActivityActiveToday(activity)) || [],
+    [isActivityActiveToday, localEvent?.activities]
+  );
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -47,10 +71,10 @@ export default function Scanner() {
 
   // Auto-select single activity if not provided
   useEffect(() => {
-    if (!loading && localEvent && !urlActivityId && localEvent.activities?.length === 1) {
-      navigate(`/scan/${urlEventId}/${localEvent.activities[0].id}${urlAction ? `/${urlAction}` : ''}`, { replace: true });
+    if (!loading && localEvent && !urlActivityId && activeActivities.length === 1 && backupActivities.length === 0) {
+      navigate(`/scan/${urlEventId}/${activeActivities[0].id}${urlAction ? `/${urlAction}` : ''}`, { replace: true });
     }
-  }, [loading, localEvent, urlActivityId, urlEventId, urlAction, navigate]);
+  }, [activeActivities, backupActivities.length, loading, localEvent, urlActivityId, urlEventId, urlAction, navigate]);
 
   const { startScanning: startScanningFn, stopScanning: stopScanningFn } = useQRScanner({
     onSuccess: async (data) => {
@@ -128,6 +152,34 @@ export default function Scanner() {
   const currentActivity = localEvent?.activities?.find(a => a.id === urlActivityId);
   const hasValidActivity = !!currentActivity;
   const hasValidAction = urlAction === 'checkin' || urlAction === 'checkout';
+
+  const renderActivityLink = (act, variant = 'active') => {
+    const inactive = variant === 'backup';
+
+    return (
+      <Link
+        key={act.id}
+        to={`/scan/${urlEventId}/${act.id}${urlAction ? `/${urlAction}` : ''}`}
+        className={`block p-4 border rounded-xl transition-all ${
+          inactive
+            ? 'bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300'
+            : 'bg-gray-50 hover:bg-orange-50 border-gray-200 hover:border-orange-300'
+        }`}
+      >
+        <div className="flex justify-between items-center gap-3">
+          <div className="min-w-0">
+            <span className={`font-bold block truncate ${inactive ? 'text-gray-600' : 'text-gray-700'}`}>{act.name}</span>
+            {(act.startDate || act.endDate) && (
+              <span className="text-[10px] font-bold text-gray-400 uppercase">
+                {act.startDate || 'Any'} to {act.endDate || 'Any'}
+              </span>
+            )}
+          </div>
+          <span className={inactive ? 'text-gray-300' : 'text-orange-400'}>→</span>
+        </div>
+      </Link>
+    );
+  };
 
   useEffect(() => {
     if (!loading && hasValidEvent && hasValidActivity && hasValidAction && !isStarting.current) {
@@ -207,19 +259,28 @@ export default function Scanner() {
           </div>
           <h2 className="text-xl font-bold text-center text-gray-900 mb-1">{localEvent.name}</h2>
           <p className="text-gray-500 text-center mb-6 text-sm font-medium uppercase tracking-wider">Select Activity Type</p>
-          <div className="space-y-3">
-            {localEvent.activities?.map(act => (
-              <Link
-                key={act.id}
-                to={`/scan/${urlEventId}/${act.id}${urlAction ? `/${urlAction}` : ''}`}
-                className="block p-4 bg-gray-50 hover:bg-orange-50 border border-gray-200 hover:border-orange-300 rounded-xl transition-all"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-gray-700">{act.name}</span>
-                  <span className="text-orange-400">→</span>
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Active Today</h3>
+              <div className="space-y-3">
+                {activeActivities.length > 0 ? (
+                  activeActivities.map(act => renderActivityLink(act))
+                ) : (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500">
+                    No activities are scheduled for today.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {backupActivities.length > 0 && (
+              <div>
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Other Activities</h3>
+                <div className="space-y-3">
+                  {backupActivities.map(act => renderActivityLink(act, 'backup'))}
                 </div>
-              </Link>
-            ))}
+              </div>
+            )}
           </div>
           <button
             onClick={() => navigate('/scan')}

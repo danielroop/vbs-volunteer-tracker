@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
-import { db } from '../utils/firebase';
+import { db, storage } from '../utils/firebase';
 import {
     collection,
     onSnapshot,
@@ -13,12 +13,52 @@ import {
     where,
     serverTimestamp,
 } from 'firebase/firestore';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
 import { GRADE_LEVEL_OPTIONS } from '../utils/grades';
+
+const normalizeTemplateText = (value = '') =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const SCHOOL_TEMPLATE_ALIASES = [
+    { school: ['bishopmoore', 'bishopmoorecatholic'], template: ['bishopmoore'] },
+    { school: ['thefirstacademy', 'firstacademy', 'tfa'], template: ['thefirstacademy', 'firstacademy', 'tfa'] },
+];
+
+const findTemplateForSchool = (schoolName, templates) => {
+    const normalizedSchool = normalizeTemplateText(schoolName);
+    if (!normalizedSchool) return null;
+
+    const templateMatches = (template, values) => {
+        const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
+        return values.some(value => normalizedTemplate.includes(value));
+    };
+
+    const exactMatch = templates.find(template => {
+        const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
+        return normalizedTemplate &&
+            (normalizedTemplate.includes(normalizedSchool) || normalizedSchool.includes(normalizedTemplate));
+    });
+    if (exactMatch) return exactMatch;
+
+    const alias = SCHOOL_TEMPLATE_ALIASES.find(item =>
+        item.school.some(value => normalizedSchool.includes(value))
+    );
+    if (alias) {
+        const aliasMatch = templates.find(template => templateMatches(template, alias.template));
+        if (aliasMatch) return aliasMatch;
+    }
+
+    const ocpsTemplate = templates.find(template => templateMatches(template, ['ocps']));
+    if (ocpsTemplate) return ocpsTemplate;
+
+    return null;
+};
 
 export default function EventStudentsPage() {
     const { eventId: paramEventId } = useParams();
@@ -37,17 +77,33 @@ export default function EventStudentsPage() {
     const [loading, setLoading] = useState(true);
     const [printingReports, setPrintingReports] = useState(false);
     const [removingStudentId, setRemovingStudentId] = useState(null);
+    const [selectedStudents, setSelectedStudents] = useState(new Set());
+    const [pdfTemplates, setPdfTemplates] = useState([]);
+    const [defaultTemplateId, setDefaultTemplateId] = useState(null);
 
     const [searchTerm, setSearchTerm] = useState('');
 
     const [addStudentModal, setAddStudentModal] = useState(false);
-    const [addForm, setAddForm] = useState({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '' });
+    const [addForm, setAddForm] = useState({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '', pdfTemplateId: '' });
     const [addingSaving, setAddingSaving] = useState(false);
 
     const [importModal, setImportModal] = useState(false);
     const [importSearch, setImportSearch] = useState('');
     const [importSelected, setImportSelected] = useState(new Set());
     const [importSaving, setImportSaving] = useState(false);
+
+    useEffect(() => {
+        const unsubTemplates = onSnapshot(collection(db, 'pdfTemplates'), snap => {
+            setPdfTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        const unsubDefaults = onSnapshot(doc(db, 'settings', 'pdfDefaults'), snap => {
+            setDefaultTemplateId(snap.exists() ? snap.data().defaultTemplateId : null);
+        });
+        return () => {
+            unsubTemplates();
+            unsubDefaults();
+        };
+    }, []);
 
     // Load event — use context if available (Operations nav), otherwise fetch from Firestore
     useEffect(() => {
@@ -121,6 +177,39 @@ export default function EventStudentsPage() {
         );
     }, [eventStudents, searchTerm]);
 
+    const allFilteredSelected = filteredStudents.length > 0 &&
+        filteredStudents.every(s => selectedStudents.has(s.id));
+
+    const getStudentsToPrint = () => {
+        if (selectedStudents.size > 0) {
+            return eventStudents.filter(s => selectedStudents.has(s.id));
+        }
+        return filteredStudents;
+    };
+
+    const toggleStudentSelection = (studentId) => {
+        setSelectedStudents(prev => {
+            const next = new Set(prev);
+            next.has(studentId) ? next.delete(studentId) : next.add(studentId);
+            return next;
+        });
+    };
+
+    const selectAllFiltered = () => {
+        setSelectedStudents(prev => {
+            const next = new Set(prev);
+            filteredStudents.forEach(s => next.add(s.id));
+            return next;
+        });
+    };
+
+    const clearSelection = () => {
+        setSelectedStudents(new Set());
+    };
+
+    const selectedPrintCount = eventStudents.filter(s => selectedStudents.has(s.id)).length;
+    const printStudentCount = selectedStudents.size > 0 ? selectedPrintCount : filteredStudents.length;
+
     // Students not yet associated with this event (for import modal)
     const importableStudents = useMemo(() => {
         return allStudents
@@ -150,10 +239,10 @@ export default function EventStudentsPage() {
         e.preventDefault();
         setAddingSaving(true);
         try {
+            const studentData = { ...addForm, overrideHours: 0, createdAt: serverTimestamp() };
+            if (!studentData.pdfTemplateId) delete studentData.pdfTemplateId;
             const docRef = await addDoc(collection(db, 'students'), {
-                ...addForm,
-                overrideHours: 0,
-                createdAt: serverTimestamp(),
+                ...studentData,
             });
             await addDoc(collection(db, 'eventStudents'), {
                 eventId,
@@ -162,7 +251,7 @@ export default function EventStudentsPage() {
                 addedBy: user?.uid || 'admin',
             });
             setAddStudentModal(false);
-            setAddForm({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '' });
+            setAddForm({ firstName: '', lastName: '', schoolName: '', gradeLevel: '', gradYear: '', pdfTemplateId: '' });
         } catch (err) {
             console.error('Error adding student:', err);
         } finally {
@@ -212,13 +301,6 @@ export default function EventStudentsPage() {
         .badge-name { font-size: 14pt; font-weight: bold; margin-bottom: 4px; color: #000; }
         .badge-id { font-size: 9pt; color: #666; margin-bottom: 8px; }
         .badge-qr { margin: 0 auto; }
-        .ocps-form-container { font-family: Arial, sans-serif; padding: 0.25in; color: black; line-height: 1.05; font-size: 8.5pt; page-break-after: always; height: 100vh; box-sizing: border-box; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 2px; }
-        th, td { border: 1px solid black; padding: 2px 6px; vertical-align: middle; }
-        .field-box { border-bottom: 1px solid black; display: inline-block; min-width: 120px; padding: 0 5px; font-weight: bold; }
-        .reflection-box { border: 1px solid black; height: 165px; width: 100%; margin-top: 2px; display: flex; flex-direction: column; }
-        .reflection-line { border-bottom: 1px solid #ddd; flex: 1; }
-        .ocps-logo { width: 40px; height: 40px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 7pt; text-align: center; }
     `;
 
     const getStudentActivityLog = (studentId) => {
@@ -253,10 +335,22 @@ export default function EventStudentsPage() {
         }).filter(Boolean);
     };
 
+    const getEffectiveTemplate = (student) => {
+        if (student.pdfTemplateId) {
+            return pdfTemplates.find(template => template.id === student.pdfTemplateId) || null;
+        }
+
+        const schoolTemplate = findTemplateForSchool(student.schoolName, pdfTemplates);
+        if (schoolTemplate) return schoolTemplate;
+
+        return defaultTemplateId ? pdfTemplates.find(template => template.id === defaultTemplateId) || null : null;
+    };
+
     const handlePrintBadges = () => {
+        const studentsToPrint = getStudentsToPrint();
         const pages = [];
-        for (let i = 0; i < filteredStudents.length; i += 8) {
-            pages.push(filteredStudents.slice(i, i + 8));
+        for (let i = 0; i < studentsToPrint.length; i += 8) {
+            pages.push(studentsToPrint.slice(i, i + 8));
         }
 
         const body = pages.map((pageStudents, pageIndex) => (
@@ -274,84 +368,61 @@ export default function EventStudentsPage() {
         printInNewWindow(html);
     };
 
-    const buildStudentFormHtml = (student, activityLog, grandTotal) => {
-        const orgName = event?.organizationName || '';
-        const contactName = event?.contactName || '---';
-        const activityRows = activityLog.map(activity => `
-            <tr>
-                <td>${orgName} ${activity.name || ''}</td>
-                <td style="text-align:center">${activity.dateDisplay}</td>
-                <td>${contactName}</td>
-                <td></td>
-                <td style="font-weight:bold">${activity.totalHours}</td>
-            </tr>
-        `).join('');
-        const blankRows = Array.from({ length: Math.max(0, 10 - activityLog.length) })
-            .map(() => '<tr style="height:36px"><td></td><td></td><td></td><td></td><td></td></tr>')
-            .join('');
+    const handlePrintReports = async () => {
+        const studentsToPrint = getStudentsToPrint();
+        const pdfGroup = [];
+        const missingTemplateStudents = [];
 
-        return `<div class="ocps-form-container">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border-bottom:2px solid black;padding-bottom:4px">
-                <div class="ocps-logo">OCPS</div>
-                <h1 style="font-size:13pt;font-weight:bold;text-align:center;flex:1">Community/Work Service Log and Reflection</h1>
-            </div>
-            <table style="margin-bottom:4px"><tbody>
-                <tr>
-                    <td style="width:33%;border:none">Student ID #: <span class="field-box" style="min-width:100px"></span></td>
-                    <td style="border:none">Student Name: <span class="field-box" style="min-width:220px">${student.firstName} ${student.lastName}</span></td>
-                </tr>
-                <tr>
-                    <td style="border:none">School Name: <span class="field-box" style="min-width:200px">${student.schoolName || ''}</span></td>
-                    <td style="border:none;text-align:right">Graduation Year: <span class="field-box" style="min-width:80px">${student.gradYear || '____'}</span></td>
-                </tr>
-            </tbody></table>
-            <p style="font-size:7.5pt;margin:2px 0">Social/Civic Issue/Professional Area Addressing with Service Activity Log (Optional):</p>
-            <div style="border-bottom:1px solid black;width:100%;margin-bottom:4px;height:16px"></div>
-            <p style="font-weight:bold;font-size:8pt;margin:2px 0">Description of Volunteer/Paid Work Activity:</p>
-            <div style="border-bottom:1px solid black;width:100%;margin-bottom:8px;height:16px"></div>
-            <table style="margin-bottom:8px;text-align:center"><thead>
-                <tr style="background:#f3f4f6;font-size:8pt">
-                    <th style="width:20%">Service Organization/Business</th>
-                    <th style="width:30%">Date(s) of Service Activity/Work</th>
-                    <th style="width:15%">Contact Name</th>
-                    <th style="width:20%">Signature of Contact</th>
-                    <th style="width:15%">Hours Completed</th>
-                </tr>
-            </thead><tbody>
-                ${activityRows}${blankRows}
-                <tr>
-                    <td colspan="4" style="text-align:right;font-weight:bold;text-transform:uppercase">Total:</td>
-                    <td style="font-weight:bold;background:#f9fafb">${grandTotal.toFixed(2)}</td>
-                </tr>
-            </tbody></table>
-            <div style="margin-top:4px">
-                <p style="font-weight:bold;font-size:7.5pt;margin:0">Reflection on Service Activity/Work (attach additional pages if necessary):</p>
-                <p style="font-size:6.5pt;font-style:italic;margin:2px 0">Attach a copy of your pay stub for work hours if applicable. Complete the reflection below...</p>
-                <div class="reflection-box">${Array.from({ length: 7 }).map(() => '<div class="reflection-line"></div>').join('')}</div>
-            </div>
-            <p style="font-size:7pt;margin-top:8px;font-weight:bold;line-height:1.3">By signing below, I certify that all information on this document is true and correct. I understand that if I am found to have given false testimony about these hours that the hours will be revoked and endanger my eligibility for the Bright Futures Scholarship.</p>
-            <div style="margin-top:12px;display:flex;justify-content:space-between">
-                <div style="font-size:8pt">Student Signature: _______________________ Date: ________</div>
-                <div style="font-size:8pt">Parent Signature: ________________________ Date: ________</div>
-            </div>
-            <p style="font-size:5.5pt;margin-top:4px;color:#9ca3af">Revised 8/2023</p>
-        </div>`;
-    };
+        studentsToPrint.forEach(student => {
+            const template = getEffectiveTemplate(student);
+            if (template) {
+                pdfGroup.push({ student, template });
+            } else {
+                missingTemplateStudents.push(student);
+            }
+        });
 
-    const handlePrintReports = () => {
-        setPrintingReports(true);
-        try {
-            const formsHtml = filteredStudents.map(student => {
-                const activityLog = getStudentActivityLog(student.id);
-                const totalCalc = activityLog.reduce((sum, activity) => sum + parseFloat(activity.totalHours), 0);
-                const grandTotal = totalCalc + parseFloat(student.overrideHours || 0);
-                return buildStudentFormHtml(student, activityLog, grandTotal);
-            }).join('');
+        if (missingTemplateStudents.length > 0) {
+            const names = missingTemplateStudents
+                .map(student => `${student.firstName} ${student.lastName}`.trim())
+                .join(', ');
+            alert(`Cannot print reports until every student has a PDF template. Missing template for: ${names}`);
+            return;
+        }
 
-            const html = createPrintDocument({ title: `${event?.name || 'Event'} Service Logs`, styles: PRINT_STYLES, body: formsHtml });
-            printInNewWindow(html);
-        } finally {
-            setPrintingReports(false);
+        if (pdfGroup.length > 0) {
+            setPrintingReports(true);
+            try {
+                const allPdfBytes = [];
+                for (const { student, template } of pdfGroup) {
+                    const storageRef = ref(storage, template.storagePath);
+                    const url = await getDownloadURL(storageRef);
+                    const response = await fetch(url);
+                    const templateBytes = await response.arrayBuffer();
+
+                    const activityLog = getStudentActivityLog(student.id);
+                    const totalCalc = activityLog.reduce((sum, activity) => sum + parseFloat(activity.totalHours), 0);
+                    const grandTotal = totalCalc + parseFloat(student.overrideHours || 0);
+
+                    const pdfBytes = await generateFilledPdf(templateBytes, template.fields, {
+                        student,
+                        totalHours: grandTotal,
+                        eventName: event?.name || '',
+                        activityLog,
+                        event,
+                        timeEntries: eventEntries.filter(entry => entry.studentId === student.id && !entry.isVoided),
+                    });
+                    allPdfBytes.push(pdfBytes);
+                }
+
+                const mergedBytes = await mergePdfs(allPdfBytes);
+                openPdfForPrinting(mergedBytes, `${event?.name || 'event'}-service-logs.pdf`);
+            } catch (err) {
+                console.error('Event PDF generation failed:', err);
+                alert('Failed to generate PDFs: ' + err.message);
+            } finally {
+                setPrintingReports(false);
+            }
         }
     };
 
@@ -397,16 +468,16 @@ export default function EventStudentsPage() {
                         aria-label="Search students"
                     />
                     <div className="flex flex-wrap gap-2 shrink-0">
-                        <Button variant="secondary" onClick={handlePrintBadges} disabled={filteredStudents.length === 0}>
-                            Print Badges
+                        <Button variant="secondary" onClick={handlePrintBadges} disabled={printStudentCount === 0}>
+                            {selectedStudents.size > 0 ? `Print Badges (${selectedPrintCount})` : 'Print Badges'}
                         </Button>
                         <Button
                             variant="secondary"
                             onClick={handlePrintReports}
-                            disabled={filteredStudents.length === 0 || printingReports}
+                            disabled={printStudentCount === 0 || printingReports}
                             loading={printingReports}
                         >
-                            {printingReports ? 'Generating...' : 'Print Reports'}
+                            {printingReports ? 'Generating...' : selectedStudents.size > 0 ? `Print Reports (${selectedPrintCount})` : 'Print Reports'}
                         </Button>
                         {allStudents.length > eventStudents.length && (
                             <Button
@@ -423,6 +494,27 @@ export default function EventStudentsPage() {
                 </div>
             </div>
 
+            {selectedStudents.size > 0 && (
+                <div className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <span className="inline-flex items-center justify-center bg-primary-600 text-white text-sm font-bold px-3 py-1 rounded-full">
+                            {selectedStudents.size}
+                        </span>
+                        <span className="text-sm font-medium text-primary-800">
+                            {selectedStudents.size === 1 ? 'student selected' : 'students selected'}
+                        </span>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button onClick={selectAllFiltered} variant="secondary" size="sm">
+                            Select All Visible ({filteredStudents.length})
+                        </Button>
+                        <Button onClick={clearSelection} variant="secondary" size="sm">
+                            Clear Selection
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {/* Student list */}
             {eventStudents.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm border p-12 text-center text-gray-400">
@@ -434,6 +526,25 @@ export default function EventStudentsPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                <th className="px-4 py-4 w-12">
+                                    <input
+                                        type="checkbox"
+                                        checked={allFilteredSelected}
+                                        onChange={e => {
+                                            if (e.target.checked) {
+                                                selectAllFiltered();
+                                            } else {
+                                                setSelectedStudents(prev => {
+                                                    const next = new Set(prev);
+                                                    filteredStudents.forEach(s => next.delete(s.id));
+                                                    return next;
+                                                });
+                                            }
+                                        }}
+                                        className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                                        aria-label={allFilteredSelected ? 'Deselect all students' : 'Select all students'}
+                                    />
+                                </th>
                                 <th className="px-6 py-4">Name</th>
                                 <th className="px-6 py-4">School</th>
                                 <th className="px-6 py-4">Grade</th>
@@ -445,13 +556,22 @@ export default function EventStudentsPage() {
                         <tbody className="divide-y divide-gray-100">
                             {filteredStudents.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
                                         <p className="font-bold">No students match your search</p>
                                         <p className="text-sm mt-1">Try a different name.</p>
                                     </td>
                                 </tr>
                             ) : filteredStudents.map(s => (
-                                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                                <tr key={s.id} className={`hover:bg-gray-50 transition-colors ${selectedStudents.has(s.id) ? 'bg-primary-50' : ''}`}>
+                                    <td className="px-4 py-4">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedStudents.has(s.id)}
+                                            onChange={() => toggleStudentSelection(s.id)}
+                                            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                                            aria-label={`Select ${s.firstName} ${s.lastName}`}
+                                        />
+                                    </td>
                                     <td className="px-6 py-4 font-bold text-gray-900">
                                         {s.firstName} {s.lastName}
                                     </td>
@@ -558,6 +678,23 @@ export default function EventStudentsPage() {
                                         placeholder="e.g. 2027"
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">PDF Template</label>
+                                <select
+                                    className="w-full border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none"
+                                    value={addForm.pdfTemplateId}
+                                    onChange={e => setAddForm(f => ({ ...f, pdfTemplateId: e.target.value }))}
+                                >
+                                    <option value="">
+                                        {defaultTemplateId
+                                            ? `Default: ${pdfTemplates.find(t => t.id === defaultTemplateId)?.name || 'Default'}`
+                                            : 'Use default template'}
+                                    </option>
+                                    {pdfTemplates.map(template => (
+                                        <option key={template.id} value={template.id}>{template.name}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="flex gap-3 pt-4">
                                 <Button type="submit" className="flex-1" disabled={addingSaving} loading={addingSaving}>

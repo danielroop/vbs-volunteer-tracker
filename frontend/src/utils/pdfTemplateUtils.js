@@ -156,6 +156,10 @@ export function resolveFieldValue(fieldKey, { student, totalHours, eventName, ev
  * Resolves an activity column key to its value for a single activity row.
  */
 export function resolveActivityColumnValue(columnKey, activity, event) {
+  if (typeof columnKey === 'object' && columnKey?.type === 'customText') {
+    return columnKey.customValue || '';
+  }
+
   switch (columnKey) {
     case 'activityOrg':
       return `${event?.organizationName || ''} ${activity.name || ''}`.trim();
@@ -174,6 +178,10 @@ export function resolveActivityColumnValue(columnKey, activity, event) {
  * Resolves a detail column key to its value for a single time entry row.
  */
 export function resolveDetailColumnValue(columnKey, entry, event) {
+  if (typeof columnKey === 'object' && columnKey?.type === 'customText') {
+    return columnKey.customValue || '';
+  }
+
   switch (columnKey) {
     case 'detailDate': {
       // Support Firestore Timestamps (with toDate()) and regular Date/string values
@@ -262,7 +270,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
           const colFontSize = col.fontSize || 10;
           // Shift baseline down by ascent so top of text aligns with yPercent
           const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
-          const value = String(resolveActivityColumnValue(col.key, activity, data.event));
+          const value = String(resolveActivityColumnValue(col.type === 'customText' ? col : col.key, activity, data.event));
 
           page.drawText(value, {
             x,
@@ -288,7 +296,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
           const x = (col.xPercent / 100) * width;
           const colFontSize = col.fontSize || 10;
           const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
-          const value = String(resolveDetailColumnValue(col.key, entry, data.event));
+          const value = String(resolveDetailColumnValue(col.type === 'customText' ? col : col.key, entry, data.event));
 
           page.drawText(value, {
             x,

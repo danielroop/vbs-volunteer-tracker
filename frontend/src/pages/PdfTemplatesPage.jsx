@@ -57,6 +57,19 @@ function buildTableColumn(option, index, isDetail) {
   };
 }
 
+function buildCustomTableColumn(isDetail) {
+  return {
+    key: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    type: 'customText',
+    label: 'Custom Text',
+    customValue: '',
+    xPercent: isDetail ? 3 : 5,
+    fontSize: 10,
+    maxWidth: isDetail ? 15 : 20,
+    enabled: true,
+  };
+}
+
 export default function PdfTemplatesPage() {
   const [templates, setTemplates] = useState([]);
   const [defaultTemplateId, setDefaultTemplateId] = useState(null);
@@ -856,6 +869,12 @@ function FieldMapperModal({ isOpen, template, onClose }) {
     ));
   };
 
+  const addTableCustomColumn = (tableType) => {
+    const isDetail = tableType === 'detailTable';
+    const updateColumns = isDetail ? setDtColumns : setAtColumns;
+    updateColumns(prev => [...prev, buildCustomTableColumn(isDetail)]);
+  };
+
   const removeField = (fieldId) => {
     setFields(prev => prev.filter(f => f.id !== fieldId));
     if (selectedFieldId === fieldId) setSelectedFieldId(null);
@@ -991,17 +1010,54 @@ function FieldMapperModal({ isOpen, template, onClose }) {
               <div className="space-y-1">
                 {atColumns.map((col, idx) => (
                   <div key={col.key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={col.enabled}
-                      onChange={(e) => {
-                        const updated = [...atColumns];
-                        updated[idx] = { ...updated[idx], enabled: e.target.checked };
-                        setAtColumns(updated);
-                      }}
-                      className="rounded"
-                    />
-                    <span className="w-40 text-gray-700">{col.label}</span>
+                    {col.type === 'customText' ? (
+                      <button
+                        type="button"
+                        onClick={() => setAtColumns(prev => prev.filter(item => item.key !== col.key))}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium w-5"
+                      >
+                        x
+                      </button>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={col.enabled}
+                        onChange={(e) => {
+                          const updated = [...atColumns];
+                          updated[idx] = { ...updated[idx], enabled: e.target.checked };
+                          setAtColumns(updated);
+                        }}
+                        className="rounded"
+                      />
+                    )}
+                    {col.type === 'customText' ? (
+                      <>
+                        <input
+                          type="text"
+                          value={col.label}
+                          onChange={(e) => {
+                            const updated = [...atColumns];
+                            updated[idx] = { ...updated[idx], label: e.target.value };
+                            setAtColumns(updated);
+                          }}
+                          placeholder="Label"
+                          className="input-field text-sm w-36"
+                        />
+                        <input
+                          type="text"
+                          value={col.customValue || ''}
+                          onChange={(e) => {
+                            const updated = [...atColumns];
+                            updated[idx] = { ...updated[idx], customValue: e.target.value };
+                            setAtColumns(updated);
+                          }}
+                          placeholder="Value for every row"
+                          className="input-field text-sm w-40"
+                        />
+                      </>
+                    ) : (
+                      <span className="w-40 text-gray-700">{col.label}</span>
+                    )}
                     <label className="text-xs text-gray-500">X%:</label>
                     <input
                       type="number"
@@ -1043,6 +1099,9 @@ function FieldMapperModal({ isOpen, template, onClose }) {
                     />
                   </div>
                 ))}
+                <Button size="sm" variant="secondary" onClick={() => addTableCustomColumn('activityTable')}>
+                  Add Custom Column
+                </Button>
               </div>
               <p className="text-xs text-primary-600">Click on the PDF where the first row should start. Drag columns to position them independently.</p>
             </div>
@@ -1081,17 +1140,54 @@ function FieldMapperModal({ isOpen, template, onClose }) {
               <div className="space-y-1">
                 {dtColumns.map((col, idx) => (
                   <div key={col.key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={col.enabled}
-                      onChange={(e) => {
-                        const updated = [...dtColumns];
-                        updated[idx] = { ...updated[idx], enabled: e.target.checked };
-                        setDtColumns(updated);
-                      }}
-                      className="rounded"
-                    />
-                    <span className="w-40 text-gray-700">{col.label}</span>
+                    {col.type === 'customText' ? (
+                      <button
+                        type="button"
+                        onClick={() => setDtColumns(prev => prev.filter(item => item.key !== col.key))}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium w-5"
+                      >
+                        x
+                      </button>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={col.enabled}
+                        onChange={(e) => {
+                          const updated = [...dtColumns];
+                          updated[idx] = { ...updated[idx], enabled: e.target.checked };
+                          setDtColumns(updated);
+                        }}
+                        className="rounded"
+                      />
+                    )}
+                    {col.type === 'customText' ? (
+                      <>
+                        <input
+                          type="text"
+                          value={col.label}
+                          onChange={(e) => {
+                            const updated = [...dtColumns];
+                            updated[idx] = { ...updated[idx], label: e.target.value };
+                            setDtColumns(updated);
+                          }}
+                          placeholder="Label"
+                          className="input-field text-sm w-36"
+                        />
+                        <input
+                          type="text"
+                          value={col.customValue || ''}
+                          onChange={(e) => {
+                            const updated = [...dtColumns];
+                            updated[idx] = { ...updated[idx], customValue: e.target.value };
+                            setDtColumns(updated);
+                          }}
+                          placeholder="Value for every row"
+                          className="input-field text-sm w-40"
+                        />
+                      </>
+                    ) : (
+                      <span className="w-40 text-gray-700">{col.label}</span>
+                    )}
                     <label className="text-xs text-gray-500">X%:</label>
                     <input
                       type="number"
@@ -1133,6 +1229,9 @@ function FieldMapperModal({ isOpen, template, onClose }) {
                     />
                   </div>
                 ))}
+                <Button size="sm" variant="secondary" onClick={() => addTableCustomColumn('detailTable')}>
+                  Add Custom Column
+                </Button>
               </div>
               <p className="text-xs text-primary-600">Click on the PDF where the first row should start. Drag columns to position them independently.</p>
             </div>
@@ -1414,7 +1513,9 @@ function FieldMarker({ field, isSelected, showPreview, previewScale, onMouseDown
 
       {/* Column position markers - each independently draggable */}
       {columns.map(col => {
-        const colPreview = columnOptions.find(o => o.key === col.key)?.preview || col.label;
+        const colPreview = col.type === 'customText'
+          ? (col.customValue || col.label)
+          : (columnOptions.find(o => o.key === col.key)?.preview || col.label);
         const displayFontSize = (col.fontSize || 10) * previewScale;
         const isColDragging = draggingColKey === col.key;
 
@@ -1494,6 +1595,13 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
     const columnOptions = isDetail ? DETAIL_COLUMN_OPTIONS : ACTIVITY_COLUMN_OPTIONS;
     const columns = field.columns || [];
     const columnsByKey = new Map(columns.map(col => [col.key, col]));
+    const customColumns = columns.filter(col => col.type === 'customText');
+
+    const updateColumn = (columnIndex, updates) => {
+      const updated = [...columns];
+      updated[columnIndex] = { ...updated[columnIndex], ...updates };
+      onUpdate({ columns: updated });
+    };
 
     const toggleColumn = (option, optionIndex, enabled) => {
       if (!enabled) {
@@ -1507,6 +1615,14 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
       const optionOrder = new Map(columnOptions.map((opt, index) => [opt.key, index]));
       nextColumns.sort((a, b) => (optionOrder.get(a.key) ?? 999) - (optionOrder.get(b.key) ?? 999));
       onUpdate({ columns: nextColumns });
+    };
+
+    const addCustomColumn = () => {
+      onUpdate({ columns: [...columns, buildCustomTableColumn(isDetail)] });
+    };
+
+    const removeCustomColumn = (columnKey) => {
+      onUpdate({ columns: columns.filter(col => col.key !== columnKey) });
     };
 
     return (
@@ -1576,11 +1692,7 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
                     <input
                       type="number"
                       value={col.xPercent}
-                      onChange={(e) => {
-                        const updated = [...columns];
-                        updated[columnIndex] = { ...updated[columnIndex], xPercent: Number(e.target.value) };
-                        onUpdate({ columns: updated });
-                      }}
+                      onChange={(e) => updateColumn(columnIndex, { xPercent: Number(e.target.value) })}
                       min={0}
                       max={100}
                       step={0.5}
@@ -1590,11 +1702,7 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
                     <input
                       type="number"
                       value={col.fontSize}
-                      onChange={(e) => {
-                        const updated = [...columns];
-                        updated[columnIndex] = { ...updated[columnIndex], fontSize: Number(e.target.value) };
-                        onUpdate({ columns: updated });
-                      }}
+                      onChange={(e) => updateColumn(columnIndex, { fontSize: Number(e.target.value) })}
                       min={6}
                       max={24}
                       className="input-field text-sm w-14"
@@ -1603,11 +1711,7 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
                     <input
                       type="number"
                       value={col.maxWidth || 0}
-                      onChange={(e) => {
-                        const updated = [...columns];
-                        updated[columnIndex] = { ...updated[columnIndex], maxWidth: Number(e.target.value) || 0 };
-                        onUpdate({ columns: updated });
-                      }}
+                      onChange={(e) => updateColumn(columnIndex, { maxWidth: Number(e.target.value) || 0 })}
                       min={0}
                       max={100}
                       className="input-field text-sm w-14"
@@ -1617,6 +1721,63 @@ function SelectedFieldEditor({ field, onUpdate, onRemove }) {
               </div>
             );
           })}
+          {customColumns.map((col) => {
+            const columnIndex = columns.findIndex(item => item.key === col.key);
+            return (
+              <div key={col.key} className={`flex items-center gap-2 text-sm bg-white p-2 rounded border ${colBorderColor}`}>
+                <button
+                  type="button"
+                  onClick={() => removeCustomColumn(col.key)}
+                  className="text-red-500 hover:text-red-700 text-xs font-medium w-5"
+                >
+                  x
+                </button>
+                <input
+                  type="text"
+                  value={col.label}
+                  onChange={(e) => updateColumn(columnIndex, { label: e.target.value })}
+                  placeholder="Label"
+                  className="input-field text-sm w-36"
+                />
+                <input
+                  type="text"
+                  value={col.customValue || ''}
+                  onChange={(e) => updateColumn(columnIndex, { customValue: e.target.value })}
+                  placeholder="Value for every row"
+                  className="input-field text-sm w-40"
+                />
+                <label className={`text-xs ${colLabelColor}`}>X%:</label>
+                <input
+                  type="number"
+                  value={col.xPercent}
+                  onChange={(e) => updateColumn(columnIndex, { xPercent: Number(e.target.value) })}
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  className="input-field text-sm w-16"
+                />
+                <label className={`text-xs ${colLabelColor}`}>Font:</label>
+                <input
+                  type="number"
+                  value={col.fontSize}
+                  onChange={(e) => updateColumn(columnIndex, { fontSize: Number(e.target.value) })}
+                  min={6}
+                  max={24}
+                  className="input-field text-sm w-14"
+                />
+                <label className={`text-xs ${colLabelColor}`}>MaxW%:</label>
+                <input
+                  type="number"
+                  value={col.maxWidth || 0}
+                  onChange={(e) => updateColumn(columnIndex, { maxWidth: Number(e.target.value) || 0 })}
+                  min={0}
+                  max={100}
+                  className="input-field text-sm w-14"
+                />
+              </div>
+            );
+          })}
+          <Button size="sm" variant="secondary" onClick={addCustomColumn}>Add Custom Column</Button>
         </div>
       </div>
     );

@@ -351,6 +351,54 @@ describe('PdfTemplatesPage', () => {
       });
     });
 
+    it('should allow adding a custom column while placing an activity table', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user);
+
+      await user.click(screen.getByRole('button', { name: /Place Activity Table/i }));
+      await user.click(screen.getByRole('button', { name: /Add Custom Column/i }));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('Value for every row')).toBeInTheDocument();
+      });
+    });
+
+    it('should allow editing custom columns on a placed detail table', async () => {
+      const user = userEvent.setup();
+      await openFieldMapper(user, {
+        fields: [
+          {
+            id: 'dt-custom',
+            type: 'detailTable',
+            label: 'Detail Table',
+            xPercent: 5,
+            yPercent: 30,
+            rowHeight: 3,
+            maxRows: 10,
+            columns: [
+              { key: 'detailDate', label: 'Date', xPercent: 5, fontSize: 10 },
+              {
+                key: 'custom_supervisor',
+                type: 'customText',
+                label: 'Supervisor',
+                customValue: 'Program Director',
+                xPercent: 40,
+                fontSize: 10,
+              },
+            ],
+            page: 0,
+          },
+        ],
+      });
+
+      await user.click(screen.getAllByText('Detail Table')[0]);
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Supervisor')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('Program Director')).toBeInTheDocument();
+      });
+    });
+
     it('should show custom static field configuration when Place Custom Field is clicked', async () => {
       const user = userEvent.setup();
       await openFieldMapper(user);

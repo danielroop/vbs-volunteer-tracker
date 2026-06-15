@@ -75,6 +75,24 @@ describe('pdfTemplateUtils', () => {
     });
   });
 
+  describe('custom table column values', () => {
+    it('should resolve custom activity table column values', () => {
+      expect(resolveActivityColumnValue({
+        type: 'customText',
+        label: 'Type',
+        customValue: 'Community Service',
+      })).toBe('Community Service');
+    });
+
+    it('should resolve custom detail table column values', () => {
+      expect(resolveDetailColumnValue({
+        type: 'customText',
+        label: 'Supervisor',
+        customValue: 'Program Director',
+      })).toBe('Program Director');
+    });
+  });
+
   describe('DETAIL_COLUMN_OPTIONS', () => {
     it('should export an array of detail column options', () => {
       expect(Array.isArray(DETAIL_COLUMN_OPTIONS)).toBe(true);
@@ -648,6 +666,78 @@ describe('pdfTemplateUtils', () => {
         totalHours: 0,
         eventName: '',
         timeEntries: [],
+        event: {},
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+
+    it('should generate activity tables with custom text columns on every row', async () => {
+      const fields = [
+        {
+          type: 'activityTable',
+          yPercent: 20,
+          rowHeight: 3,
+          maxRows: 2,
+          page: 0,
+          columns: [
+            { key: 'activityOrg', xPercent: 5, fontSize: 10 },
+            {
+              key: 'custom_service_type',
+              type: 'customText',
+              label: 'Type',
+              customValue: 'Community Service',
+              xPercent: 40,
+              fontSize: 10,
+            },
+          ],
+        },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 0,
+        eventName: '',
+        activityLog: [
+          { name: 'Morning', totalHours: '4.00' },
+          { name: 'Afternoon', totalHours: '3.00' },
+        ],
+        event: { organizationName: 'Church' },
+      };
+
+      const result = await generateFilledPdf(templatePdfBytes, fields, data);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+
+    it('should generate detail tables with custom text columns on every row', async () => {
+      const fields = [
+        {
+          type: 'detailTable',
+          yPercent: 20,
+          rowHeight: 3,
+          maxRows: 2,
+          page: 0,
+          columns: [
+            { key: 'detailDate', xPercent: 5, fontSize: 10 },
+            {
+              key: 'custom_supervisor',
+              type: 'customText',
+              label: 'Supervisor',
+              customValue: 'Program Director',
+              xPercent: 40,
+              fontSize: 10,
+            },
+          ],
+        },
+      ];
+      const data = {
+        student: { firstName: 'Jane', lastName: 'Smith' },
+        totalHours: 0,
+        eventName: '',
+        timeEntries: [
+          { date: '2026-06-09', hoursWorked: 4 },
+          { date: '2026-06-10', hoursWorked: 3 },
+        ],
         event: {},
       };
 

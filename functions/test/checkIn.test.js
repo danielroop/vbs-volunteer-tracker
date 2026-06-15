@@ -50,6 +50,7 @@ const mockDocRef = {
 const mockCollection = jest.fn();
 const mockDoc = jest.fn();
 const mockWhere = jest.fn();
+const mockLimit = jest.fn();
 const mockGet = jest.fn();
 const mockAdd = jest.fn();
 
@@ -97,6 +98,11 @@ describe('checkIn Cloud Function', () => {
 
     mockWhere.mockReturnValue({
       where: mockWhere,
+      limit: mockLimit,
+      get: mockGet,
+    });
+
+    mockLimit.mockReturnValue({
       get: mockGet,
     });
 
@@ -145,7 +151,8 @@ describe('checkIn Cloud Function', () => {
       mockGet
         .mockResolvedValueOnce(mockEmptyQuery) // No existing entry
         .mockResolvedValueOnce(mockStudentDoc) // Student found
-        .mockResolvedValueOnce(mockEventDoc); // Event found
+        .mockResolvedValueOnce(mockEventDoc)   // Event found
+        .mockResolvedValueOnce(mockEmptyQuery); // Roster check (student not yet on roster)
     });
 
     it('should create time entry for valid check-in', async () => {

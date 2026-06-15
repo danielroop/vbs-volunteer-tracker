@@ -89,6 +89,21 @@ export const checkIn = onCall({ cors: true }, async (request) => {
 
     const docRef = await db.collection('timeEntries').add(entry);
 
+    // Ensure the student is on the event roster (idempotent upsert)
+    const rosterQuery = await db.collection('eventStudents')
+      .where('eventId', '==', eventId)
+      .where('studentId', '==', studentId)
+      .limit(1)
+      .get();
+    if (rosterQuery.empty) {
+      await db.collection('eventStudents').add({
+        eventId,
+        studentId,
+        addedAt: Timestamp.now(),
+        addedBy: scannerId,
+      });
+    }
+
     return {
       success: true,
       studentName: `${student.firstName} ${student.lastName}`,

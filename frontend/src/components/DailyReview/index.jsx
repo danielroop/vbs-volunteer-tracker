@@ -25,6 +25,7 @@ export default function DailyReview() {
   const [timeEntries, setTimeEntries] = useState([]);
   const [students, setStudents] = useState([]);
   const [eventStudentIds, setEventStudentIds] = useState(new Set());
+  const [allEventCheckedInIds, setAllEventCheckedInIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activityFilter, setActivityFilter] = useState('all');
@@ -114,6 +115,33 @@ export default function DailyReview() {
     return () => unsubscribe();
   }, [currentEvent?.id]);
 
+  // Load all student IDs who have ever checked in for this event (any date)
+  // Needed to show students who attended previous days but not today as "Not Checked In"
+  useEffect(() => {
+    if (!currentEvent?.id) {
+      setAllEventCheckedInIds(new Set());
+      return;
+    }
+
+    const q = query(
+      collection(db, 'timeEntries'),
+      where('eventId', '==', currentEvent.id)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const ids = new Set();
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (!data.isVoided) ids.add(data.studentId);
+      });
+      setAllEventCheckedInIds(ids);
+    }, (error) => {
+      console.error('Error loading all event time entries:', error);
+    });
+
+    return () => unsubscribe();
+  }, [currentEvent?.id]);
+
   // Load time entries for selected date
   useEffect(() => {
     if (!currentEvent?.id) {
@@ -145,6 +173,12 @@ export default function DailyReview() {
 
     return () => unsubscribe();
   }, [currentEvent?.id, selectedDate]);
+
+  // Full roster: explicitly added students + anyone who has ever checked in for this event
+  const fullRosterIds = useMemo(
+    () => new Set([...eventStudentIds, ...allEventCheckedInIds]),
+    [eventStudentIds, allEventCheckedInIds]
+  );
 
   // Create student lookup map
   const studentMap = useMemo(() => {
@@ -218,8 +252,8 @@ export default function DailyReview() {
       const checkedOutIds = new Set(activeEntries.filter(entry => entry.checkOutTime).map(entry => entry.studentId));
       const checkedInIds = new Set(activeEntries.filter(entry => !entry.checkOutTime).map(entry => entry.studentId));
       const checkedInAnyIds = new Set(activeEntries.map(entry => entry.studentId));
-      const rosterIds = isActivityScheduledForDate(activity, selectedDate) && eventStudentIds.size > 0
-        ? eventStudentIds
+      const rosterIds = isActivityScheduledForDate(activity, selectedDate) && fullRosterIds.size > 0
+        ? fullRosterIds
         : new Set([...checkedInAnyIds]);
 
       return {
@@ -229,10 +263,10 @@ export default function DailyReview() {
         checkedOut: checkedOutIds.size
       };
     });
-  }, [activityOptions, entryRows, eventStudentIds, isActivityScheduledForDate, selectedDate]);
+  }, [activityOptions, entryRows, fullRosterIds, isActivityScheduledForDate, selectedDate]);
 
   const studentRows = useMemo(() => {
-    const studentIds = new Set([...eventStudentIds]);
+    const studentIds = new Set([...fullRosterIds]);
     entryRows.forEach(entry => studentIds.add(entry.studentId));
 
     return [...studentIds].map(studentId => {
@@ -250,7 +284,7 @@ export default function DailyReview() {
 
         if (
           activeEntriesForActivity.length === 0 &&
-          eventStudentIds.has(studentId) &&
+          fullRosterIds.has(studentId) &&
           isActivityScheduledForDate(activity, selectedDate)
         ) {
           return [{
@@ -293,7 +327,7 @@ export default function DailyReview() {
         if (lastNameCompare !== 0) return lastNameCompare;
         return a.student.firstName.localeCompare(b.student.firstName);
       });
-  }, [activityFilter, activityOptions, entryRows, eventStudentIds, isActivityScheduledForDate, matchesStatusFilter, searchTerm, selectedDate, studentMap]);
+  }, [activityFilter, activityOptions, entryRows, fullRosterIds, isActivityScheduledForDate, matchesStatusFilter, searchTerm, selectedDate, studentMap]);
 
   const filteredEntries = useMemo(() => {
     return studentRows.flatMap(row => row.details);
@@ -303,7 +337,7 @@ export default function DailyReview() {
   const stats = useMemo(() => {
     const activeEntries = timeEntries.filter(e => !e.isVoided);
     const checkedInStudentIds = new Set(activeEntries.map(e => e.studentId));
-    const noCheckIn = [...eventStudentIds].filter(studentId => !checkedInStudentIds.has(studentId)).length;
+    const noCheckIn = [...fullRosterIds].filter(studentId => !checkedInStudentIds.has(studentId)).length;
     return {
       total: timeEntries.length,
       flagged: new Set(activeEntries.filter(e => e.flags && e.flags.length > 0).map(e => e.studentId)).size,
@@ -313,7 +347,7 @@ export default function DailyReview() {
       modified: new Set(activeEntries.filter(e => e.modificationReason || e.forcedCheckoutReason).map(e => e.studentId)).size,
       voided: timeEntries.filter(e => e.isVoided).length
     };
-  }, [timeEntries, eventStudentIds]);
+  }, [timeEntries, fullRosterIds]);
 
   // Get activity end time for a given entry
   const getActivityEndTime = (entry) => {

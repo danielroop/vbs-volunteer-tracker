@@ -240,7 +240,7 @@ describe('DailyReview', () => {
         expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Brown, Bob').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Not Checked In').length).toBeGreaterThanOrEqual(1);
-        expect(screen.getAllByText('No entry').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByRole('button', { name: /check in alice adams/i }).length).toBeGreaterThanOrEqual(1);
       });
     });
 

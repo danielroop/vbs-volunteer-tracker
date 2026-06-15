@@ -15,7 +15,7 @@ import TimeEntryCard from './TimeEntryCard';
  * Per PRD Section 3.5.2: Daily Review (Nightly)
  * - Review time entries
  * - Flag early/late times
- * - Force checkout for students who forgot
+ * - Checkout students who forgot
  * - Force all checkout for end of event
  * - Export CSV/PDF
  */
@@ -29,6 +29,17 @@ export default function DailyReview() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [exporting, setExporting] = useState(false);
+
+  // Quick check-in modal state
+  const [quickCheckInModal, setQuickCheckInModal] = useState({
+    isOpen: false,
+    entry: null,
+    activityId: '',
+    checkInTime: '',
+    reason: '',
+    loading: false,
+    error: null
+  });
 
   // Force checkout modal state
   const [forceCheckoutModal, setForceCheckoutModal] = useState({
@@ -236,6 +247,38 @@ export default function DailyReview() {
     return activity?.endTime || currentEvent?.typicalEndTime || '15:00';
   };
 
+  const getLocalDateTimeValue = (dateString, timeString) => {
+    const [hours = '09', mins = '00'] = (timeString || '09:00').split(':');
+    const [yr, mo, dy] = dateString.split('-').map(Number);
+    const date = new Date(yr, mo - 1, dy);
+    date.setHours(parseInt(hours), parseInt(mins), 0, 0);
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hh}:${mm}`;
+  };
+
+  const getDefaultActivity = () => currentEvent?.activities?.[0] || null;
+
+  // Open quick check-in modal
+  const openQuickCheckInModal = (entry) => {
+    const defaultActivity = getDefaultActivity();
+    const startTime = defaultActivity?.startTime || currentEvent?.typicalStartTime || '09:00';
+
+    setQuickCheckInModal({
+      isOpen: true,
+      entry,
+      activityId: defaultActivity?.id || '',
+      checkInTime: getLocalDateTimeValue(selectedDate, startTime),
+      reason: '',
+      loading: false,
+      error: null
+    });
+  };
+
   // Open force checkout modal
   const openForceCheckoutModal = (entry) => {
     // Default to activity end time
@@ -353,6 +396,47 @@ export default function DailyReview() {
         ...prev,
         loading: false,
         error: error.message || 'Failed to force checkout'
+      }));
+    }
+  };
+
+  // Handle quick check-in
+  const handleQuickCheckIn = async () => {
+    if (!quickCheckInModal.entry || !quickCheckInModal.activityId || !quickCheckInModal.checkInTime) {
+      setQuickCheckInModal(prev => ({ ...prev, error: 'Activity and check-in time are required' }));
+      return;
+    }
+
+    setQuickCheckInModal(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const quickCheckInFunc = httpsCallable(functions, 'quickCheckIn');
+      const result = await quickCheckInFunc({
+        studentId: quickCheckInModal.entry.studentId,
+        eventId: currentEvent.id,
+        activityId: quickCheckInModal.activityId,
+        date: selectedDate,
+        checkInTime: new Date(quickCheckInModal.checkInTime).toISOString(),
+        reason: quickCheckInModal.reason
+      });
+
+      if (result.data.success) {
+        setQuickCheckInModal({
+          isOpen: false,
+          entry: null,
+          activityId: '',
+          checkInTime: '',
+          reason: '',
+          loading: false,
+          error: null
+        });
+      }
+    } catch (error) {
+      console.error('Quick check-in error:', error);
+      setQuickCheckInModal(prev => ({
+        ...prev,
+        loading: false,
+        error: error.message || 'Failed to check in student'
       }));
     }
   };
@@ -912,7 +996,14 @@ export default function DailyReview() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {entry.isNoCheckIn ? (
-                          <span className="text-sm text-gray-500">No entry</span>
+                          <Button
+                            size="sm"
+                            variant="success"
+                            onClick={() => openQuickCheckInModal(entry)}
+                            aria-label={`Check in ${entry.student.firstName} ${entry.student.lastName}`}
+                          >
+                            Check In
+                          </Button>
                         ) : entry.isVoided ? (
                           <Button
                             size="sm"
@@ -945,9 +1036,9 @@ export default function DailyReview() {
                                 size="sm"
                                 variant="danger"
                                 onClick={() => openForceCheckoutModal(entry)}
-                                aria-label={`Force checkout for ${entry.student.firstName} ${entry.student.lastName}`}
+                                aria-label={`Checkout for ${entry.student.firstName} ${entry.student.lastName}`}
                               >
-                                Force Out
+                                Checkout
                               </Button>
                             )}
                           </>
@@ -984,6 +1075,7 @@ export default function DailyReview() {
                   getStatusDisplay={getStatusDisplay}
                   getStatusClass={getStatusClass}
                   onEdit={openEditModal}
+                  onQuickCheckIn={openQuickCheckInModal}
                   onForceCheckout={openForceCheckoutModal}
                   onVoid={openVoidModal}
                   onRestore={handleRestoreEntry}
@@ -1022,11 +1114,117 @@ export default function DailyReview() {
         </div>
       </div>
 
+      {/* Quick Check-In Modal */}
+      <Modal
+        isOpen={quickCheckInModal.isOpen}
+        onClose={() => setQuickCheckInModal({ ...quickCheckInModal, isOpen: false })}
+        title="Check In"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setQuickCheckInModal({ ...quickCheckInModal, isOpen: false })}
+              disabled={quickCheckInModal.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              onClick={handleQuickCheckIn}
+              loading={quickCheckInModal.loading}
+            >
+              Check In
+            </Button>
+          </>
+        }
+      >
+        {quickCheckInModal.entry && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-gray-600">
+                Check in:{' '}
+                <span className="font-bold text-gray-900">
+                  {quickCheckInModal.entry.student?.firstName} {quickCheckInModal.entry.student?.lastName}
+                </span>
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Date: {formatDate(selectedDate)}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Activity <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={quickCheckInModal.activityId}
+                onChange={(e) => {
+                  const activity = activityMap[e.target.value];
+                  setQuickCheckInModal(prev => ({
+                    ...prev,
+                    activityId: e.target.value,
+                    checkInTime: getLocalDateTimeValue(
+                      selectedDate,
+                      activity?.startTime || currentEvent?.typicalStartTime || '09:00'
+                    )
+                  }));
+                }}
+                className="input-field w-full"
+              >
+                <option value="">Select activity</option>
+                {(currentEvent?.activities || []).map(activity => (
+                  <option key={activity.id} value={activity.id}>
+                    {activity.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Check-In Time <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={quickCheckInModal.checkInTime}
+                onChange={(e) => setQuickCheckInModal(prev => ({
+                  ...prev,
+                  checkInTime: e.target.value
+                }))}
+                className="input-field w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason or Note
+              </label>
+              <textarea
+                value={quickCheckInModal.reason}
+                onChange={(e) => setQuickCheckInModal(prev => ({
+                  ...prev,
+                  reason: e.target.value
+                }))}
+                placeholder="e.g., Missed scan-in, entered from roster review"
+                className="input-field w-full h-24 resize-none"
+              />
+            </div>
+
+            {quickCheckInModal.error && (
+              <div className="text-red-600 text-sm">
+                {quickCheckInModal.error}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
       {/* Force Checkout Modal */}
       <Modal
         isOpen={forceCheckoutModal.isOpen}
         onClose={() => setForceCheckoutModal({ ...forceCheckoutModal, isOpen: false })}
-        title="Force Check-Out"
+        title="Checkout"
         size="md"
         footer={
           <>
@@ -1042,7 +1240,7 @@ export default function DailyReview() {
               onClick={handleForceCheckout}
               loading={forceCheckoutModal.loading}
             >
-              Force Check-Out
+              Checkout
             </Button>
           </>
         }
@@ -1051,7 +1249,7 @@ export default function DailyReview() {
           <div className="space-y-4">
             <div>
               <p className="text-gray-600">
-                Force checkout for:{' '}
+                Checkout:{' '}
                 <span className="font-bold text-gray-900">
                   {forceCheckoutModal.entry.student?.firstName} {forceCheckoutModal.entry.student?.lastName}
                 </span>
@@ -1084,7 +1282,7 @@ export default function DailyReview() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason for Force Checkout <span className="text-red-500">*</span>
+                Reason for Checkout <span className="text-red-500">*</span>
               </label>
               <textarea
                 value={forceCheckoutModal.reason}

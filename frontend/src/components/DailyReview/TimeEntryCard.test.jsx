@@ -65,6 +65,7 @@ describe('TimeEntryCard', () => {
     getStatusDisplay: mockGetStatusDisplay,
     getStatusClass: mockGetStatusClass,
     onEdit: vi.fn(),
+    onQuickCheckIn: vi.fn(),
     onForceCheckout: vi.fn()
   };
 
@@ -111,10 +112,10 @@ describe('TimeEntryCard', () => {
       expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
     });
 
-    it('should not render Force Out button when checked out', () => {
+    it('should not render Checkout button when checked out', () => {
       render(<TimeEntryCard {...defaultProps} />);
 
-      expect(screen.queryByRole('button', { name: /force checkout/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^checkout/i })).not.toBeInTheDocument();
     });
   });
 
@@ -131,10 +132,10 @@ describe('TimeEntryCard', () => {
       expect(screen.getByText('Not checked out')).toBeInTheDocument();
     });
 
-    it('should render Force Out button when not checked out', () => {
+    it('should render Checkout button when not checked out', () => {
       render(<TimeEntryCard {...defaultProps} entry={entryNoCheckout} />);
 
-      expect(screen.getByRole('button', { name: /force checkout/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^checkout/i })).toBeInTheDocument();
     });
 
     it('should display No Checkout status', () => {
@@ -220,16 +221,28 @@ describe('TimeEntryCard', () => {
       expect(onEdit).toHaveBeenCalledWith(mockEntry);
     });
 
-    it('should call onForceCheckout when Force Out button is clicked', async () => {
+    it('should call onForceCheckout when Checkout button is clicked', async () => {
       const user = userEvent.setup();
       const onForceCheckout = vi.fn();
       const entryNoCheckout = { ...mockEntry, checkOutTime: null };
 
       render(<TimeEntryCard {...defaultProps} entry={entryNoCheckout} onForceCheckout={onForceCheckout} />);
 
-      await user.click(screen.getByRole('button', { name: /force checkout/i }));
+      await user.click(screen.getByRole('button', { name: /^checkout/i }));
 
       expect(onForceCheckout).toHaveBeenCalledWith(entryNoCheckout);
+    });
+
+    it('should call onQuickCheckIn when Check In button is clicked', async () => {
+      const user = userEvent.setup();
+      const onQuickCheckIn = vi.fn();
+      const entryNoCheckIn = { ...mockEntry, checkInTime: null, checkOutTime: null, isNoCheckIn: true };
+
+      render(<TimeEntryCard {...defaultProps} entry={entryNoCheckIn} onQuickCheckIn={onQuickCheckIn} />);
+
+      await user.click(screen.getByRole('button', { name: /check in john doe/i }));
+
+      expect(onQuickCheckIn).toHaveBeenCalledWith(entryNoCheckIn);
     });
   });
 
@@ -258,12 +271,12 @@ describe('TimeEntryCard', () => {
       expect(editButton).toHaveAttribute('aria-label', 'Edit time entry for John Doe');
     });
 
-    it('should have aria-label on Force Out button when visible', () => {
+    it('should have aria-label on Checkout button when visible', () => {
       const entryNoCheckout = { ...mockEntry, checkOutTime: null };
       render(<TimeEntryCard {...defaultProps} entry={entryNoCheckout} />);
 
-      const forceOutButton = screen.getByRole('button', { name: /force checkout/i });
-      expect(forceOutButton).toHaveAttribute('aria-label', 'Force checkout for John Doe');
+      const checkoutButton = screen.getByRole('button', { name: /^checkout/i });
+      expect(checkoutButton).toHaveAttribute('aria-label', 'Checkout for John Doe');
     });
   });
 

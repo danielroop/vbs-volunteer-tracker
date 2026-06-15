@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import DailyReview from './index';
@@ -175,6 +175,16 @@ describe('DailyReview', () => {
 
       expect(screen.getByLabelText('Status filter')).toBeInTheDocument();
       expect(screen.getByText('All Entries')).toBeInTheDocument();
+    });
+
+    it('should render sort controls', () => {
+      renderWithRouter(<DailyReview />);
+
+      expect(screen.getByLabelText('Sort by')).toBeInTheDocument();
+      expect(screen.getByLabelText('Sort direction')).toBeInTheDocument();
+      expect(screen.getByText('Sort by Check-In Time')).toBeInTheDocument();
+      expect(screen.getByText('Sort by Check-Out Time')).toBeInTheDocument();
+      expect(screen.getByText('Sort by Hours')).toBeInTheDocument();
     });
 
     it('should render export buttons', () => {
@@ -484,6 +494,88 @@ describe('DailyReview', () => {
         expect(screen.getAllByText('Work Hours').length).toBeGreaterThanOrEqual(1);
         expect(screen.queryByText('Training')).not.toBeInTheDocument();
         expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+      });
+    });
+  });
+
+  describe('sort options', () => {
+    const getDesktopRowNames = () => {
+      const table = screen.getByRole('table', { name: 'Daily student activity review' });
+      return within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map(row => within(row).queryByRole('link')?.textContent)
+        .filter(Boolean);
+    };
+
+    beforeEach(() => {
+      mockCurrentEvent.activities = [
+        { id: 'activity1', name: 'Morning Session', startTime: '08:00', endTime: '12:00' }
+      ];
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Amy', lastName: 'Adams' },
+        { id: 'student2', firstName: 'Zoe', lastName: 'Zephyr' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student1',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T10:00:00'),
+          checkOutTime: new Date('2026-01-31T12:00:00'),
+          hoursWorked: 2,
+          flags: []
+        },
+        {
+          id: 'entry2',
+          eventId: 'event123',
+          studentId: 'student2',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: new Date('2026-01-31T11:00:00'),
+          hoursWorked: 3,
+          flags: []
+        }
+      ];
+    });
+
+    it('should default to sorting students by name ascending', async () => {
+      renderWithRouter(<DailyReview />);
+
+      await waitFor(() => {
+        expect(getDesktopRowNames()).toEqual(['Adams, Amy', 'Zephyr, Zoe']);
+      });
+    });
+
+    it('should sort rows by check-in time and direction', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<DailyReview />);
+
+      await user.selectOptions(screen.getByLabelText('Sort by'), 'checkInTime');
+
+      await waitFor(() => {
+        expect(getDesktopRowNames()).toEqual(['Zephyr, Zoe', 'Adams, Amy']);
+      });
+
+      await user.selectOptions(screen.getByLabelText('Sort direction'), 'desc');
+
+      await waitFor(() => {
+        expect(getDesktopRowNames()).toEqual(['Adams, Amy', 'Zephyr, Zoe']);
+      });
+    });
+
+    it('should sort rows by hours worked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<DailyReview />);
+
+      await user.selectOptions(screen.getByLabelText('Sort by'), 'hoursWorked');
+      await user.selectOptions(screen.getByLabelText('Sort direction'), 'desc');
+
+      await waitFor(() => {
+        expect(getDesktopRowNames()).toEqual(['Zephyr, Zoe', 'Adams, Amy']);
       });
     });
   });

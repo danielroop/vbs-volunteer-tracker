@@ -10,6 +10,62 @@ import { printInNewWindow, createPrintDocument } from '../../utils/printUtils';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 
+const SORT_OPTIONS = [
+  { value: 'name', label: 'Name' },
+  { value: 'activity', label: 'Activity' },
+  { value: 'checkInTime', label: 'Check-In Time' },
+  { value: 'checkOutTime', label: 'Check-Out Time' },
+  { value: 'hoursWorked', label: 'Hours' }
+];
+
+const getTimeValue = (time) => {
+  if (!time) return null;
+  const timestamp = new Date(time).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+const getStudentSortName = (student = {}) =>
+  `${student.lastName || ''}, ${student.firstName || ''}`.trim().toLowerCase();
+
+const getSortValue = (entry, field) => {
+  if (!entry) return null;
+
+  switch (field) {
+    case 'activity':
+      return (entry.activity?.name || '').toLowerCase();
+    case 'checkInTime':
+      return getTimeValue(entry.checkInTime);
+    case 'checkOutTime':
+      return getTimeValue(entry.checkOutTime);
+    case 'hoursWorked':
+      return entry.hoursWorked === null || entry.hoursWorked === undefined ? null : Number(entry.hoursWorked);
+    case 'name':
+    default:
+      return getStudentSortName(entry.student);
+  }
+};
+
+const compareSortValues = (left, right, direction = 'asc') => {
+  const leftMissing = left === null || left === undefined || left === '';
+  const rightMissing = right === null || right === undefined || right === '';
+
+  if (leftMissing && rightMissing) return 0;
+  if (leftMissing) return 1;
+  if (rightMissing) return -1;
+
+  const result = typeof left === 'string' || typeof right === 'string'
+    ? String(left).localeCompare(String(right), undefined, { sensitivity: 'base' })
+    : left - right;
+
+  return direction === 'desc' ? -result : result;
+};
+
+const compareStudentName = (leftStudent, rightStudent) => {
+  const lastNameCompare = (leftStudent?.lastName || '').localeCompare(rightStudent?.lastName || '', undefined, { sensitivity: 'base' });
+  if (lastNameCompare !== 0) return lastNameCompare;
+  return (leftStudent?.firstName || '').localeCompare(rightStudent?.firstName || '', undefined, { sensitivity: 'base' });
+};
+
 /**
  * Daily Review Component
  * Per PRD Section 3.5.2: Daily Review (Nightly)
@@ -30,6 +86,8 @@ export default function DailyReview() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activityFilter, setActivityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortField, setSortField] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
   const [exporting, setExporting] = useState(false);
 
   // Quick check-in modal state
@@ -306,11 +364,24 @@ export default function DailyReview() {
       });
 
       const visibleDetails = activityDetails.filter(matchesStatusFilter);
+      const sortedDetails = [...visibleDetails].sort((a, b) => {
+        const primaryCompare = compareSortValues(
+          getSortValue(a, sortField),
+          getSortValue(b, sortField),
+          sortDirection
+        );
+        if (primaryCompare !== 0) return primaryCompare;
+
+        const activityCompare = compareSortValues(getSortValue(a, 'activity'), getSortValue(b, 'activity'), 'asc');
+        if (activityCompare !== 0) return activityCompare;
+
+        return compareSortValues(getSortValue(a, 'checkInTime'), getSortValue(b, 'checkInTime'), 'asc');
+      });
 
       return {
         id: studentId,
         student,
-        details: visibleDetails
+        details: sortedDetails
       };
     })
       .filter(Boolean)
@@ -323,11 +394,21 @@ export default function DailyReview() {
         return row.details.length > 0;
       })
       .sort((a, b) => {
-        const lastNameCompare = a.student.lastName.localeCompare(b.student.lastName);
-        if (lastNameCompare !== 0) return lastNameCompare;
-        return a.student.firstName.localeCompare(b.student.firstName);
+        if (sortField === 'name') {
+          const nameCompare = compareStudentName(a.student, b.student);
+          return sortDirection === 'desc' ? -nameCompare : nameCompare;
+        }
+
+        const primaryCompare = compareSortValues(
+          getSortValue(a.details[0], sortField),
+          getSortValue(b.details[0], sortField),
+          sortDirection
+        );
+        if (primaryCompare !== 0) return primaryCompare;
+
+        return compareStudentName(a.student, b.student);
       });
-  }, [activityFilter, activityOptions, entryRows, fullRosterIds, isActivityScheduledForDate, matchesStatusFilter, searchTerm, selectedDate, studentMap]);
+  }, [activityFilter, activityOptions, entryRows, fullRosterIds, isActivityScheduledForDate, matchesStatusFilter, searchTerm, selectedDate, sortDirection, sortField, studentMap]);
 
   const filteredEntries = useMemo(() => {
     return studentRows.flatMap(row => row.details);
@@ -1053,6 +1134,27 @@ export default function DailyReview() {
               <option value="not-checked-in">Not Checked In</option>
               <option value="modified">Modified Only</option>
               <option value="voided">Voided Only</option>
+            </select>
+            <select
+              aria-label="Sort by"
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value)}
+              className="input-field w-48"
+            >
+              {SORT_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  Sort by {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Sort direction"
+              value={sortDirection}
+              onChange={(e) => setSortDirection(e.target.value)}
+              className="input-field w-40"
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
             </select>
           </div>
         </div>

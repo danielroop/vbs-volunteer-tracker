@@ -328,11 +328,12 @@ export default function EventStudentsPage() {
                 name: activity.name,
                 dateDisplay: uniqueDates.map(date => {
                     const parsed = new Date(date);
-                    return `${parsed.getMonth() + 1}/${parsed.getDate()}/${parsed.getFullYear().toString().slice(-2)}`;
+                    return `${parsed.getUTCMonth() + 1}/${parsed.getUTCDate()}/${parsed.getUTCFullYear().toString().slice(-2)}`;
                 }).join(', '),
+                sortDate: uniqueDates[0],
                 totalHours: totalHours.toFixed(2)
             };
-        }).filter(Boolean);
+        }).filter(Boolean).sort((a, b) => a.sortDate.localeCompare(b.sortDate));
     };
 
     const getEffectiveTemplate = (student) => {

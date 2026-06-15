@@ -222,8 +222,8 @@ export default function StudentsPage() {
       const dateStrings = groups.map(group => {
         const start = new Date(group[0]);
         const end = new Date(group[group.length - 1]);
-        const startStr = `${start.getMonth() + 1}/${start.getDate()}/${start.getFullYear().toString().slice(-2)}`;
-        const endStr = `${end.getMonth() + 1}/${end.getDate()}/${end.getFullYear().toString().slice(-2)}`;
+        const startStr = `${start.getUTCMonth() + 1}/${start.getUTCDate()}/${start.getUTCFullYear().toString().slice(-2)}`;
+        const endStr = `${end.getUTCMonth() + 1}/${end.getUTCDate()}/${end.getUTCFullYear().toString().slice(-2)}`;
 
         return group.length > 1 ? `${startStr} - ${endStr}` : startStr;
       });
@@ -236,9 +236,10 @@ export default function StudentsPage() {
       return {
         name: activity.name,
         dateDisplay: dateStrings.join(', '),
+        sortDate: uniqueDates[0],
         totalHours: totalHours.toFixed(2)
       };
-    }).filter(Boolean);
+    }).filter(Boolean).sort((a, b) => a.sortDate.localeCompare(b.sortDate));
   };
 
   const PRINT_STYLES = `

@@ -264,9 +264,10 @@ export default function StudentDetailPage() {
             return {
                 name: activity.name,
                 dateDisplay: dateStrings.join(', '),
+                sortDate: uniqueDates[0],
                 totalHours: totalHours.toFixed(2)
             };
-        }).filter(Boolean);
+        }).filter(Boolean).sort((a, b) => a.sortDate.localeCompare(b.sortDate));
     }, [entries, currentEvent]);
 
     const totalCalculatedHours = activityLog.reduce((sum, act) => sum + parseFloat(act.totalHours), 0);

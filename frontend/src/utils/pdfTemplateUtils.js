@@ -1,5 +1,78 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
+const REPORT_TIME_ZONE = 'America/New_York';
+
+export function toDateValue(value) {
+  if (!value) return null;
+  if (value.toDate) return value.toDate();
+  if (value instanceof Date) return value;
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnlyMatch) {
+    return new Date(Date.UTC(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]), 12));
+  }
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function timestampMs(value) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  const date = toDateValue(value);
+  return date ? date.getTime() : Number.POSITIVE_INFINITY;
+}
+
+function localDateMs(dateString) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString || '');
+  if (!match) return Number.POSITIVE_INFINITY;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime();
+}
+
+function displayDateMs(dateString) {
+  const match = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(dateString || '');
+  if (!match) return Number.POSITIVE_INFINITY;
+  const year = Number(match[3]);
+  const fullYear = year < 100 ? 2000 + year : year;
+  return new Date(fullYear, Number(match[1]) - 1, Number(match[2])).getTime();
+}
+
+function formatDateForReport(date) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: REPORT_TIME_ZONE,
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+function formatTimeForReport(date) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: REPORT_TIME_ZONE,
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+export function getActivitySortTime(activity) {
+  if (!activity) return Number.POSITIVE_INFINITY;
+  const dateOnlyTime = localDateMs(activity.sortDate || activity.startDate || activity.firstDate);
+  return Number.isFinite(dateOnlyTime) ? dateOnlyTime : displayDateMs(activity.dateDisplay);
+}
+
+export function getEntrySortTime(entry) {
+  if (!entry) return Number.POSITIVE_INFINITY;
+  const fromCheckIn = timestampMs(entry.checkInTime);
+  if (Number.isFinite(fromCheckIn)) return fromCheckIn;
+  return localDateMs(entry.date);
+}
+
+export function sortActivityRows(activities = []) {
+  return [...activities].sort((a, b) => getActivitySortTime(a) - getActivitySortTime(b));
+}
+
+export function sortDetailRows(entries = []) {
+  return [...entries].sort((a, b) => getEntrySortTime(a) - getEntrySortTime(b));
+}
+
 /**
  * Available field keys for STATIC fields (placed individually on the PDF).
  */
@@ -63,7 +136,7 @@ export function resolveFieldValue(fieldKey, { student, totalHours, eventName, ev
     case 'totalHours':
       return typeof totalHours === 'number' ? totalHours.toFixed(2) : String(totalHours || '0');
     case 'date':
-      return new Date().toLocaleDateString();
+      return formatDateForReport(new Date());
     case 'eventName':
       return eventName || '';
     case 'contactPerson':
@@ -106,18 +179,18 @@ export function resolveDetailColumnValue(columnKey, entry, event) {
       // Support Firestore Timestamps (with toDate()) and regular Date/string values
       const raw = entry.checkInTime || entry.date;
       if (!raw) return '';
-      const d = raw.toDate ? raw.toDate() : (raw instanceof Date ? raw : new Date(raw));
-      return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+      const d = toDateValue(raw);
+      return d ? formatDateForReport(d) : '';
     }
     case 'detailStartTime': {
       if (!entry.checkInTime) return '';
-      const d = entry.checkInTime.toDate ? entry.checkInTime.toDate() : (entry.checkInTime instanceof Date ? entry.checkInTime : new Date(entry.checkInTime));
-      return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const d = toDateValue(entry.checkInTime);
+      return d ? formatTimeForReport(d) : '';
     }
     case 'detailEndTime': {
       if (!entry.checkOutTime) return '';
-      const d = entry.checkOutTime.toDate ? entry.checkOutTime.toDate() : (entry.checkOutTime instanceof Date ? entry.checkOutTime : new Date(entry.checkOutTime));
-      return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const d = toDateValue(entry.checkOutTime);
+      return d ? formatTimeForReport(d) : '';
     }
     case 'detailHours': {
       // Use stored hoursWorked if available, otherwise calculate from timestamps
@@ -127,11 +200,9 @@ export function resolveDetailColumnValue(columnKey, entry, event) {
       // Fallback: calculate from checkIn/checkOut timestamps (supports Firestore Timestamps with .seconds)
       if (entry.checkInTime && entry.checkOutTime) {
         const inSec = entry.checkInTime.seconds != null ? entry.checkInTime.seconds
-          : (entry.checkInTime.toDate ? entry.checkInTime.toDate().getTime() / 1000
-          : new Date(entry.checkInTime).getTime() / 1000);
+          : (toDateValue(entry.checkInTime)?.getTime() / 1000);
         const outSec = entry.checkOutTime.seconds != null ? entry.checkOutTime.seconds
-          : (entry.checkOutTime.toDate ? entry.checkOutTime.toDate().getTime() / 1000
-          : new Date(entry.checkOutTime).getTime() / 1000);
+          : (toDateValue(entry.checkOutTime)?.getTime() / 1000);
         if (!isNaN(inSec) && !isNaN(outSec) && outSec > inSec) {
           const hours = Math.round(((outSec - inSec) / 3600) * 4) / 4; // Round to nearest 0.25
           return hours.toFixed(2);
@@ -175,7 +246,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
 
     if (field.type === 'activityTable') {
       // Render repeating activity rows (summary)
-      const activities = data.activityLog || [];
+      const activities = sortActivityRows(data.activityLog || []);
       const maxRows = field.maxRows || 10;
       const rowHeightPct = field.rowHeight || 3;
       const startYPct = field.yPercent;
@@ -202,7 +273,7 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
       });
     } else if (field.type === 'detailTable') {
       // Render repeating detail rows (individual time entries)
-      const entries = data.timeEntries || [];
+      const entries = sortDetailRows(data.timeEntries || []);
       const maxRows = field.maxRows || 10;
       const rowHeightPct = field.rowHeight || 3;
       const startYPct = field.yPercent;

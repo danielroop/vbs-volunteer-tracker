@@ -6,6 +6,8 @@ import {
   resolveFieldValue,
   resolveActivityColumnValue,
   resolveDetailColumnValue,
+  sortActivityRows,
+  sortDetailRows,
   generateFilledPdf,
   mergePdfs,
   openPdfForPrinting,
@@ -257,6 +259,10 @@ describe('pdfTemplateUtils', () => {
       expect(typeof result).toBe('string');
     });
 
+    it('should format date-only values in the report timezone without shifting to the previous day', () => {
+      expect(resolveDetailColumnValue('detailDate', { date: '2026-06-13' })).toBe('6/13/2026');
+    });
+
     it('should resolve detailStartTime', () => {
       const result = resolveDetailColumnValue('detailStartTime', mockEntry);
       expect(result).toBeTruthy();
@@ -340,6 +346,32 @@ describe('pdfTemplateUtils', () => {
       expect(resolveDetailColumnValue('detailDate', entryWithTimestamps)).toBeTruthy();
       expect(resolveDetailColumnValue('detailStartTime', entryWithTimestamps)).toBeTruthy();
       expect(resolveDetailColumnValue('detailEndTime', entryWithTimestamps)).toBeTruthy();
+    });
+  });
+
+  describe('table row sorting', () => {
+    it('should sort activity rows by earliest service date', () => {
+      const rows = [
+        { name: 'Later', sortDate: '2026-06-15' },
+        { name: 'Earlier', sortDate: '2026-06-13' },
+        { name: 'Middle', dateDisplay: '6/14/26' },
+      ];
+
+      expect(sortActivityRows(rows).map(row => row.name)).toEqual(['Earlier', 'Middle', 'Later']);
+    });
+
+    it('should sort detail rows by check-in date/time from oldest to newest', () => {
+      const rows = [
+        { id: 'later-day', checkInTime: '2026-06-15T08:00:00-04:00' },
+        { id: 'same-day-later', checkInTime: '2026-06-13T12:00:00-04:00' },
+        { id: 'same-day-earlier', checkInTime: '2026-06-13T08:00:00-04:00' },
+      ];
+
+      expect(sortDetailRows(rows).map(row => row.id)).toEqual([
+        'same-day-earlier',
+        'same-day-later',
+        'later-day',
+      ]);
     });
   });
 

@@ -211,7 +211,10 @@ export function resolveDetailColumnValue(columnKey, entry, event) {
       return '0';
     }
     case 'detailActivity':
-      return entry.activityName || '';
+      return entry.activityName ||
+        entry.activity?.name ||
+        event?.activities?.find(activity => activity.id === entry.activityId)?.name ||
+        '';
     case 'detailContact':
       return event?.contactName || '';
     default:

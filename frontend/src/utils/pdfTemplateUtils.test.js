@@ -302,6 +302,30 @@ describe('pdfTemplateUtils', () => {
       expect(resolveDetailColumnValue('detailActivity', mockEntry)).toBe('VBS Morning Session');
     });
 
+    it('should resolve detailActivity from an embedded activity object', () => {
+      expect(resolveDetailColumnValue('detailActivity', {
+        ...mockEntry,
+        activityName: '',
+        activity: { name: 'Embedded Activity' },
+      })).toBe('Embedded Activity');
+    });
+
+    it('should resolve detailActivity from event activities by activityId', () => {
+      const entry = {
+        ...mockEntry,
+        activityName: '',
+        activityId: 'activity2',
+      };
+      const event = {
+        activities: [
+          { id: 'activity1', name: 'Morning Session' },
+          { id: 'activity2', name: 'Afternoon Session' },
+        ],
+      };
+
+      expect(resolveDetailColumnValue('detailActivity', entry, event)).toBe('Afternoon Session');
+    });
+
     it('should resolve detailContact from event data', () => {
       expect(resolveDetailColumnValue('detailContact', mockEntry, mockEvent)).toBe('Jane Smith');
     });

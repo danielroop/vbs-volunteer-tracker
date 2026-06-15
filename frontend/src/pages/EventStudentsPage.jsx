@@ -232,16 +232,17 @@ export default function EventStudentsPage() {
         const studentEventEntries = getEventEntriesForStudent(studentId);
         const eventStudentDocId = eventStudentDocIds[studentId];
 
-        if (studentEventEntries.length > 0) {
-            const confirmed = window.confirm(
-                `${studentName} has ${studentEventEntries.length} activity ` +
-                `record${studentEventEntries.length === 1 ? '' : 's'} for this event. ` +
-                'Remove them from the event and delete those activity records?'
-            );
-            if (!confirmed) return;
-        } else if (!eventStudentDocId) {
+        if (!eventStudentDocId && studentEventEntries.length === 0) {
             return;
         }
+
+        const confirmMessage = studentEventEntries.length > 0
+            ? `${studentName} has ${studentEventEntries.length} activity ` +
+                `record${studentEventEntries.length === 1 ? '' : 's'} for this event. ` +
+                'Remove them from the event and delete those activity records?'
+            : `Remove ${studentName} from this event? Their student record will remain in the system.`;
+
+        if (!window.confirm(confirmMessage)) return;
 
         setRemovingStudentId(studentId);
         try {

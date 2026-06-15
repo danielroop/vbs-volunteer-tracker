@@ -413,9 +413,28 @@ describe('EventStudentsPage', () => {
         fireEvent.click(within(aliceRow).getByRole('button', { name: /^Remove$/ }));
 
         await waitFor(() => {
+            expect(window.confirm).toHaveBeenCalledWith(
+                'Remove Alice Adams from this event? Their student record will remain in the system.'
+            );
             expect(doc).toHaveBeenCalledWith({}, 'eventStudents', 'es1');
             expect(deleteDoc).toHaveBeenCalledTimes(1);
         });
+    });
+
+    it('does not remove a roster-only student when confirmation is cancelled', async () => {
+        const { deleteDoc } = await import('firebase/firestore');
+        window.confirm = vi.fn(() => false);
+
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        const aliceRow = screen.getByText('Alice Adams').closest('tr');
+        fireEvent.click(within(aliceRow).getByRole('button', { name: /^Remove$/ }));
+
+        expect(window.confirm).toHaveBeenCalledWith(
+            'Remove Alice Adams from this event? Their student record will remain in the system.'
+        );
+        expect(deleteDoc).not.toHaveBeenCalled();
     });
 
     it('asks before removing a student with activity records', async () => {

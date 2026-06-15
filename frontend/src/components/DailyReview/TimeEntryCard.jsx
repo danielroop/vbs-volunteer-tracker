@@ -11,6 +11,7 @@ import Button from '../common/Button';
  * @param {Function} getStatusDisplay - Function to get status display text
  * @param {Function} getStatusClass - Function to get status CSS class
  * @param {Function} onEdit - Callback when edit button is clicked
+ * @param {Function} onQuickCheckIn - Callback when check-in button is clicked
  * @param {Function} onForceCheckout - Callback when force checkout button is clicked
  * @param {Function} onVoid - Callback when void button is clicked
  * @param {Function} onRestore - Callback when restore button is clicked
@@ -22,6 +23,7 @@ export default function TimeEntryCard({
   getStatusDisplay,
   getStatusClass,
   onEdit,
+  onQuickCheckIn,
   onForceCheckout,
   onVoid,
   onRestore
@@ -142,7 +144,14 @@ export default function TimeEntryCard({
       {/* Actions */}
       <div className="flex gap-2 pt-2 border-t border-gray-100">
         {isNoCheckIn ? (
-          <span className="text-sm text-gray-500">No entry</span>
+          <Button
+            size="sm"
+            variant="success"
+            onClick={() => onQuickCheckIn(entry)}
+            aria-label={`Check in ${entry.student.firstName} ${entry.student.lastName}`}
+          >
+            Check In
+          </Button>
         ) : isVoided ? (
           <Button
             size="sm"
@@ -175,9 +184,9 @@ export default function TimeEntryCard({
                 size="sm"
                 variant="danger"
                 onClick={() => onForceCheckout(entry)}
-                aria-label={`Force checkout for ${entry.student.firstName} ${entry.student.lastName}`}
+                aria-label={`Checkout for ${entry.student.firstName} ${entry.student.lastName}`}
               >
-                Force Out
+                Checkout
               </Button>
             )}
           </>

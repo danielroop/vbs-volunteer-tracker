@@ -58,6 +58,7 @@ const mockCollection = jest.fn();
 const mockDoc = jest.fn();
 const mockWhere = jest.fn();
 const mockGet = jest.fn();
+const mockAdd = jest.fn();
 const mockBatch = jest.fn();
 const mockBatchUpdate = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue(undefined);
@@ -82,6 +83,136 @@ jest.unstable_mockModule('firebase-functions/v2/https', () => ({
     }
   },
 }));
+
+describe('quickCheckIn Cloud Function', () => {
+  let quickCheckIn;
+
+  beforeAll(async () => {
+    const dailyReviewModule = await import('../src/dailyReview.js');
+    quickCheckIn = dailyReviewModule.quickCheckIn;
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    const queryChain = {
+      where: mockWhere,
+      get: mockGet,
+    };
+
+    mockCollection.mockReturnValue({
+      doc: mockDoc,
+      where: mockWhere,
+      add: mockAdd,
+    });
+    mockDoc.mockReturnValue({ get: mockGet });
+    mockWhere.mockReturnValue(queryChain);
+    mockAdd.mockResolvedValue({ id: 'entry123' });
+  });
+
+  it('should throw error when required fields are missing', async () => {
+    const request = {
+      data: {
+        studentId: 'student123',
+        eventId: 'event123',
+      },
+      auth: { uid: 'admin123' },
+    };
+
+    await expect(quickCheckIn(request)).rejects.toThrow('Missing required fields');
+  });
+
+  it('should throw error when user is not authenticated', async () => {
+    const request = {
+      data: {
+        studentId: 'student123',
+        eventId: 'event123',
+        activityId: 'activity1',
+        date: '2026-06-15',
+        checkInTime: '2026-06-15T09:00:00Z',
+      },
+    };
+
+    await expect(quickCheckIn(request)).rejects.toThrow('User must be authenticated');
+  });
+
+  it('should throw error when check-in time does not match selected date', async () => {
+    const request = {
+      data: {
+        studentId: 'student123',
+        eventId: 'event123',
+        activityId: 'activity1',
+        date: '2026-06-15',
+        checkInTime: '2026-06-16T09:00:00Z',
+      },
+      auth: { uid: 'admin123' },
+    };
+
+    await expect(quickCheckIn(request)).rejects.toThrow('Check-in time must match selected date');
+  });
+
+  it('should create an open time entry', async () => {
+    mockGet
+      .mockResolvedValueOnce(mockStudentDoc)
+      .mockResolvedValueOnce(mockEventDoc)
+      .mockResolvedValueOnce({ docs: [] });
+
+    const request = {
+      data: {
+        studentId: 'student123',
+        eventId: 'event123',
+        activityId: 'activity1',
+        date: '2026-06-15',
+        checkInTime: '2026-06-15T09:00:00Z',
+        reason: 'Missed scan-in',
+      },
+      auth: { uid: 'admin123', token: { name: 'Admin User' } },
+    };
+
+    const result = await quickCheckIn(request);
+
+    expect(result.success).toBe(true);
+    expect(result.entryId).toBe('entry123');
+    expect(mockAdd).toHaveBeenCalledWith(expect.objectContaining({
+      studentId: 'student123',
+      eventId: 'event123',
+      activityId: 'activity1',
+      date: '2026-06-15',
+      checkInBy: 'admin123',
+      checkInByName: 'Admin User',
+      checkInMethod: 'daily_review',
+      checkOutTime: null,
+      hoursWorked: null,
+      rawMinutes: null,
+      isVoided: false,
+      modificationReason: expect.stringContaining('Missed scan-in'),
+    }));
+  });
+
+  it('should reject a duplicate active time entry for the date', async () => {
+    mockGet
+      .mockResolvedValueOnce(mockStudentDoc)
+      .mockResolvedValueOnce(mockEventDoc)
+      .mockResolvedValueOnce({
+        docs: [
+          { data: () => ({ isVoided: false }) },
+        ],
+      });
+
+    const request = {
+      data: {
+        studentId: 'student123',
+        eventId: 'event123',
+        activityId: 'activity1',
+        date: '2026-06-15',
+        checkInTime: '2026-06-15T09:00:00Z',
+      },
+      auth: { uid: 'admin123' },
+    };
+
+    await expect(quickCheckIn(request)).rejects.toThrow('Student already has a time entry for this date');
+  });
+});
 
 describe('forceCheckOut Cloud Function', () => {
   let forceCheckOut;

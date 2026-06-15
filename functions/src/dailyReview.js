@@ -10,6 +10,143 @@ const toDate = (timestamp) => {
   return new Date(timestamp);
 };
 
+const getFlagsForCheckIn = (checkInTime, typicalStart = '09:00') => {
+  const flags = [];
+  const [hour, min] = typicalStart.split(':');
+  const typical = new Date(checkInTime);
+  typical.setHours(parseInt(hour), parseInt(min), 0, 0);
+
+  if (checkInTime < (typical.getTime() - (15 * 60 * 1000))) {
+    flags.push('early_arrival');
+  }
+
+  return flags;
+};
+
+/**
+ * Quick Check-In Cloud Function
+ * Creates an open time entry from Daily Review for a student who missed scan-in.
+ *
+ * @param {Object} request.data
+ * @param {string} request.data.studentId - Student ID
+ * @param {string} request.data.eventId - Event ID
+ * @param {string} request.data.activityId - Activity ID
+ * @param {string} request.data.date - Date (YYYY-MM-DD)
+ * @param {string} request.data.checkInTime - ISO timestamp for check-in
+ * @param {string} request.data.reason - Optional reason/note
+ */
+export const quickCheckIn = onCall({ cors: true }, async (request) => {
+  const { studentId, eventId, activityId, date, checkInTime, reason } = request.data;
+
+  if (!studentId || !eventId || !activityId || !date || !checkInTime) {
+    throw new HttpsError('invalid-argument', 'Missing required fields: studentId, eventId, activityId, date, and checkInTime');
+  }
+
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const parsedCheckInTime = new Date(checkInTime);
+  if (isNaN(parsedCheckInTime.getTime())) {
+    throw new HttpsError('invalid-argument', 'Invalid check-in time');
+  }
+
+  const checkInDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(parsedCheckInTime);
+  if (checkInDate !== date) {
+    throw new HttpsError('invalid-argument', 'Check-in time must match selected date');
+  }
+
+  const db = getFirestore();
+  const userId = request.auth.uid;
+  const userName = request.auth.token?.name || null;
+
+  try {
+    const studentDoc = await db.collection('students').doc(studentId).get();
+    if (!studentDoc.exists) {
+      throw new HttpsError('not-found', 'Student not found');
+    }
+    const student = studentDoc.data();
+
+    const eventDoc = await db.collection('events').doc(eventId).get();
+    if (!eventDoc.exists) {
+      throw new HttpsError('not-found', 'Event not found');
+    }
+    const event = eventDoc.data();
+    const activity = (event.activities || []).find(a => a.id === activityId);
+    if (!activity) {
+      throw new HttpsError('not-found', 'Activity not found for event');
+    }
+
+    const existingQuery = await db.collection('timeEntries')
+      .where('studentId', '==', studentId)
+      .where('eventId', '==', eventId)
+      .where('date', '==', date)
+      .get();
+
+    const hasExistingActiveEntry = existingQuery.docs.some(doc => !doc.data().isVoided);
+    if (hasExistingActiveEntry) {
+      throw new HttpsError('already-exists', 'Student already has a time entry for this date');
+    }
+
+    const checkInTimestamp = Timestamp.fromDate(parsedCheckInTime);
+    const flags = getFlagsForCheckIn(parsedCheckInTime, activity.startTime || event.typicalStartTime || '09:00');
+    const note = reason?.trim();
+    const changeDescription = note
+      ? `Quick Check-In at ${parsedCheckInTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Reason: ${note}`
+      : `Quick Check-In at ${parsedCheckInTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+
+    const entry = {
+      studentId,
+      eventId,
+      activityId,
+      date,
+      checkInTime: checkInTimestamp,
+      checkInBy: userId,
+      checkInByName: userName,
+      checkInMethod: 'daily_review',
+      checkOutTime: null,
+      checkOutBy: null,
+      checkOutMethod: null,
+      hoursWorked: null,
+      rawMinutes: null,
+      reviewStatus: flags.length > 0 ? 'flagged' : 'pending',
+      flags,
+      modifiedBy: userId,
+      modificationReason: changeDescription,
+      modifiedAt: Timestamp.now(),
+      isVoided: false,
+      voidReason: null,
+      voidedAt: null,
+      createdAt: Timestamp.now(),
+      changeLog: [{
+        timestamp: new Date().toISOString(),
+        modifiedBy: userId,
+        type: 'quick_checkin',
+        newCheckInTime: parsedCheckInTime.toISOString(),
+        reason: note || null,
+        description: changeDescription
+      }]
+    };
+
+    const docRef = await db.collection('timeEntries').add(entry);
+
+    return {
+      success: true,
+      entryId: docRef.id,
+      studentName: `${student.firstName} ${student.lastName}`,
+      checkInTime: parsedCheckInTime.toISOString(),
+      flags,
+      message: `Check-in recorded for ${student.firstName} ${student.lastName}`
+    };
+  } catch (error) {
+    console.error('Quick check-in error:', error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', error.message);
+  }
+});
+
 /**
  * Force Check-Out Cloud Function
  * Per PRD Section 3.5.2: Daily Review (Nightly)

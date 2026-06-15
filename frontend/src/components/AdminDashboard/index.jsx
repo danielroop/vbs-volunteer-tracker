@@ -4,6 +4,102 @@ import { collection, onSnapshot } from 'firebase/firestore'; //
 import { useEvent } from '../../contexts/EventContext'; // Add this
 import { useTimeEntries } from '../../hooks/useTimeEntries'; // Add this
 
+const convertToDate = (timeValue) => {
+  if (!timeValue) return null;
+  if (timeValue instanceof Date) return timeValue;
+  if (typeof timeValue.toDate === 'function') return timeValue.toDate();
+  return new Date(timeValue);
+};
+
+const formatActivityTime = (timeValue) => {
+  const date = convertToDate(timeValue);
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleTimeString() : '--';
+};
+
+const getMethodLabel = (method) => {
+  if (method === 'manual') return 'manual';
+  if (method === 'self_scan') return 'self-scan';
+  if (method === 'av_scan') return 'AV scan';
+  return 'scan';
+};
+
+const getChangeTypeLabel = (type) => {
+  switch (type) {
+    case 'void':
+      return 'Voided';
+    case 'restore':
+      return 'Restored';
+    case 'force_checkout':
+    case 'bulk_force_checkout':
+      return 'Forced Check-Out';
+    case 'edit':
+    default:
+      return 'Modified';
+  }
+};
+
+const buildRecentActivityItems = (timeEntries, studentNameMap, activityNameMap) => {
+  return timeEntries
+    .flatMap(entry => {
+      const studentName = studentNameMap[entry.studentId] || 'Student';
+      const activityName = activityNameMap[entry.activityId] || 'Activity';
+      const items = [];
+      const isManualEntry = entry.entry_source === 'manual' || (
+        entry.checkInMethod === 'manual' && entry.checkOutMethod === 'manual'
+      );
+
+      if (isManualEntry) {
+        const actionTime = convertToDate(entry.modifiedAt || entry.createdAt || entry.checkInTime);
+        items.push({
+          id: `${entry.id}-manual-entry`,
+          studentName,
+          actionLabel: 'Manual Entry',
+          detail: `${activityName} logged`,
+          actionTime,
+          sortTime: actionTime?.getTime() || 0
+        });
+      } else if (entry.checkInTime) {
+        const actionTime = convertToDate(entry.checkInTime);
+        items.push({
+          id: `${entry.id}-check-in`,
+          studentName,
+          actionLabel: 'Check-In',
+          detail: `${activityName} via ${getMethodLabel(entry.checkInMethod)}`,
+          actionTime,
+          sortTime: actionTime?.getTime() || 0
+        });
+      }
+
+      if (!isManualEntry && entry.checkOutTime) {
+        const actionTime = convertToDate(entry.checkOutTime);
+        items.push({
+          id: `${entry.id}-check-out`,
+          studentName,
+          actionLabel: 'Check-Out',
+          detail: `${activityName} via ${getMethodLabel(entry.checkOutMethod)}`,
+          actionTime,
+          sortTime: actionTime?.getTime() || 0
+        });
+      }
+
+      (entry.changeLog || []).forEach((change, index) => {
+        const actionTime = convertToDate(change.timestamp);
+        items.push({
+          id: `${entry.id}-change-${index}`,
+          studentName,
+          actionLabel: getChangeTypeLabel(change.type),
+          detail: change.description || activityName,
+          actionTime,
+          sortTime: actionTime?.getTime() || 0
+        });
+      });
+
+      return items;
+    })
+    .sort((a, b) => b.sortTime - a.sortTime)
+    .slice(0, 5);
+};
+
 /**
  * Admin Dashboard Component
  * Per PRD Section 3.5: Volunteer Admin (VA) Dashboard
@@ -19,21 +115,27 @@ export default function AdminDashboard() {
     realtime: true
   });
 
-  // Helper to handle both Firestore Timestamps and JS Dates
-  const convertToDate = (timeValue) => {
-    if (!timeValue) return null;
-    return typeof timeValue.toDate === 'function' ? timeValue.toDate() : new Date(timeValue);
-  };
-
-  // This creates an object where the key is the ID and the value is the First Name
+  // This creates an object where the key is the ID and the value is the full name
   const studentNameMap = useMemo(() => {
     const map = {};
 
     students.forEach(s => {
-      map[s.id] = s.firstName;
+      map[s.id] = [s.firstName, s.lastName].filter(Boolean).join(' ') || s.firstName || 'Student';
     });
     return map;
   }, [students]);
+
+  const activityNameMap = useMemo(() => {
+    const map = {};
+    (currentEvent?.activities || []).forEach(activity => {
+      map[activity.id] = activity.name;
+    });
+    return map;
+  }, [currentEvent?.activities]);
+
+  const recentActivityItems = useMemo(() => (
+    buildRecentActivityItems(timeEntries, studentNameMap, activityNameMap)
+  ), [timeEntries, studentNameMap, activityNameMap]);
 
 
   // 1. Fetch the collection of students
@@ -47,16 +149,9 @@ export default function AdminDashboard() {
 
   // Calculate stats from real-time data
   const attendanceStats = useMemo(() => {
-    // Helper to handle both Firestore Timestamps and JS Dates
-    const convertToDate = (timeValue) => {
-      if (!timeValue) return null;
-      return typeof timeValue.toDate === 'function' ? timeValue.toDate() : new Date(timeValue);
-    };
-
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     
-    console.log(timeEntries);
     const todaysEntries = timeEntries.filter(e => {
       const checkInDate = convertToDate(e.checkInTime);
       return checkInDate && checkInDate >= startOfToday;
@@ -121,24 +216,24 @@ export default function AdminDashboard() {
 
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-lg font-semibold mb-2">🔔 Recent Activity</h3>
-            {timeEntries.slice(0, 5).map(entry => {
-              // Lookup name from the map or fallback to "Student" if not found
-              const firstName = studentNameMap[entry.studentId] || 'Student';
-
-              // Safely handle the checkInTime
-              const timeString = entry.checkInTime?.toDate
-                ? entry.checkInTime.toDate().toLocaleTimeString()
-                : new Date(entry.checkInTime).toLocaleTimeString();
-
-              return (
-                <div key={entry.id} className="text-sm border-b py-2 flex justify-between">
-                  <span className="font-bold text-gray-800">{firstName}</span>
-                  <span className="text-gray-500">
-                     scanned at {timeString}
-                  </span>
+            {recentActivityItems.length > 0 ? (
+              recentActivityItems.map(item => (
+                <div key={item.id} className="text-sm border-b py-2">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-bold text-gray-800">{item.studentName}</span>
+                    <span className="text-gray-500 whitespace-nowrap">
+                      {formatActivityTime(item.actionTime)}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex justify-between gap-3 text-xs">
+                    <span className="font-semibold text-gray-700">{item.actionLabel}</span>
+                    <span className="text-gray-500 text-right">{item.detail}</span>
+                  </div>
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              <p className="text-gray-500 text-sm">No recent activity</p>
+            )}
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">

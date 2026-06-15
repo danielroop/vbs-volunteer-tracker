@@ -216,6 +216,22 @@ describe('Scanner', () => {
       });
     });
 
+    it('should return to event selection when clicking the back button', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+      renderScanner('/scan/event1');
+
+      await waitFor(() => {
+        expect(screen.getByText('Select Activity Type')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Back to Event Selection/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Select Event')).toBeInTheDocument();
+      });
+    });
+
     it('should allow direct scanner access to a backup activity', async () => {
       mockEvents[0].activities = [
         {

@@ -337,8 +337,8 @@ describe('Scanner', () => {
       });
     });
 
-    it('should show scan feedback in a fixed top toast', async () => {
-      renderScanner('/scan/event1/general/checkin');
+    it('should show scan feedback in a fixed top body-level toast', async () => {
+      const { container } = renderScanner('/scan/event1/general/checkin');
 
       await waitFor(() => {
         expect(mockUseQRScannerOptions).not.toBeNull();
@@ -350,7 +350,11 @@ describe('Scanner', () => {
 
       const toast = screen.getByRole('status', { name: 'Scan result' });
       expect(toast).toHaveTextContent('✓ Test Student Checked In');
-      expect(toast.parentElement).toHaveClass('fixed', 'top-3', 'z-50');
+      expect(toast.parentElement).toHaveClass('fixed', 'z-[2147483647]');
+      expect(toast.parentElement).toHaveStyle({
+        top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)',
+      });
+      expect(container).not.toContain(toast);
     });
   });
 

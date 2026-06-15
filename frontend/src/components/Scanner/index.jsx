@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { db, functions } from '../../utils/firebase';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -9,6 +10,31 @@ import Spinner from '../common/Spinner';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { parseQRData } from '../../utils/qrCodeGenerator';
 import { useAuth } from '../../contexts/AuthContext';
+
+function ScanResultToast({ message }) {
+  if (!message) return null;
+
+  return createPortal(
+    <div
+      className="pointer-events-none fixed inset-x-3 z-[2147483647] mx-auto max-w-md"
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+    >
+      <div
+        role={message.type === 'error' ? 'alert' : 'status'}
+        aria-live={message.type === 'error' ? 'assertive' : 'polite'}
+        aria-label="Scan result"
+        className={`rounded-xl border-2 px-4 py-3 shadow-2xl ${
+          message.type === 'success'
+            ? 'border-green-300 bg-green-50 text-green-900'
+            : 'border-red-300 bg-red-50 text-red-900'
+        }`}
+      >
+        <p className="text-center text-base font-black leading-snug sm:text-lg">{message.text}</p>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 export default function Scanner() {
   const { eventId: urlEventId, activityId: urlActivityId, action: urlAction } = useParams();
@@ -366,22 +392,7 @@ export default function Scanner() {
   return (
     <div className="min-h-screen bg-gray-50">
       <ScannerHeader />
-      {message && (
-        <div className="pointer-events-none fixed inset-x-3 top-3 z-50 mx-auto max-w-md sm:top-4">
-          <div
-            role={message.type === 'error' ? 'alert' : 'status'}
-            aria-live={message.type === 'error' ? 'assertive' : 'polite'}
-            aria-label="Scan result"
-            className={`rounded-xl border-2 px-4 py-3 shadow-2xl ${
-              message.type === 'success'
-                ? 'border-green-300 bg-green-50 text-green-900'
-                : 'border-red-300 bg-red-50 text-red-900'
-            }`}
-          >
-            <p className="text-center text-base font-black leading-snug sm:text-lg">{message.text}</p>
-          </div>
-        </div>
-      )}
+      <ScanResultToast message={message} />
       <div className="max-w-2xl mx-auto p-4">
         <div className="bg-white rounded-lg shadow-md p-6 mb-4 border-t-4 border-primary-600">
           <div className="flex justify-between items-center">

@@ -4,34 +4,72 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import EventStudentsPage from './EventStudentsPage';
 
-vi.mock('../utils/firebase', () => ({ db: {} }));
+vi.mock('../utils/firebase', () => ({ db: {}, storage: {} }));
+
+vi.mock('firebase/storage', () => ({
+    ref: vi.fn(),
+    getDownloadURL: vi.fn(() => Promise.resolve('https://storage.example.com/template.pdf')),
+}));
+
+vi.mock('../utils/pdfTemplateUtils', () => ({
+    generateFilledPdf: vi.fn(() => Promise.resolve(new Uint8Array([1, 2, 3]))),
+    mergePdfs: vi.fn((arr) => Promise.resolve(arr[0] || new Uint8Array([1, 2, 3]))),
+    openPdfForPrinting: vi.fn(),
+}));
+
+vi.mock('../utils/printUtils', () => ({
+    printInNewWindow: vi.fn(),
+    createPrintDocument: vi.fn(({ title, styles, body }) =>
+        `<!DOCTYPE html><html><head><title>${title}</title><style>${styles}</style></head><body>${body}</body></html>`
+    ),
+}));
 
 const mockStudents = [
-    { id: 'student1', firstName: 'Alice', lastName: 'Adams', schoolName: 'Central High', gradeLevel: '10', gradYear: '2027' },
+    { id: 'student1', firstName: 'Alice', lastName: 'Adams', schoolName: 'Central High', gradeLevel: '10', gradYear: '2027', pdfTemplateId: 'template1' },
     { id: 'student2', firstName: 'Bob', lastName: 'Brown', schoolName: 'West High', gradeLevel: '11', gradYear: '2026' },
     { id: 'student3', firstName: 'Charlie', lastName: 'Clark', schoolName: 'East High', gradeLevel: '12', gradYear: '2025' },
 ];
 
 const mockEvents = [
-    { id: 'event123', name: 'VBS 2026', organizationName: 'Church' },
+    {
+        id: 'event123',
+        name: 'VBS 2026',
+        organizationName: 'Church',
+        contactName: 'Coordinator',
+        activities: [{ id: 'activity1', name: 'Setup' }],
+    },
 ];
 
 const mockCurrentEvent = { id: 'event123', name: 'VBS 2026' };
+const defaultPdfTemplates = [
+    { id: 'template1', name: 'Central High Form', storagePath: 'templates/central.pdf', fields: [] },
+    { id: 'template2', name: 'OCPS', fileName: 'ocps.pdf', storagePath: 'templates/ocps.pdf', fields: [] },
+];
 
 let onSnapshotCalls = [];
 let addDocMock;
+let mockPdfTemplates = [...defaultPdfTemplates];
 
 vi.mock('firebase/firestore', () => ({
     collection: vi.fn((db, path) => ({ _collPath: path })),
-    doc: vi.fn((db, col, id) => ({ _docPath: `${col}/${id}` })),
+    doc: vi.fn((db, col, id) => ({ _isDoc: true, _docPath: `${col}/${id}` })),
     query: vi.fn((ref) => ref),
     where: vi.fn(() => ({})),
     deleteDoc: vi.fn().mockResolvedValue(undefined),
     onSnapshot: vi.fn((queryOrRef, callback) => {
+        if (queryOrRef?._isDoc) {
+            queueMicrotask(() => callback({ exists: () => false, data: () => null }));
+            const unsub = vi.fn();
+            onSnapshotCalls.push(unsub);
+            return unsub;
+        }
+
         const path = queryOrRef?._collPath;
 
         if (path === 'events') {
             queueMicrotask(() => callback({ docs: mockEvents.map(e => ({ id: e.id, data: () => e })) }));
+        } else if (path === 'pdfTemplates') {
+            queueMicrotask(() => callback({ docs: mockPdfTemplates.map(template => ({ id: template.id, data: () => template })) }));
         } else if (path === 'students') {
             queueMicrotask(() => callback({ docs: mockStudents.map(s => ({ id: s.id, data: () => s })) }));
         } else if (path === 'eventStudents') {
@@ -40,7 +78,17 @@ vi.mock('firebase/firestore', () => ({
         } else if (path === 'timeEntries') {
             // student2 checked in via time entries
             queueMicrotask(() => callback({ docs: [
-                { id: 'te1', data: () => ({ eventId: 'event123', studentId: 'student2', isVoided: false }) }
+                {
+                    id: 'te1',
+                    data: () => ({
+                        eventId: 'event123',
+                        studentId: 'student2',
+                        activityId: 'activity1',
+                        isVoided: false,
+                        checkInTime: { seconds: 1704096000, toDate: () => new Date('2024-01-01T08:00:00') },
+                        checkOutTime: { seconds: 1704110400, toDate: () => new Date('2024-01-01T12:00:00') },
+                    })
+                }
             ] }));
         } else {
             queueMicrotask(() => callback({ docs: [] }));
@@ -76,6 +124,11 @@ describe('EventStudentsPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         onSnapshotCalls = [];
+        mockPdfTemplates = [...defaultPdfTemplates];
+        window.alert = vi.fn();
+        global.fetch = vi.fn(() => Promise.resolve({
+            arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+        }));
     });
 
     it('renders page heading with event name', async () => {
@@ -135,6 +188,84 @@ describe('EventStudentsPage', () => {
         });
     });
 
+    it('supports selecting visible event students for targeted printing', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('checkbox', { name: /Select Alice Adams/i }));
+
+        expect(screen.getByText(/student selected/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Print Badges \(1\)/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Print Reports \(1\)/i })).toBeInTheDocument();
+    });
+
+    it('prints only selected badges when students are selected', async () => {
+        const { printInNewWindow } = await import('../utils/printUtils');
+        const user = userEvent.setup();
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('checkbox', { name: /Select Alice Adams/i }));
+        await user.click(screen.getByRole('button', { name: /Print Badges \(1\)/i }));
+
+        expect(printInNewWindow).toHaveBeenCalledTimes(1);
+        const printedHtml = printInNewWindow.mock.calls[0][0];
+        expect(printedHtml).toContain('Alice Adams');
+        expect(printedHtml).not.toContain('Bob Brown');
+    });
+
+    it('uses the selected student PDF template for event report printing', async () => {
+        const { generateFilledPdf, openPdfForPrinting } = await import('../utils/pdfTemplateUtils');
+        const user = userEvent.setup();
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('checkbox', { name: /Select Alice Adams/i }));
+        await user.click(screen.getByRole('button', { name: /Print Reports \(1\)/i }));
+
+        await waitFor(() => {
+            expect(generateFilledPdf).toHaveBeenCalledTimes(1);
+            expect(openPdfForPrinting).toHaveBeenCalledTimes(1);
+        });
+        expect(generateFilledPdf.mock.calls[0][2].student.id).toBe('student1');
+    });
+
+    it('uses a school-matched PDF template for students without an explicit template', async () => {
+        const { generateFilledPdf, openPdfForPrinting } = await import('../utils/pdfTemplateUtils');
+        const { printInNewWindow } = await import('../utils/printUtils');
+        const user = userEvent.setup();
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Bob Brown')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('checkbox', { name: /Select Bob Brown/i }));
+        await user.click(screen.getByRole('button', { name: /Print Reports \(1\)/i }));
+
+        await waitFor(() => {
+            expect(generateFilledPdf).toHaveBeenCalledTimes(1);
+            expect(openPdfForPrinting).toHaveBeenCalledTimes(1);
+        });
+        expect(generateFilledPdf.mock.calls[0][2].student.id).toBe('student2');
+        expect(printInNewWindow).not.toHaveBeenCalled();
+    });
+
+    it('does not fall back to the old HTML report when a PDF template is missing', async () => {
+        mockPdfTemplates = [];
+        const { generateFilledPdf, openPdfForPrinting } = await import('../utils/pdfTemplateUtils');
+        const { printInNewWindow } = await import('../utils/printUtils');
+        const user = userEvent.setup();
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Alice Adams')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('checkbox', { name: /Select Alice Adams/i }));
+        await user.click(screen.getByRole('button', { name: /Print Reports \(1\)/i }));
+
+        expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Missing template for: Alice Adams'));
+        expect(generateFilledPdf).not.toHaveBeenCalled();
+        expect(openPdfForPrinting).not.toHaveBeenCalled();
+        expect(printInNewWindow).not.toHaveBeenCalled();
+    });
+
     it('opens Add Student modal on button click', async () => {
         const user = userEvent.setup();
         renderPage();
@@ -148,7 +279,7 @@ describe('EventStudentsPage', () => {
         await waitFor(() => screen.getByRole('button', { name: /\+ Add Student/i }));
         fireEvent.click(screen.getByRole('button', { name: /\+ Add Student/i }));
 
-        const gradeSelect = screen.getByRole('combobox');
+        const gradeSelect = screen.getAllByRole('combobox')[0];
         expect(within(gradeSelect).getByRole('option', { name: 'Kindergarten' })).toHaveValue('K');
         expect(within(gradeSelect).getByRole('option', { name: '12th Grade' })).toHaveValue('12');
     });

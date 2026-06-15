@@ -151,6 +151,17 @@ describe('checkHoursLogged Cloud Function', () => {
     expect(result.events.find((event) => event.id === 'event456').entries).toHaveLength(1);
   });
 
+  it('accepts student-id-only badge data', async () => {
+    const result = await checkHoursLogged({
+      data: { qrData: 'student123' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.scannedEventId).toBeNull();
+    expect(result.student.fullName).toBe('Jane Smith');
+    expect(result.totalHours).toBe(5);
+  });
+
   it('rejects QR data with an invalid checksum', async () => {
     await expect(checkHoursLogged({
       data: { qrData: 'student123|event456|bad' },

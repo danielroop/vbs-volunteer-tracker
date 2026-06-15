@@ -26,6 +26,14 @@ function formatTime(value) {
   return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
+function CheckIcon() {
+  return (
+    <svg className="h-4 w-4" aria-hidden="true" viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.25 7.25a1 1 0 01-1.415 0l-3.25-3.25a1 1 0 111.415-1.42l2.543 2.543 6.543-6.543a1 1 0 011.414 0z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
 export default function CheckHoursPage() {
   const [lookup, setLookup] = useState(null);
   const [selectedEventId, setSelectedEventId] = useState(null);
@@ -35,7 +43,7 @@ export default function CheckHoursPage() {
 
   const selectedEvent = useMemo(() => {
     if (!lookup?.events?.length) return null;
-    return lookup.events.find((event) => event.id === selectedEventId) || lookup.events[0];
+    return lookup.events.find((event) => event.id === selectedEventId) || null;
   }, [lookup, selectedEventId]);
 
   const loadHours = async (qrData) => {
@@ -53,8 +61,8 @@ export default function CheckHoursPage() {
       }
 
       setLookup(result.data);
-      setSelectedEventId(result.data.scannedEventId || result.data.events?.[0]?.id || null);
-      setStatus({ type: 'success', message: 'Hours loaded' });
+      setSelectedEventId(null);
+      setStatus({ type: 'success', message: 'Badge scanned' });
       await stopScanning();
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Unable to load hours' });
@@ -69,6 +77,7 @@ export default function CheckHoursPage() {
       setStatus({ type: 'error', message: error.message || 'Invalid QR code' });
     },
     qrbox: { width: 260, height: 260 },
+    validateQrData: false,
   });
 
   const handleStartScanner = async () => {
@@ -137,9 +146,9 @@ export default function CheckHoursPage() {
             </div>
 
             <form onSubmit={handleManualSubmit} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
-              <h2 className="text-lg font-black text-gray-900">Enter QR Data</h2>
+              <h2 className="text-lg font-black text-gray-900">Enter Badge Data</h2>
               <label htmlFor="manual-qr-data" className="mt-4 block text-sm font-bold text-gray-700">
-                QR code text
+                QR code text or student ID
               </label>
               <textarea
                 id="manual-qr-data"
@@ -147,14 +156,14 @@ export default function CheckHoursPage() {
                 onChange={(event) => setManualQrData(event.target.value)}
                 rows={4}
                 className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
-                placeholder="studentId|eventId|checksum"
+                placeholder="Scan a badge, or enter the student ID"
               />
               <button
                 type="submit"
                 disabled={!manualQrData.trim() || status.type === 'loading'}
                 className="mt-4 w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Look Up Hours
+                Continue
               </button>
             </form>
           </section>
@@ -195,7 +204,9 @@ export default function CheckHoursPage() {
               </div>
             ) : (
               <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-                <nav className="space-y-2" aria-label="Worked events">
+                <div>
+                  <h3 className="mb-3 text-lg font-black text-gray-900">Which event are you interested in?</h3>
+                  <nav className="space-y-2" aria-label="Worked events">
                   {lookup.events.map((event) => (
                     <button
                       key={event.id}
@@ -207,13 +218,17 @@ export default function CheckHoursPage() {
                           : 'border-gray-200 bg-white text-gray-800 hover:border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      <span className="block text-sm font-black">{event.name}</span>
+                      <span className="flex items-center justify-between gap-3 text-sm font-black">
+                        {event.name}
+                        {selectedEvent?.id === event.id && <CheckIcon />}
+                      </span>
                       <span className="mt-1 block text-xs font-bold text-gray-500">{formatHours(event.totalHours)}</span>
                     </button>
                   ))}
-                </nav>
+                  </nav>
+                </div>
 
-                {selectedEvent && (
+                {selectedEvent ? (
                   <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
                     <div className="border-b border-gray-200 p-4 sm:p-6">
                       <h3 className="text-xl font-black text-gray-900">{selectedEvent.name}</h3>
@@ -234,6 +249,10 @@ export default function CheckHoursPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-sm font-semibold text-gray-500">
+                    Choose an event to see the credited hours for that event.
                   </div>
                 )}
               </div>

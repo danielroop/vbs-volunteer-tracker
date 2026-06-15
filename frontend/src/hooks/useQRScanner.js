@@ -9,13 +9,15 @@ import { parseQRData } from '../utils/qrCodeGenerator';
  * @param {Function} options.onError - Callback when scan error occurs
  * @param {number} options.fps - Frames per second (default: 10)
  * @param {Object} options.qrbox - QR box dimensions
+ * @param {boolean} options.validateQrData - Parse QR data before calling onSuccess
  */
 export function useQRScanner(options = {}) {
   const {
     onSuccess,
     onError,
     fps = 10,
-    qrbox = { width: 250, height: 250 }
+    qrbox = { width: 250, height: 250 },
+    validateQrData = true
   } = options;
 
   const [isScanning, setIsScanning] = useState(false);
@@ -86,6 +88,11 @@ export function useQRScanner(options = {}) {
         selectedCamera || { facingMode: 'environment' },
         config,
         (decodedText) => {
+          if (!validateQrData) {
+            onSuccess?.({ rawData: decodedText });
+            return;
+          }
+
           // Parse and validate QR code
           const parsed = parseQRData(decodedText);
 
@@ -116,7 +123,7 @@ export function useQRScanner(options = {}) {
       isScanningRef.current = false;
       setIsScanning(false);
     }
-  }, [cameras, selectedCamera, fps, qrbox, onSuccess, onError, getCameras]);
+  }, [cameras, selectedCamera, fps, qrbox, validateQrData, onSuccess, onError, getCameras]);
 
   /**
    * Stop scanning

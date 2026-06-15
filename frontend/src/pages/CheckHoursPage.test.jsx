@@ -73,50 +73,51 @@ describe('CheckHoursPage', () => {
     });
   });
 
-  it('looks up QR data and shows the scanned student profile', async () => {
+  it('looks up badge data and shows the scanned student profile', async () => {
     render(<CheckHoursPage />);
 
     act(() => {
       fireEvent.change(screen.getByLabelText(/QR code text/i), {
-        target: { value: 'student1|event2|abc123' },
+        target: { value: 'student1' },
       });
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Look Up Hours/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
     });
 
     await waitFor(() => {
       expect(screen.getByText('Jane Smith')).toBeInTheDocument();
     });
 
-    expect(mockCheckHoursLogged).toHaveBeenCalledWith({ qrData: 'student1|event2|abc123' });
+    expect(mockCheckHoursLogged).toHaveBeenCalledWith({ qrData: 'student1' });
     expect(screen.getByText('Central High')).toBeInTheDocument();
     expect(screen.getByText('All Credited Hours')).toBeInTheDocument();
     expect(screen.getByText('5.00 hours')).toBeInTheDocument();
   });
 
-  it('defaults to the scanned event and can switch events', async () => {
+  it('asks which event to inspect before showing event details', async () => {
     render(<CheckHoursPage />);
 
     act(() => {
       fireEvent.change(screen.getByLabelText(/QR code text/i), {
-        target: { value: 'student1|event2|abc123' },
+        target: { value: 'student1' },
       });
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Look Up Hours/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'VBS 2026' })).toBeInTheDocument();
+      expect(screen.getByText(/Which event are you interested in/i)).toBeInTheDocument();
     });
+    expect(screen.getByText(/Choose an event to see the credited hours/i)).toBeInTheDocument();
+    expect(screen.queryByText('Work Hours')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /VBS 2026/i }));
+    });
+
+    expect(screen.getByRole('heading', { name: 'VBS 2026' })).toBeInTheDocument();
     expect(screen.getByText('Work Hours')).toBeInTheDocument();
-
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /Setup Day/i }));
-    });
-
-    expect(screen.getByRole('heading', { name: 'Setup Day' })).toBeInTheDocument();
-    expect(screen.getByText('Decorating')).toBeInTheDocument();
   });
 });

@@ -13,11 +13,22 @@ function generateChecksum(studentId, eventId) {
 }
 
 function parseQRData(qrData) {
-  if (typeof qrData !== 'string') {
+  if (typeof qrData !== 'string' || !qrData.trim()) {
     return { isValid: false, error: 'Missing QR data' };
   }
 
-  const parts = qrData.split('|');
+  const trimmed = qrData.trim();
+  const parts = trimmed.split('|');
+
+  if (parts.length === 1) {
+    return {
+      studentId: trimmed,
+      eventId: null,
+      checksum: null,
+      isValid: true,
+    };
+  }
+
   if (parts.length !== 3) {
     return { isValid: false, error: 'Invalid QR code format' };
   }
@@ -77,8 +88,9 @@ function publicStudentProfile(student, studentId) {
 /**
  * Public QR-backed hour lookup for students.
  *
- * The QR checksum gates access to a single student. The response intentionally
- * returns only hour-report fields, not contact or emergency data.
+ * Accepts both current event-specific QR data and older student-id-only badges.
+ * The response intentionally returns only hour-report fields, not contact or
+ * emergency data.
  */
 export const checkHoursLogged = onCall({ cors: true }, async (request) => {
   const { qrData } = request.data || {};

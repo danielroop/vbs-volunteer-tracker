@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import Scanner from './index';
@@ -335,6 +335,22 @@ describe('Scanner', () => {
       await waitFor(() => {
         expect(screen.getByText('Signed in as Test User')).toBeInTheDocument();
       });
+    });
+
+    it('should show scan feedback in a fixed top toast', async () => {
+      renderScanner('/scan/event1/general/checkin');
+
+      await waitFor(() => {
+        expect(mockUseQRScannerOptions).not.toBeNull();
+      });
+
+      await act(async () => {
+        await mockUseQRScannerOptions.onSuccess('valid-qr');
+      });
+
+      const toast = screen.getByRole('status', { name: 'Scan result' });
+      expect(toast).toHaveTextContent('✓ Test Student Checked In');
+      expect(toast.parentElement).toHaveClass('fixed', 'top-3', 'z-50');
     });
   });
 

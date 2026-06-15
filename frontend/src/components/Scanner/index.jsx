@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo, act } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { db, functions } from '../../utils/firebase';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -21,6 +21,7 @@ export default function Scanner() {
   const [message, setMessage] = useState(null);
   const isStarting = useRef(false);
   const isProcessing = useRef(false);
+  const messageTimeoutRef = useRef(null);
   const pauseAfterValidScan = 2000;
   const scannerId = user?.uid || userProfile?.id || 'av_scan';
   const scannerName = userProfile?.name || user?.displayName || user?.email || '';
@@ -199,9 +200,24 @@ export default function Scanner() {
     }
   }, [loading, hasValidEvent, hasValidActivity, hasValidAction]);
 
+  useEffect(() => {
+    return () => {
+      if (messageTimeoutRef.current) {
+        clearTimeout(messageTimeoutRef.current);
+      }
+    };
+  }, []);
+
   function showMessage(type, text) {
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 4000);
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage(null);
+      messageTimeoutRef.current = null;
+    }, 4000);
   }
 
   function activateScanner(){
@@ -350,6 +366,22 @@ export default function Scanner() {
   return (
     <div className="min-h-screen bg-gray-50">
       <ScannerHeader />
+      {message && (
+        <div className="pointer-events-none fixed inset-x-3 top-3 z-50 mx-auto max-w-md sm:top-4">
+          <div
+            role={message.type === 'error' ? 'alert' : 'status'}
+            aria-live={message.type === 'error' ? 'assertive' : 'polite'}
+            aria-label="Scan result"
+            className={`rounded-xl border-2 px-4 py-3 shadow-2xl ${
+              message.type === 'success'
+                ? 'border-green-300 bg-green-50 text-green-900'
+                : 'border-red-300 bg-red-50 text-red-900'
+            }`}
+          >
+            <p className="text-center text-base font-black leading-snug sm:text-lg">{message.text}</p>
+          </div>
+        </div>
+      )}
       <div className="max-w-2xl mx-auto p-4">
         <div className="bg-white rounded-lg shadow-md p-6 mb-4 border-t-4 border-primary-600">
           <div className="flex justify-between items-center">
@@ -377,14 +409,6 @@ export default function Scanner() {
         <div className="bg-black rounded-2xl overflow-hidden min-h-[300px] mb-4 shadow-inner">
           <div id="qr-reader" className="w-full"></div>
         </div>
-
-        {message && (
-          <div className={`p-4 rounded-xl shadow-lg border-2 animate-bounce ${
-            message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <p className="font-bold text-center">{message.text}</p>
-          </div>
-        )}
       </div>
     </div>
   );

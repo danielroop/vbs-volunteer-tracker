@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import AdminDashboard from './index';
 
 const mockStudents = [
@@ -8,6 +9,12 @@ const mockStudents = [
 ];
 
 let mockTimeEntries = [];
+
+const renderDashboard = () => render(
+  <MemoryRouter>
+    <AdminDashboard />
+  </MemoryRouter>
+);
 
 vi.mock('../../utils/firebase', () => ({ db: {} }));
 
@@ -64,7 +71,7 @@ describe('AdminDashboard recent activity', () => {
       }
     ];
 
-    render(<AdminDashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Alice Adams')).toBeInTheDocument();
@@ -104,18 +111,24 @@ describe('AdminDashboard recent activity', () => {
       }
     ];
 
-    render(<AdminDashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Modified')).toBeInTheDocument();
     });
 
-    const activityPanel = screen.getByText('🔔 Recent Activity').closest('div');
+    const activityPanel = screen.getByText('🔔 Recent Activity').closest('.bg-white');
     const rows = within(activityPanel).getAllByText(/Alice Adams|Bob Brown/);
 
     expect(rows[0]).toHaveTextContent('Alice Adams');
     expect(rows[1]).toHaveTextContent('Bob Brown');
     expect(screen.getByText('Manual Entry')).toBeInTheDocument();
     expect(screen.getByText('Afternoon Session logged')).toBeInTheDocument();
+  });
+
+  it('links to the full activity page', async () => {
+    renderDashboard();
+
+    expect(await screen.findByRole('link', { name: 'View all' })).toHaveAttribute('href', '/admin/activity');
   });
 });

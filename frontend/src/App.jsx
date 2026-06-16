@@ -18,6 +18,7 @@ import UsersPage from './pages/UsersPage';
 import PdfTemplatesPage from './pages/PdfTemplatesPage';
 import EventStudentsPage from './pages/EventStudentsPage';
 import CheckHoursPage from './pages/CheckHoursPage';
+import ActivityPage from './pages/ActivityPage';
 
 // Loading Spinner Component
 function LoadingSpinner() {
@@ -182,6 +183,7 @@ function App() {
               }
             >
               <Route index element={<AdminDashboardPage />} />
+              <Route path="activity" element={<ActivityPage />} />
               <Route path="daily-review" element={<DailyReviewPage />} />
               <Route path="forms" element={<FormGenerationPage />} />
               <Route path="students" element={<EventStudentsPage />} />

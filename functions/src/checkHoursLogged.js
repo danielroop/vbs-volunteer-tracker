@@ -78,6 +78,7 @@ function publicStudentProfile(student, studentId) {
     schoolName: student.schoolName || '',
     gradeLevel: student.gradeLevel || '',
     gradYear: student.gradYear || '',
+    pdfTemplateId: student.pdfTemplateId || '',
   };
 }
 

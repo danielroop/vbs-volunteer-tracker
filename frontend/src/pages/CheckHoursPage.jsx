@@ -1,8 +1,10 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../utils/firebase';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { db, functions } from '../utils/firebase';
 import useQRScanner from '../hooks/useQRScanner';
 import Spinner from '../components/common/Spinner';
+import { getEffectivePdfTemplate } from '../utils/pdfTemplateUtils';
 
 const qrReaderId = 'hours-qr-reader';
 
@@ -39,12 +41,33 @@ export default function CheckHoursPage() {
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [manualQrData, setManualQrData] = useState('');
   const [status, setStatus] = useState({ type: 'idle', message: '' });
+  const [pdfTemplates, setPdfTemplates] = useState([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState(null);
   const lookupInFlight = useRef(false);
+
+  useEffect(() => {
+    const unsubTemplates = onSnapshot(collection(db, 'pdfTemplates'), (snapshot) => {
+      setPdfTemplates(snapshot.docs.map((templateDoc) => ({ id: templateDoc.id, ...templateDoc.data() })));
+    });
+    const unsubDefaults = onSnapshot(doc(db, 'settings', 'pdfDefaults'), (snapshot) => {
+      setDefaultTemplateId(snapshot.exists() ? snapshot.data().defaultTemplateId : null);
+    });
+
+    return () => {
+      unsubTemplates();
+      unsubDefaults();
+    };
+  }, []);
 
   const selectedEvent = useMemo(() => {
     if (!lookup?.events?.length) return null;
     return lookup.events.find((event) => event.id === selectedEventId) || null;
   }, [lookup, selectedEventId]);
+
+  const effectiveTemplate = useMemo(() => {
+    if (!lookup?.student) return null;
+    return getEffectivePdfTemplate(lookup.student, pdfTemplates, defaultTemplateId);
+  }, [lookup, pdfTemplates, defaultTemplateId]);
 
   const loadHours = async (qrData) => {
     if (!qrData || lookupInFlight.current) return;
@@ -173,7 +196,7 @@ export default function CheckHoursPage() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-gray-900">{lookup.student.fullName || 'Volunteer'}</h2>
-                  <dl className="mt-3 grid gap-3 text-sm text-gray-600 sm:grid-cols-3">
+                  <dl className="mt-3 grid gap-3 text-sm text-gray-600 sm:grid-cols-4">
                     <div>
                       <dt className="font-bold text-gray-900">School</dt>
                       <dd>{lookup.student.schoolName || 'Not listed'}</dd>
@@ -185,6 +208,10 @@ export default function CheckHoursPage() {
                     <div>
                       <dt className="font-bold text-gray-900">All Credited Hours</dt>
                       <dd>{formatHours(lookup.totalHours)}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold text-gray-900">School Form</dt>
+                      <dd>{effectiveTemplate?.name || 'No form configured'}</dd>
                     </div>
                   </dl>
                 </div>

@@ -12,6 +12,7 @@ This is a web-based volunteer hour tracking system for VBS (Vacation Bible Schoo
 
 > [!IMPORTANT]
 > **Git Workflow**: ALWAYS create a new branch and open a PR for any code changes. Never commit directly to `main`.
+> When committing work tied to a known issue, include the "resolves" issue number or identifier in the commit message.
 
 > [!IMPORTANT]
 > **Testing Requirement**: New implementations must **ALWAYS** run unit tests, write new unit tests, and write E2E tests.

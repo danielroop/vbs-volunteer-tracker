@@ -22,31 +22,31 @@ describe('hourCalculations', () => {
       expect(result.rounded).toBe(6);
     });
 
-    it('should round down for 0-14 minutes (6h 13m -> 6.0)', () => {
+    it('should round to the nearest quarter hour (6h 13m -> 6.25)', () => {
       const checkIn = new Date('2026-06-15T09:02:00');
       const checkOut = new Date('2026-06-15T15:15:00');
       const result = calculateHours(checkIn, checkOut);
 
       expect(result.minutes).toBe(373); // 6h 13m
-      expect(result.rounded).toBe(6.0);
+      expect(result.rounded).toBe(6.25);
     });
 
-    it('should round to 0.5 for 15-44 minutes (6h 16m -> 6.5)', () => {
+    it('should round to the nearest quarter hour (6h 16m -> 6.25)', () => {
       const checkIn = new Date('2026-06-15T09:02:00');
       const checkOut = new Date('2026-06-15T15:18:00');
       const result = calculateHours(checkIn, checkOut);
 
       expect(result.minutes).toBe(376); // 6h 16m
-      expect(result.rounded).toBe(6.5);
+      expect(result.rounded).toBe(6.25);
     });
 
-    it('should round up for 45-59 minutes (6h 47m -> 7.0)', () => {
+    it('should round to the nearest quarter hour (6h 47m -> 6.75)', () => {
       const checkIn = new Date('2026-06-15T09:00:00');
       const checkOut = new Date('2026-06-15T15:47:00');
       const result = calculateHours(checkIn, checkOut);
 
       expect(result.minutes).toBe(407); // 6h 47m
-      expect(result.rounded).toBe(7.0);
+      expect(result.rounded).toBe(6.75);
     });
 
     it('should handle 7h 30m -> 7.5 hours', () => {
@@ -175,15 +175,19 @@ describe('hourCalculations', () => {
 
   describe('formatHours', () => {
     it('should format hours with decimal', () => {
-      expect(formatHours(6.5)).toBe('6.5 hours');
+      expect(formatHours(6.5)).toBe('6.50 hours');
     });
 
     it('should use singular "hour" for 1 hour', () => {
-      expect(formatHours(1)).toBe('1.0 hour');
+      expect(formatHours(1)).toBe('1.00 hour');
     });
 
     it('should handle whole numbers', () => {
-      expect(formatHours(7)).toBe('7.0 hours');
+      expect(formatHours(7)).toBe('7.00 hours');
+    });
+
+    it('should preserve quarter hours', () => {
+      expect(formatHours(3.25)).toBe('3.25 hours');
     });
 
     it('should return "--" for null', () => {
@@ -195,7 +199,7 @@ describe('hourCalculations', () => {
     });
 
     it('should handle zero hours', () => {
-      expect(formatHours(0)).toBe('0.0 hours');
+      expect(formatHours(0)).toBe('0.00 hours');
     });
   });
 

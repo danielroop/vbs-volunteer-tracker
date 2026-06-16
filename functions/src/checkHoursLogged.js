@@ -55,22 +55,18 @@ function timestampToIso(value) {
 }
 
 function getHours(entry) {
-  if (typeof entry.hoursWorked === 'number') {
-    return entry.hoursWorked;
+  if (entry.checkInTime && entry.checkOutTime) {
+    const checkInMs = typeof entry.checkInTime.toMillis === 'function'
+      ? entry.checkInTime.toMillis()
+      : entry.checkInTime.seconds * 1000;
+    const checkOutMs = typeof entry.checkOutTime.toMillis === 'function'
+      ? entry.checkOutTime.toMillis()
+      : entry.checkOutTime.seconds * 1000;
+    const hours = (checkOutMs - checkInMs) / 1000 / 60 / 60;
+    return Math.round(hours * 4) / 4;
   }
 
-  if (!entry.checkInTime || !entry.checkOutTime) {
-    return 0;
-  }
-
-  const checkInMs = typeof entry.checkInTime.toMillis === 'function'
-    ? entry.checkInTime.toMillis()
-    : entry.checkInTime.seconds * 1000;
-  const checkOutMs = typeof entry.checkOutTime.toMillis === 'function'
-    ? entry.checkOutTime.toMillis()
-    : entry.checkOutTime.seconds * 1000;
-  const hours = (checkOutMs - checkInMs) / 1000 / 60 / 60;
-  return Math.round(hours * 4) / 4;
+  return typeof entry.hoursWorked === 'number' ? entry.hoursWorked : 0;
 }
 
 function publicStudentProfile(student, studentId) {

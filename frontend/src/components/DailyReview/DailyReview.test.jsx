@@ -70,6 +70,15 @@ vi.mock('../../contexts/EventContext', () => ({
 
 // Mock hourCalculations
 vi.mock('../../utils/hourCalculations', () => ({
+  calculateHours: (checkIn, checkOut) => {
+    const minutes = Math.floor((checkOut - checkIn) / 1000 / 60);
+    const hours = minutes / 60;
+    return {
+      rounded: Math.round(hours * 4) / 4,
+      raw: hours,
+      minutes
+    };
+  },
   formatTime: (date) => {
     if (!date) return '--';
     const d = new Date(date);
@@ -576,6 +585,32 @@ describe('DailyReview', () => {
 
       await waitFor(() => {
         expect(getDesktopRowNames()).toEqual(['Zephyr, Zoe', 'Adams, Amy']);
+      });
+    });
+
+    it('should calculate displayed hours from timestamps instead of stored half-hour values', async () => {
+      mockFirestoreData.students = [
+        { id: 'student1', firstName: 'Amy', lastName: 'Adams' }
+      ];
+      mockFirestoreData.timeEntries = [
+        {
+          id: 'entry1',
+          eventId: 'event123',
+          studentId: 'student1',
+          activityId: 'activity1',
+          date: '2026-01-31',
+          checkInTime: new Date('2026-01-31T08:00:00'),
+          checkOutTime: new Date('2026-01-31T11:15:00'),
+          hoursWorked: 3.5,
+          flags: []
+        }
+      ];
+
+      renderWithRouter(<DailyReview />);
+
+      await waitFor(() => {
+        const table = screen.getByRole('table', { name: 'Daily student activity review' });
+        expect(within(table).getByText('Hours: 3.25 hrs')).toBeInTheDocument();
       });
     });
   });

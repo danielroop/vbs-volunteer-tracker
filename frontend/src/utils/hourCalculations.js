@@ -1,11 +1,7 @@
 import { format, parse } from 'date-fns';
 
 /**
- * Calculate hours worked and round to nearest 0.5 hour
- * Per PRD Section 3.4.1:
- * - 0-14 minutes = round down
- * - 15-44 minutes = round to 0.5
- * - 45-59 minutes = round up to next hour
+ * Calculate hours worked and round to nearest 0.25 hour.
  *
  * @param {Date} checkIn - Check-in timestamp
  * @param {Date} checkOut - Check-out timestamp
@@ -15,11 +11,11 @@ export function calculateHours(checkIn, checkOut) {
   const minutes = Math.floor((checkOut - checkIn) / 1000 / 60);
   const hours = minutes / 60;
 
-  // Round to nearest 0.5
-  const rounded = Math.round(hours * 2) / 2;
+  // Round to nearest quarter hour to match student detail and reports.
+  const rounded = Math.round(hours * 4) / 4;
 
   return {
-    rounded,          // 6.5
+    rounded,          // 6.25
     raw: hours,       // 6.216666...
     minutes           // 373
   };
@@ -92,7 +88,7 @@ export function formatHours(hours) {
   if (hours === null || hours === undefined) {
     return '--';
   }
-  return `${hours.toFixed(1)} ${hours === 1 ? 'hour' : 'hours'}`;
+  return `${hours.toFixed(2)} ${hours === 1 ? 'hour' : 'hours'}`;
 }
 
 /**

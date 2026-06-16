@@ -4,7 +4,7 @@ import { db, functions } from '../../utils/firebase';
 import { collection, onSnapshot, query, where, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useEvent } from '../../contexts/EventContext';
-import { formatTime, formatHours, getTodayDateString, formatDate } from '../../utils/hourCalculations';
+import { calculateHours, formatTime, formatHours, getTodayDateString, formatDate } from '../../utils/hourCalculations';
 import { buildEditChangeDescription } from '../../utils/changeDescriptions';
 import { printInNewWindow, createPrintDocument } from '../../utils/printUtils';
 import Button from '../common/Button';
@@ -64,6 +64,14 @@ const compareStudentName = (leftStudent, rightStudent) => {
   const lastNameCompare = (leftStudent?.lastName || '').localeCompare(rightStudent?.lastName || '', undefined, { sensitivity: 'base' });
   if (lastNameCompare !== 0) return lastNameCompare;
   return (leftStudent?.firstName || '').localeCompare(rightStudent?.firstName || '', undefined, { sensitivity: 'base' });
+};
+
+const getCreditedHours = (entry) => {
+  if (entry?.checkInTime && entry?.checkOutTime) {
+    return calculateHours(new Date(entry.checkInTime), new Date(entry.checkOutTime)).rounded;
+  }
+
+  return entry?.hoursWorked ?? null;
 };
 
 /**
@@ -287,6 +295,7 @@ export default function DailyReview() {
   const entryRows = useMemo(() => {
     return timeEntries.map(entry => ({
       ...entry,
+      hoursWorked: getCreditedHours(entry),
       student: studentMap[entry.studentId] || { firstName: 'Unknown', lastName: 'Student' },
       activity: activityMap[entry.activityId] || { id: entry.activityId, name: 'Unknown Activity', endTime: '15:00' }
     }));
@@ -724,7 +733,7 @@ export default function DailyReview() {
       if (checkInTime && checkOutTime) {
         const minutes = Math.floor((checkOutTime - checkInTime) / 1000 / 60);
         rawMinutes = minutes;
-        hoursWorked = Math.round((minutes / 60) * 2) / 2; // Round to nearest 0.5
+        hoursWorked = calculateHours(checkInTime, checkOutTime).rounded;
       }
 
       // Build smart change description (only includes fields that actually changed)
@@ -1816,9 +1825,7 @@ export default function DailyReview() {
                     {(() => {
                       const checkIn = new Date(editModal.checkInTime);
                       const checkOut = new Date(editModal.checkOutTime);
-                      const minutes = Math.floor((checkOut - checkIn) / 1000 / 60);
-                      const hours = Math.round((minutes / 60) * 2) / 2;
-                      return formatHours(hours);
+                      return formatHours(calculateHours(checkIn, checkOut).rounded);
                     })()}
                   </span>
                 </p>

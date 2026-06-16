@@ -162,6 +162,33 @@ describe('checkHoursLogged Cloud Function', () => {
     expect(result.totalHours).toBe(5);
   });
 
+  it('calculates credited hours from timestamps before falling back to stored hoursWorked', async () => {
+    mockGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'entry1',
+          data: () => ({
+            studentId: 'student123',
+            eventId: 'event456',
+            activityId: 'work-hours',
+            date: '2026-06-15',
+            checkInTime: makeTimestamp('2026-06-15T09:00:00-04:00'),
+            checkOutTime: makeTimestamp('2026-06-15T12:15:00-04:00'),
+            hoursWorked: 3.5,
+            isVoided: false,
+          }),
+        },
+      ],
+    });
+
+    const result = await checkHoursLogged({
+      data: { qrData: generateQRData('student123', 'event456') },
+    });
+
+    expect(result.totalHours).toBe(3.25);
+    expect(result.events[0].entries[0].hours).toBe(3.25);
+  });
+
   it('rejects QR data with an invalid checksum', async () => {
     await expect(checkHoursLogged({
       data: { qrData: 'student123|event456|bad' },

@@ -16,51 +16,13 @@ import {
     writeBatch,
 } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
-import { generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
+import { generateFilledPdf, getEffectivePdfTemplate, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import PrintableBadge from '../components/common/PrintableBadge';
 import { GRADE_LEVEL_OPTIONS } from '../utils/grades';
-
-const normalizeTemplateText = (value = '') =>
-    value.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-const SCHOOL_TEMPLATE_ALIASES = [
-    { school: ['bishopmoore', 'bishopmoorecatholic'], template: ['bishopmoore'] },
-    { school: ['thefirstacademy', 'firstacademy', 'tfa'], template: ['thefirstacademy', 'firstacademy', 'tfa'] },
-];
-
-const findTemplateForSchool = (schoolName, templates) => {
-    const normalizedSchool = normalizeTemplateText(schoolName);
-    if (!normalizedSchool) return null;
-
-    const templateMatches = (template, values) => {
-        const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
-        return values.some(value => normalizedTemplate.includes(value));
-    };
-
-    const exactMatch = templates.find(template => {
-        const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
-        return normalizedTemplate &&
-            (normalizedTemplate.includes(normalizedSchool) || normalizedSchool.includes(normalizedTemplate));
-    });
-    if (exactMatch) return exactMatch;
-
-    const alias = SCHOOL_TEMPLATE_ALIASES.find(item =>
-        item.school.some(value => normalizedSchool.includes(value))
-    );
-    if (alias) {
-        const aliasMatch = templates.find(template => templateMatches(template, alias.template));
-        if (aliasMatch) return aliasMatch;
-    }
-
-    const ocpsTemplate = templates.find(template => templateMatches(template, ['ocps']));
-    if (ocpsTemplate) return ocpsTemplate;
-
-    return null;
-};
 
 export default function EventStudentsPage() {
     const { eventId: paramEventId } = useParams();
@@ -387,14 +349,7 @@ export default function EventStudentsPage() {
     };
 
     const getEffectiveTemplate = (student) => {
-        if (student.pdfTemplateId) {
-            return pdfTemplates.find(template => template.id === student.pdfTemplateId) || null;
-        }
-
-        const schoolTemplate = findTemplateForSchool(student.schoolName, pdfTemplates);
-        if (schoolTemplate) return schoolTemplate;
-
-        return defaultTemplateId ? pdfTemplates.find(template => template.id === defaultTemplateId) || null : null;
+        return getEffectivePdfTemplate(student, pdfTemplates, defaultTemplateId);
     };
 
     const handlePrintBadges = () => {

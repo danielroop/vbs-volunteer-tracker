@@ -70,6 +70,7 @@ describe('checkHoursLogged Cloud Function', () => {
           lastName: 'Smith',
           schoolName: 'Central High',
           gradeLevel: '10',
+          pdfTemplateId: 'central-template',
           email: 'private@example.com',
         }),
       }),
@@ -144,6 +145,7 @@ describe('checkHoursLogged Cloud Function', () => {
       schoolName: 'Central High',
       gradeLevel: '10',
       gradYear: '',
+      pdfTemplateId: 'central-template',
     });
     expect(result.student.email).toBeUndefined();
     expect(result.totalHours).toBe(5);

@@ -2,6 +2,55 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 const REPORT_TIME_ZONE = 'America/New_York';
 
+export const normalizeTemplateText = (value = '') =>
+  value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const SCHOOL_TEMPLATE_ALIASES = [
+  { school: ['bishopmoore', 'bishopmoorecatholic'], template: ['bishopmoore'] },
+  { school: ['thefirstacademy', 'firstacademy', 'tfa'], template: ['thefirstacademy', 'firstacademy', 'tfa'] },
+];
+
+export const findTemplateForSchool = (schoolName, templates = []) => {
+  const normalizedSchool = normalizeTemplateText(schoolName);
+  if (!normalizedSchool) return null;
+
+  const templateMatches = (template, values) => {
+    const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
+    return values.some(value => normalizedTemplate.includes(value));
+  };
+
+  const exactMatch = templates.find(template => {
+    const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
+    return normalizedTemplate &&
+      (normalizedTemplate.includes(normalizedSchool) || normalizedSchool.includes(normalizedTemplate));
+  });
+  if (exactMatch) return exactMatch;
+
+  const alias = SCHOOL_TEMPLATE_ALIASES.find(item =>
+    item.school.some(value => normalizedSchool.includes(value))
+  );
+  if (alias) {
+    const aliasMatch = templates.find(template => templateMatches(template, alias.template));
+    if (aliasMatch) return aliasMatch;
+  }
+
+  const ocpsTemplate = templates.find(template => templateMatches(template, ['ocps']));
+  if (ocpsTemplate) return ocpsTemplate;
+
+  return null;
+};
+
+export const getEffectivePdfTemplate = (student = {}, templates = [], defaultTemplateId = null) => {
+  if (student.pdfTemplateId) {
+    return templates.find(template => template.id === student.pdfTemplateId) || null;
+  }
+
+  const schoolTemplate = findTemplateForSchool(student.schoolName, templates);
+  if (schoolTemplate) return schoolTemplate;
+
+  return defaultTemplateId ? templates.find(template => template.id === defaultTemplateId) || null : null;
+};
+
 export function toDateValue(value) {
   if (!value) return null;
   if (value.toDate) return value.toDate();

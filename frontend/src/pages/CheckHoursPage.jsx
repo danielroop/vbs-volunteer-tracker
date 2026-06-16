@@ -1,10 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
-import { db, functions } from '../utils/firebase';
+import { functions } from '../utils/firebase';
 import useQRScanner from '../hooks/useQRScanner';
 import Spinner from '../components/common/Spinner';
-import { getEffectivePdfTemplate } from '../utils/pdfTemplateUtils';
 
 const qrReaderId = 'hours-qr-reader';
 
@@ -41,33 +39,12 @@ export default function CheckHoursPage() {
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [manualQrData, setManualQrData] = useState('');
   const [status, setStatus] = useState({ type: 'idle', message: '' });
-  const [pdfTemplates, setPdfTemplates] = useState([]);
-  const [defaultTemplateId, setDefaultTemplateId] = useState(null);
   const lookupInFlight = useRef(false);
-
-  useEffect(() => {
-    const unsubTemplates = onSnapshot(collection(db, 'pdfTemplates'), (snapshot) => {
-      setPdfTemplates(snapshot.docs.map((templateDoc) => ({ id: templateDoc.id, ...templateDoc.data() })));
-    });
-    const unsubDefaults = onSnapshot(doc(db, 'settings', 'pdfDefaults'), (snapshot) => {
-      setDefaultTemplateId(snapshot.exists() ? snapshot.data().defaultTemplateId : null);
-    });
-
-    return () => {
-      unsubTemplates();
-      unsubDefaults();
-    };
-  }, []);
 
   const selectedEvent = useMemo(() => {
     if (!lookup?.events?.length) return null;
     return lookup.events.find((event) => event.id === selectedEventId) || null;
   }, [lookup, selectedEventId]);
-
-  const effectiveTemplate = useMemo(() => {
-    if (!lookup?.student) return null;
-    return getEffectivePdfTemplate(lookup.student, pdfTemplates, defaultTemplateId);
-  }, [lookup, pdfTemplates, defaultTemplateId]);
 
   const loadHours = async (qrData) => {
     if (!qrData || lookupInFlight.current) return;
@@ -211,7 +188,7 @@ export default function CheckHoursPage() {
                     </div>
                     <div>
                       <dt className="font-bold text-gray-900">School Form</dt>
-                      <dd>{effectiveTemplate?.name || 'No form configured'}</dd>
+                      <dd>{lookup.schoolForm?.name || 'No form configured'}</dd>
                     </div>
                   </dl>
                 </div>

@@ -21,8 +21,10 @@ const makeTimestamp = (iso) => ({
 const mockCollection = jest.fn();
 const mockStudentDoc = jest.fn();
 const mockEventDoc = jest.fn();
+const mockSettingsDoc = jest.fn();
 const mockWhere = jest.fn();
 const mockGet = jest.fn();
+const mockTemplatesGet = jest.fn();
 
 jest.unstable_mockModule('firebase-admin/firestore', () => ({
   getFirestore: () => ({
@@ -58,6 +60,12 @@ describe('checkHoursLogged Cloud Function', () => {
       if (name === 'events') {
         return { doc: mockEventDoc };
       }
+      if (name === 'pdfTemplates') {
+        return { get: mockTemplatesGet };
+      }
+      if (name === 'settings') {
+        return { doc: mockSettingsDoc };
+      }
       return { where: mockWhere };
     });
 
@@ -88,6 +96,24 @@ describe('checkHoursLogged Cloud Function', () => {
     }));
 
     mockWhere.mockReturnValue({ get: mockGet });
+    mockTemplatesGet.mockResolvedValue({
+      docs: [
+        {
+          id: 'central-template',
+          data: () => ({ name: 'Central High School Form', fileName: 'central.pdf' }),
+        },
+        {
+          id: 'default-template',
+          data: () => ({ name: 'Default School Form', fileName: 'default.pdf' }),
+        },
+      ],
+    });
+    mockSettingsDoc.mockReturnValue({
+      get: jest.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({ defaultTemplateId: 'default-template' }),
+      }),
+    });
     mockGet.mockResolvedValue({
       docs: [
         {
@@ -145,7 +171,11 @@ describe('checkHoursLogged Cloud Function', () => {
       schoolName: 'Central High',
       gradeLevel: '10',
       gradYear: '',
-      pdfTemplateId: 'central-template',
+    });
+    expect(result.schoolForm).toEqual({
+      id: 'central-template',
+      name: 'Central High School Form',
+      fileName: 'central.pdf',
     });
     expect(result.student.email).toBeUndefined();
     expect(result.totalHours).toBe(5);
@@ -162,6 +192,31 @@ describe('checkHoursLogged Cloud Function', () => {
     expect(result.scannedEventId).toBeNull();
     expect(result.student.fullName).toBe('Jane Smith');
     expect(result.totalHours).toBe(5);
+  });
+
+  it('falls back to the default school form when no student or school template matches', async () => {
+    mockStudentDoc.mockReturnValueOnce({
+      get: jest.fn().mockResolvedValue({
+        id: 'student123',
+        exists: true,
+        data: () => ({
+          firstName: 'Jane',
+          lastName: 'Smith',
+          schoolName: 'Unknown Academy',
+          gradeLevel: '10',
+        }),
+      }),
+    });
+
+    const result = await checkHoursLogged({
+      data: { qrData: 'student123' },
+    });
+
+    expect(result.schoolForm).toEqual({
+      id: 'default-template',
+      name: 'Default School Form',
+      fileName: 'default.pdf',
+    });
   });
 
   it('calculates credited hours from timestamps before falling back to stored hoursWorked', async () => {

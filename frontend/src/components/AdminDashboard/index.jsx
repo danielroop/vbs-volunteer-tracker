@@ -1,104 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'; //
 import { db } from '../../utils/firebase'; //
 import { collection, onSnapshot } from 'firebase/firestore'; //
+import { Link } from 'react-router-dom';
+import ActivityFeedList from '../ActivityFeed/ActivityFeedList';
 import { useEvent } from '../../contexts/EventContext'; // Add this
 import { useTimeEntries } from '../../hooks/useTimeEntries'; // Add this
-
-const convertToDate = (timeValue) => {
-  if (!timeValue) return null;
-  if (timeValue instanceof Date) return timeValue;
-  if (typeof timeValue.toDate === 'function') return timeValue.toDate();
-  return new Date(timeValue);
-};
-
-const formatActivityTime = (timeValue) => {
-  const date = convertToDate(timeValue);
-  return date && !Number.isNaN(date.getTime()) ? date.toLocaleTimeString() : '--';
-};
-
-const getMethodLabel = (method) => {
-  if (method === 'manual') return 'manual';
-  if (method === 'self_scan') return 'self-scan';
-  if (method === 'av_scan') return 'AV scan';
-  return 'scan';
-};
-
-const getChangeTypeLabel = (type) => {
-  switch (type) {
-    case 'void':
-      return 'Voided';
-    case 'restore':
-      return 'Restored';
-    case 'force_checkout':
-    case 'bulk_force_checkout':
-      return 'Forced Check-Out';
-    case 'edit':
-    default:
-      return 'Modified';
-  }
-};
-
-const buildRecentActivityItems = (timeEntries, studentNameMap, activityNameMap) => {
-  return timeEntries
-    .flatMap(entry => {
-      const studentName = studentNameMap[entry.studentId] || 'Student';
-      const activityName = activityNameMap[entry.activityId] || 'Activity';
-      const items = [];
-      const isManualEntry = entry.entry_source === 'manual' || (
-        entry.checkInMethod === 'manual' && entry.checkOutMethod === 'manual'
-      );
-
-      if (isManualEntry) {
-        const actionTime = convertToDate(entry.modifiedAt || entry.createdAt || entry.checkInTime);
-        items.push({
-          id: `${entry.id}-manual-entry`,
-          studentName,
-          actionLabel: 'Manual Entry',
-          detail: `${activityName} logged`,
-          actionTime,
-          sortTime: actionTime?.getTime() || 0
-        });
-      } else if (entry.checkInTime) {
-        const actionTime = convertToDate(entry.checkInTime);
-        items.push({
-          id: `${entry.id}-check-in`,
-          studentName,
-          actionLabel: 'Check-In',
-          detail: `${activityName} via ${getMethodLabel(entry.checkInMethod)}`,
-          actionTime,
-          sortTime: actionTime?.getTime() || 0
-        });
-      }
-
-      if (!isManualEntry && entry.checkOutTime) {
-        const actionTime = convertToDate(entry.checkOutTime);
-        items.push({
-          id: `${entry.id}-check-out`,
-          studentName,
-          actionLabel: 'Check-Out',
-          detail: `${activityName} via ${getMethodLabel(entry.checkOutMethod)}`,
-          actionTime,
-          sortTime: actionTime?.getTime() || 0
-        });
-      }
-
-      (entry.changeLog || []).forEach((change, index) => {
-        const actionTime = convertToDate(change.timestamp);
-        items.push({
-          id: `${entry.id}-change-${index}`,
-          studentName,
-          actionLabel: getChangeTypeLabel(change.type),
-          detail: change.description || activityName,
-          actionTime,
-          sortTime: actionTime?.getTime() || 0
-        });
-      });
-
-      return items;
-    })
-    .sort((a, b) => b.sortTime - a.sortTime)
-    .slice(0, 5);
-};
+import { buildActivityItems, convertToDate } from '../../utils/activityFeed';
 
 /**
  * Admin Dashboard Component
@@ -134,7 +41,7 @@ export default function AdminDashboard() {
   }, [currentEvent?.activities]);
 
   const recentActivityItems = useMemo(() => (
-    buildRecentActivityItems(timeEntries, studentNameMap, activityNameMap)
+    buildActivityItems(timeEntries, studentNameMap, activityNameMap, 5)
   ), [timeEntries, studentNameMap, activityNameMap]);
 
 
@@ -215,25 +122,13 @@ export default function AdminDashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold mb-2">🔔 Recent Activity</h3>
-            {recentActivityItems.length > 0 ? (
-              recentActivityItems.map(item => (
-                <div key={item.id} className="text-sm border-b py-2">
-                  <div className="flex justify-between gap-3">
-                    <span className="font-bold text-gray-800">{item.studentName}</span>
-                    <span className="text-gray-500 whitespace-nowrap">
-                      {formatActivityTime(item.actionTime)}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex justify-between gap-3 text-xs">
-                    <span className="font-semibold text-gray-700">{item.actionLabel}</span>
-                    <span className="text-gray-500 text-right">{item.detail}</span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-sm">No recent activity</p>
-            )}
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="text-lg font-semibold">🔔 Recent Activity</h3>
+              <Link to="/admin/activity" className="text-xs font-black text-primary-700 hover:text-primary-800">
+                View all
+              </Link>
+            </div>
+            <ActivityFeedList items={recentActivityItems} />
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">

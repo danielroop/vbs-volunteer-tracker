@@ -13,6 +13,26 @@ vi.mock('firebase/storage', () => ({
 
 vi.mock('../utils/pdfTemplateUtils', () => ({
     generateFilledPdf: vi.fn(() => Promise.resolve(new Uint8Array([1, 2, 3]))),
+    getEffectivePdfTemplate: vi.fn((student = {}, templates = [], defaultTemplateId = null) => {
+        if (student.pdfTemplateId) {
+            return templates.find(template => template.id === student.pdfTemplateId) || null;
+        }
+
+        const normalizedSchool = (student.schoolName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const schoolTemplate = templates.find(template => {
+            const normalizedTemplate = `${template.name || ''} ${template.fileName || ''}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return normalizedTemplate &&
+                (normalizedTemplate.includes(normalizedSchool) || normalizedSchool.includes(normalizedTemplate));
+        });
+        if (schoolTemplate) return schoolTemplate;
+
+        const ocpsTemplate = templates.find(template =>
+            `${template.name || ''} ${template.fileName || ''}`.toLowerCase().replace(/[^a-z0-9]/g, '').includes('ocps')
+        );
+        if (ocpsTemplate) return ocpsTemplate;
+
+        return defaultTemplateId ? templates.find(template => template.id === defaultTemplateId) || null : null;
+    }),
     mergePdfs: vi.fn((arr) => Promise.resolve(arr[0] || new Uint8Array([1, 2, 3]))),
     openPdfForPrinting: vi.fn(),
 }));

@@ -3,21 +3,13 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import CheckHoursPage from './CheckHoursPage';
 
 const mockCheckHoursLogged = vi.fn();
-const mockOnSnapshot = vi.fn();
 
 vi.mock('../utils/firebase', () => ({
-  db: {},
   functions: {},
 }));
 
 vi.mock('firebase/functions', () => ({
   httpsCallable: vi.fn(() => mockCheckHoursLogged),
-}));
-
-vi.mock('firebase/firestore', () => ({
-  collection: vi.fn((db, name) => ({ type: 'collection', name })),
-  doc: vi.fn((db, collectionName, id) => ({ type: 'doc', collectionName, id })),
-  onSnapshot: (...args) => mockOnSnapshot(...args),
 }));
 
 vi.mock('html5-qrcode', () => ({
@@ -32,28 +24,6 @@ vi.mock('html5-qrcode', () => ({
 describe('CheckHoursPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOnSnapshot.mockImplementation((ref, callback) => {
-      if (ref.type === 'collection' && ref.name === 'pdfTemplates') {
-        callback({
-          docs: [
-            {
-              id: 'central-template',
-              data: () => ({ name: 'Central High School Form', fileName: 'central.pdf' }),
-            },
-            {
-              id: 'default-template',
-              data: () => ({ name: 'Default School Form', fileName: 'default.pdf' }),
-            },
-          ],
-        });
-      } else {
-        callback({
-          exists: () => true,
-          data: () => ({ defaultTemplateId: 'default-template' }),
-        });
-      }
-      return vi.fn();
-    });
     mockCheckHoursLogged.mockResolvedValue({
       data: {
         success: true,
@@ -65,8 +35,8 @@ describe('CheckHoursPage', () => {
           fullName: 'Jane Smith',
           schoolName: 'Central High',
           gradeLevel: '10',
-          pdfTemplateId: '',
         },
+        schoolForm: { id: 'central-template', name: 'Central High School Form' },
         totalHours: 5,
         events: [
           {
@@ -128,7 +98,7 @@ describe('CheckHoursPage', () => {
     expect(screen.getByText('Central High School Form')).toBeInTheDocument();
   });
 
-  it('shows the assigned school form when the student has a template override', async () => {
+  it('shows a fallback when no school form is configured', async () => {
     mockCheckHoursLogged.mockResolvedValueOnce({
       data: {
         success: true,
@@ -140,8 +110,8 @@ describe('CheckHoursPage', () => {
           fullName: 'Jane Smith',
           schoolName: 'Central High',
           gradeLevel: '10',
-          pdfTemplateId: 'default-template',
         },
+        schoolForm: null,
         totalHours: 0,
         events: [],
       },
@@ -159,7 +129,7 @@ describe('CheckHoursPage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Default School Form')).toBeInTheDocument();
+      expect(screen.getByText('No form configured')).toBeInTheDocument();
     });
   });
 

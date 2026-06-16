@@ -69,6 +69,74 @@ function getHours(entry) {
   return typeof entry.hoursWorked === 'number' ? entry.hoursWorked : 0;
 }
 
+function normalizeTemplateText(value = '') {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+const SCHOOL_TEMPLATE_ALIASES = [
+  { school: ['bishopmoore', 'bishopmoorecatholic'], template: ['bishopmoore'] },
+  { school: ['thefirstacademy', 'firstacademy', 'tfa'], template: ['thefirstacademy', 'firstacademy', 'tfa'] },
+];
+
+function findTemplateForSchool(schoolName, templates = []) {
+  const normalizedSchool = normalizeTemplateText(schoolName);
+  if (!normalizedSchool) return null;
+
+  const templateMatches = (template, values) => {
+    const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
+    return values.some((value) => normalizedTemplate.includes(value));
+  };
+
+  const exactMatch = templates.find((template) => {
+    const normalizedTemplate = normalizeTemplateText(`${template.name || ''} ${template.fileName || ''}`);
+    return normalizedTemplate &&
+      (normalizedTemplate.includes(normalizedSchool) || normalizedSchool.includes(normalizedTemplate));
+  });
+  if (exactMatch) return exactMatch;
+
+  const alias = SCHOOL_TEMPLATE_ALIASES.find((item) =>
+    item.school.some((value) => normalizedSchool.includes(value))
+  );
+  if (alias) {
+    const aliasMatch = templates.find((template) => templateMatches(template, alias.template));
+    if (aliasMatch) return aliasMatch;
+  }
+
+  const ocpsTemplate = templates.find((template) => templateMatches(template, ['ocps']));
+  if (ocpsTemplate) return ocpsTemplate;
+
+  return null;
+}
+
+function getEffectivePdfTemplate(student = {}, templates = [], defaultTemplateId = null) {
+  if (student.pdfTemplateId) {
+    return templates.find((template) => template.id === student.pdfTemplateId) || null;
+  }
+
+  const schoolTemplate = findTemplateForSchool(student.schoolName, templates);
+  if (schoolTemplate) return schoolTemplate;
+
+  return defaultTemplateId ? templates.find((template) => template.id === defaultTemplateId) || null : null;
+}
+
+async function getSchoolFormForStudent(db, student) {
+  const [templatesSnap, defaultsSnap] = await Promise.all([
+    db.collection('pdfTemplates').get(),
+    db.collection('settings').doc('pdfDefaults').get(),
+  ]);
+  const templates = templatesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const defaultTemplateId = defaultsSnap.exists ? defaultsSnap.data().defaultTemplateId : null;
+  const template = getEffectivePdfTemplate(student, templates, defaultTemplateId);
+
+  return template
+    ? {
+        id: template.id,
+        name: template.name || template.fileName || template.id,
+        fileName: template.fileName || '',
+      }
+    : null;
+}
+
 function publicStudentProfile(student, studentId) {
   return {
     id: studentId,
@@ -78,7 +146,6 @@ function publicStudentProfile(student, studentId) {
     schoolName: student.schoolName || '',
     gradeLevel: student.gradeLevel || '',
     gradYear: student.gradYear || '',
-    pdfTemplateId: student.pdfTemplateId || '',
   };
 }
 
@@ -104,6 +171,7 @@ export const checkHoursLogged = onCall({ cors: true }, async (request) => {
     if (!studentDoc.exists) {
       throw new HttpsError('not-found', 'Student not found');
     }
+    const student = studentDoc.data();
 
     const entriesSnap = await db.collection('timeEntries')
       .where('studentId', '==', parsed.studentId)
@@ -153,7 +221,8 @@ export const checkHoursLogged = onCall({ cors: true }, async (request) => {
     return {
       success: true,
       scannedEventId: parsed.eventId,
-      student: publicStudentProfile(studentDoc.data(), studentDoc.id),
+      student: publicStudentProfile(student, studentDoc.id),
+      schoolForm: await getSchoolFormForStudent(db, student),
       events,
       totalHours: events.reduce((sum, event) => sum + event.totalHours, 0),
     };

@@ -317,7 +317,7 @@ describe('EventStudentsPage', () => {
         expect(screen.getByText('Add New Student')).toBeInTheDocument();
     });
 
-    it('allows selecting grades from Kindergarten through 12th in Add Student modal', async () => {
+    it('allows selecting grades from Kindergarten through College in Add Student modal', async () => {
         renderPage();
         await waitFor(() => screen.getByRole('button', { name: /\+ Add Student/i }));
         fireEvent.click(screen.getByRole('button', { name: /\+ Add Student/i }));
@@ -325,6 +325,7 @@ describe('EventStudentsPage', () => {
         const gradeSelect = screen.getAllByRole('combobox')[0];
         expect(within(gradeSelect).getByRole('option', { name: 'Kindergarten' })).toHaveValue('K');
         expect(within(gradeSelect).getByRole('option', { name: '12th Grade' })).toHaveValue('12');
+        expect(within(gradeSelect).getByRole('option', { name: 'College' })).toHaveValue('College');
     });
 
     it('opens Import modal on button click', async () => {

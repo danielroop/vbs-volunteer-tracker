@@ -4,6 +4,7 @@ export const GRADE_LEVEL_OPTIONS = [
     const grade = String(index + 1);
     return { value: grade, label: `${grade}${getOrdinalSuffix(index + 1)} Grade` };
   }),
+  { value: 'College', label: 'College' },
 ];
 
 function getOrdinalSuffix(grade) {

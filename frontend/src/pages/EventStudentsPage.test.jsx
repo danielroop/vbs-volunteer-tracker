@@ -12,6 +12,7 @@ vi.mock('firebase/storage', () => ({
 }));
 
 vi.mock('../utils/pdfTemplateUtils', () => ({
+    formatActivityDateRanges: vi.fn((dates = []) => dates.join(', ')),
     generateFilledPdf: vi.fn(() => Promise.resolve(new Uint8Array([1, 2, 3]))),
     getEffectivePdfTemplate: vi.fn((student = {}, templates = [], defaultTemplateId = null) => {
         if (student.pdfTemplateId) {

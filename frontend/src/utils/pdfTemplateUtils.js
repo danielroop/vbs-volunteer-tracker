@@ -93,6 +93,70 @@ function formatDateForReport(date) {
   }).format(date);
 }
 
+function parseDateOnlyParts(dateString) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString || '');
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function dateOnlyUtcMs(dateString) {
+  const parts = parseDateOnlyParts(dateString);
+  return parts ? Date.UTC(parts.year, parts.month - 1, parts.day) : Number.NaN;
+}
+
+function formatDateOnlyForActivity(dateString, includeYear = false) {
+  const parts = parseDateOnlyParts(dateString);
+  if (!parts) return '';
+  const monthDay = `${parts.month}/${parts.day}`;
+  return includeYear ? `${monthDay}/${String(parts.year).slice(-2)}` : monthDay;
+}
+
+export function formatActivityDateRanges(dateStrings = [], { includeYear = false } = {}) {
+  const uniqueDates = [...new Set(dateStrings)]
+    .filter(dateString => Number.isFinite(dateOnlyUtcMs(dateString)))
+    .sort();
+
+  if (uniqueDates.length === 0) return '';
+
+  const groups = [];
+  let currentGroup = [uniqueDates[0]];
+
+  for (let i = 1; i < uniqueDates.length; i += 1) {
+    const prevMs = dateOnlyUtcMs(uniqueDates[i - 1]);
+    const currMs = dateOnlyUtcMs(uniqueDates[i]);
+    const diffDays = (currMs - prevMs) / (1000 * 60 * 60 * 24);
+
+    if (diffDays === 1) {
+      currentGroup.push(uniqueDates[i]);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [uniqueDates[i]];
+    }
+  }
+  groups.push(currentGroup);
+
+  return groups.map(group => {
+    const start = formatDateOnlyForActivity(group[0], includeYear);
+    const end = formatDateOnlyForActivity(group[group.length - 1], includeYear);
+    return group.length > 1 ? `${start}-${end}` : start;
+  }).join(', ');
+}
+
+export function getFittingFontSize({ text, font, fontSize, maxWidth, minFontSize = 6 }) {
+  if (!text || !font || !maxWidth || maxWidth <= 0) return fontSize;
+  if (font.widthOfTextAtSize(text, fontSize) <= maxWidth) return fontSize;
+
+  const widthAtOnePoint = font.widthOfTextAtSize(text, 1);
+  if (!widthAtOnePoint) return fontSize;
+
+  const fitted = maxWidth / widthAtOnePoint;
+  return Math.max(minFontSize, Math.min(fontSize, fitted));
+}
+
 function formatTimeForReport(date) {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: REPORT_TIME_ZONE,
@@ -147,7 +211,7 @@ export const FIELD_KEY_OPTIONS = [
  */
 export const ACTIVITY_COLUMN_OPTIONS = [
   { key: 'activityOrg', label: 'Organization + Activity', preview: 'First Baptist VBS AM' },
-  { key: 'activityDates', label: 'Date(s) of Service', preview: '6/9/26 - 6/13/26' },
+  { key: 'activityDates', label: 'Date(s) of Service', preview: '6/9-6/13' },
   { key: 'activityContact', label: 'Contact Name', preview: 'Jane Smith' },
   { key: 'activityHours', label: 'Hours Completed', preview: '12.50' },
 ];
@@ -317,17 +381,21 @@ export async function generateFilledPdf(templatePdfBytes, fields, data) {
         (field.columns || []).forEach((col) => {
           const x = (col.xPercent / 100) * width;
           const colFontSize = col.fontSize || 10;
-          // Shift baseline down by ascent so top of text aligns with yPercent
-          const y = height - (rowYPct / 100) * height - (colFontSize * ASCENT_RATIO);
+          const maxWidth = col.maxWidth ? (col.maxWidth / 100) * width : undefined;
           const value = String(resolveActivityColumnValue(col.type === 'customText' ? col : col.key, activity, data.event));
+          const drawFontSize = col.key === 'activityDates'
+            ? getFittingFontSize({ text: value, font, fontSize: colFontSize, maxWidth })
+            : colFontSize;
+          // Shift baseline down by ascent so top of text aligns with yPercent
+          const y = height - (rowYPct / 100) * height - (drawFontSize * ASCENT_RATIO);
 
           page.drawText(value, {
             x,
             y,
-            size: colFontSize,
+            size: drawFontSize,
             font,
             color: rgb(0, 0, 0),
-            maxWidth: col.maxWidth ? (col.maxWidth / 100) * width : undefined,
+            maxWidth,
           });
         });
       });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import StudentDetailPage from './StudentDetailPage';
@@ -209,6 +209,20 @@ describe('StudentDetailPage', () => {
         expect(screen.getByRole('button', { name: /Print Service Log/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Print Badge/i })).toBeInTheDocument();
       });
+    });
+
+    it('should include College in the edit student grade options', async () => {
+      const user = userEvent.setup();
+      renderWithRouter();
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Edit Student/i })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Edit Student/i }));
+
+      const gradeSelect = screen.getByRole('combobox');
+      expect(within(gradeSelect).getByRole('option', { name: 'College' })).toHaveValue('College');
     });
 
     it('should render time entries table or service log', async () => {

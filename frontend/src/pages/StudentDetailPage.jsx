@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { formatTime, formatHours } from '../utils/hourCalculations';
-import { generateFilledPdf, openPdfForPrinting } from '../utils/pdfTemplateUtils';
+import { formatActivityDateRanges, generateFilledPdf, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 
 import { db, functions, storage } from '../utils/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy, Timestamp, updateDoc, getDocs } from 'firebase/firestore';
@@ -204,26 +204,7 @@ export default function StudentDetailPage() {
                 new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(e.checkInTime.toDate())
             ))].sort();
 
-            // 2. Identify consecutive groups
-            const groups = [];
-            if (uniqueDates.length > 0) {
-                let currentGroup = [uniqueDates[0]];
-                for (let i = 1; i < uniqueDates.length; i++) {
-                    const prev = new Date(uniqueDates[i - 1]);
-                    const curr = new Date(uniqueDates[i]);
-                    const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
-
-                    if (diffDays === 1) {
-                        currentGroup.push(uniqueDates[i]);
-                    } else {
-                        groups.push(currentGroup);
-                        currentGroup = [uniqueDates[i]];
-                    }
-                }
-                groups.push(currentGroup);
-            }
-
-            // 3. Default Checkout Times to end of Activity if one is missing
+            // 2. Default Checkout Times to end of Activity if one is missing
             const updatedActivityEntries = activityEntries.map(entry => {
                 // Check if checkoutTime is missing, null, or undefined
                 if (!entry.checkOutTime) {
@@ -242,17 +223,6 @@ export default function StudentDetailPage() {
                 return entry;
             });
 
-            // 4. Format strings like "1/1/26 - 1/3/26, 1/5/26"
-            // Use UTC methods since uniqueDates are YYYY-MM-DD strings parsed as midnight UTC
-            const dateStrings = groups.map(group => {
-                const start = new Date(group[0]);
-                const end = new Date(group[group.length - 1]);
-                const startStr = `${start.getUTCMonth() + 1}/${start.getUTCDate()}/${start.getUTCFullYear().toString().slice(-2)}`;
-                const endStr = `${end.getUTCMonth() + 1}/${end.getUTCDate()}/${end.getUTCFullYear().toString().slice(-2)}`;
-
-                return group.length > 1 ? `${startStr} - ${endStr}` : startStr;
-            });
-
             const totalHours = updatedActivityEntries.reduce((acc, entry) => {
                 // Only Count the Hours if not defaulted                 
                 if (entry.isDefaulted) return acc;
@@ -263,7 +233,7 @@ export default function StudentDetailPage() {
 
             return {
                 name: activity.name,
-                dateDisplay: dateStrings.join(', '),
+                dateDisplay: formatActivityDateRanges(uniqueDates),
                 sortDate: uniqueDates[0],
                 totalHours: totalHours.toFixed(2)
             };

@@ -13,8 +13,10 @@ import {
   openPdfForPrinting,
   downloadPdf,
   getPdfPageDimensions,
+  formatActivityDateRanges,
+  getFittingFontSize,
 } from './pdfTemplateUtils';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 
 describe('pdfTemplateUtils', () => {
   describe('FIELD_KEY_OPTIONS', () => {
@@ -257,6 +259,64 @@ describe('pdfTemplateUtils', () => {
     it('should handle missing activity data', () => {
       expect(resolveActivityColumnValue('activityDates', {}, mockEvent)).toBe('');
       expect(resolveActivityColumnValue('activityHours', {}, mockEvent)).toBe('0');
+    });
+  });
+
+  describe('formatActivityDateRanges', () => {
+    it('should format a single date without the year by default', () => {
+      expect(formatActivityDateRanges(['2026-06-09'])).toBe('6/9');
+    });
+
+    it('should compact multiple consecutive dates into a range', () => {
+      expect(formatActivityDateRanges([
+        '2026-06-09',
+        '2026-06-10',
+        '2026-06-11',
+        '2026-06-12',
+      ])).toBe('6/9-6/12');
+    });
+
+    it('should compact mixed consecutive and non-consecutive dates', () => {
+      expect(formatActivityDateRanges([
+        '2026-06-13',
+        '2026-06-10',
+        '2026-06-09',
+        '2026-06-11',
+        '2026-06-13',
+      ])).toBe('6/9-6/11, 6/13');
+    });
+
+    it('should include years when requested', () => {
+      expect(formatActivityDateRanges(['2026-06-09', '2026-06-10'], { includeYear: true })).toBe('6/9/26-6/10/26');
+    });
+  });
+
+  describe('getFittingFontSize', () => {
+    it('should preserve the configured font size when text fits', async () => {
+      const pdfDoc = await PDFDocument.create();
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      expect(getFittingFontSize({
+        text: '6/9',
+        font,
+        fontSize: 10,
+        maxWidth: 80,
+      })).toBe(10);
+    });
+
+    it('should shrink long date text that exceeds the available column width', async () => {
+      const pdfDoc = await PDFDocument.create();
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      const fitted = getFittingFontSize({
+        text: '6/9-6/11, 6/13, 6/15-6/19',
+        font,
+        fontSize: 10,
+        maxWidth: 100,
+      });
+
+      expect(fitted).toBeLessThan(10);
+      expect(font.widthOfTextAtSize('6/9-6/11, 6/13, 6/15-6/19', fitted)).toBeLessThanOrEqual(100.001);
     });
   });
 

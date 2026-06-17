@@ -16,7 +16,7 @@ import {
     writeBatch,
 } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
-import { generateFilledPdf, getEffectivePdfTemplate, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
+import { formatActivityDateRanges, generateFilledPdf, getEffectivePdfTemplate, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
@@ -338,10 +338,7 @@ export default function EventStudentsPage() {
 
             return {
                 name: activity.name,
-                dateDisplay: uniqueDates.map(date => {
-                    const parsed = new Date(date);
-                    return `${parsed.getUTCMonth() + 1}/${parsed.getUTCDate()}/${parsed.getUTCFullYear().toString().slice(-2)}`;
-                }).join(', '),
+                dateDisplay: formatActivityDateRanges(uniqueDates),
                 sortDate: uniqueDates[0],
                 totalHours: totalHours.toFixed(2)
             };

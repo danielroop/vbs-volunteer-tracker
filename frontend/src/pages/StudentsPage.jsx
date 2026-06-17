@@ -4,7 +4,7 @@ import { printInNewWindow, createPrintDocument } from '../utils/printUtils';
 import { db, storage } from '../utils/firebase';
 import { collection, onSnapshot, addDoc, serverTimestamp, query, where, doc, updateDoc } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
-import { generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
+import { formatActivityDateRanges, generateFilledPdf, mergePdfs, openPdfForPrinting } from '../utils/pdfTemplateUtils';
 import { useEvent } from '../contexts/EventContext';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
@@ -199,35 +199,6 @@ export default function StudentsPage() {
         new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(e.checkInTime.toDate())
       ))].sort();
 
-      // Identify consecutive groups
-      const groups = [];
-      if (uniqueDates.length > 0) {
-        let currentGroup = [uniqueDates[0]];
-        for (let i = 1; i < uniqueDates.length; i++) {
-          const prev = new Date(uniqueDates[i - 1]);
-          const curr = new Date(uniqueDates[i]);
-          const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
-
-          if (diffDays === 1) {
-            currentGroup.push(uniqueDates[i]);
-          } else {
-            groups.push(currentGroup);
-            currentGroup = [uniqueDates[i]];
-          }
-        }
-        groups.push(currentGroup);
-      }
-
-      // Format strings like "1/1/26 - 1/3/26, 1/5/26"
-      const dateStrings = groups.map(group => {
-        const start = new Date(group[0]);
-        const end = new Date(group[group.length - 1]);
-        const startStr = `${start.getUTCMonth() + 1}/${start.getUTCDate()}/${start.getUTCFullYear().toString().slice(-2)}`;
-        const endStr = `${end.getUTCMonth() + 1}/${end.getUTCDate()}/${end.getUTCFullYear().toString().slice(-2)}`;
-
-        return group.length > 1 ? `${startStr} - ${endStr}` : startStr;
-      });
-
       const totalHours = activityEntries.reduce((acc, entry) => {
         const diff = (entry.checkOutTime.seconds - entry.checkInTime.seconds) / 3600;
         return acc + roundTime(diff);
@@ -235,7 +206,7 @@ export default function StudentsPage() {
 
       return {
         name: activity.name,
-        dateDisplay: dateStrings.join(', '),
+        dateDisplay: formatActivityDateRanges(uniqueDates),
         sortDate: uniqueDates[0],
         totalHours: totalHours.toFixed(2)
       };

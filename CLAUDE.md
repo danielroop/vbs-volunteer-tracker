@@ -14,6 +14,14 @@ This is a web-based volunteer hour tracking system for VBS (Vacation Bible Schoo
 > **Git Workflow**: ALWAYS create a new branch and open a PR for any code changes. Never commit directly to `main`.
 > When committing work tied to a known issue, include the "resolves" issue number or identifier in the commit message.
 
+### "Implement {Issue}" Workflow
+When the user asks to `Implement {Issue}`:
+1. Switch to `main`.
+2. Look up the details for `{Issue}`.
+3. Create a new branch with a name appropriate for the issue.
+4. Ask any clarifying questions about the requirements before coding.
+5. Implement a draft of the issue.
+
 > [!IMPORTANT]
 > **Testing Requirement**: New implementations must **ALWAYS** run unit tests, write new unit tests, and write E2E tests.
 

@@ -820,7 +820,7 @@ describe('DailyReview Accessibility', () => {
       renderWithRouter(<DailyReview />);
 
       const headers = screen.getAllByRole('columnheader');
-      expect(headers).toHaveLength(4); // Date, Name, Activity Details, Actions
+      expect(headers).toHaveLength(5); // Checkbox, Date, Name, Activity Details, Actions
       headers.forEach(header => {
         expect(header).toHaveAttribute('scope', 'col');
       });
@@ -833,6 +833,179 @@ describe('DailyReview Accessibility', () => {
 
       const mobileList = screen.getByRole('list', { name: 'Daily student activity review' });
       expect(mobileList).toBeInTheDocument();
+    });
+  });
+});
+
+describe('DailyReview Bulk Selection', () => {
+  const setupTwoStudentData = () => {
+    // Use single activity so entry count is predictable (2 students = 2 entries)
+    mockCurrentEvent.activities = [
+      { id: 'activity1', name: 'Morning Session', startTime: '08:00', endTime: '12:00' }
+    ];
+    mockFirestoreData.students = [
+      { id: 'student1', firstName: 'Alice', lastName: 'Adams' },
+      { id: 'student2', firstName: 'Bob', lastName: 'Brown' }
+    ];
+    mockFirestoreData.eventStudents = [
+      { id: 'es1', eventId: 'event123', studentId: 'student1' },
+      { id: 'es2', eventId: 'event123', studentId: 'student2' }
+    ];
+    mockFirestoreData.timeEntries = [
+      {
+        id: 'entry1',
+        eventId: 'event123',
+        studentId: 'student1',
+        activityId: 'activity1',
+        date: '2026-01-31',
+        checkInTime: new Date('2026-01-31T08:00:00'),
+        checkOutTime: null,
+        hoursWorked: null,
+        flags: []
+      },
+      {
+        id: 'entry2',
+        eventId: 'event123',
+        studentId: 'student2',
+        activityId: 'activity1',
+        date: '2026-01-31',
+        checkInTime: new Date('2026-01-31T08:00:00'),
+        checkOutTime: null,
+        hoursWorked: null,
+        flags: []
+      }
+    ];
+  };
+
+  it('should render checkboxes for each entry row in desktop table', async () => {
+    setupTwoStudentData();
+    renderWithRouter(<DailyReview />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    // One select-all + two entry checkboxes (desktop) + two entry checkboxes (mobile) = 5
+    expect(checkboxes.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('should show bulk action toolbar when an entry is selected', async () => {
+    const user = userEvent.setup();
+    setupTwoStudentData();
+    renderWithRouter(<DailyReview />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const entryCheckboxes = screen.getAllByRole('checkbox').filter(
+      cb => cb.getAttribute('aria-label')?.includes('Select entry for')
+    );
+    await user.click(entryCheckboxes[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 entry selected/)).toBeInTheDocument();
+    });
+  });
+
+  it('should select all entries with the select-all checkbox', async () => {
+    const user = userEvent.setup();
+    setupTwoStudentData();
+    renderWithRouter(<DailyReview />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const selectAllCheckbox = screen.getByLabelText('Select all entries');
+    await user.click(selectAllCheckbox);
+
+    await waitFor(() => {
+      expect(screen.getByText(/2 entries selected/)).toBeInTheDocument();
+    });
+  });
+
+  it('should clear selection when clear selection is clicked', async () => {
+    const user = userEvent.setup();
+    setupTwoStudentData();
+    renderWithRouter(<DailyReview />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const selectAllCheckbox = screen.getByLabelText('Select all entries');
+    await user.click(selectAllCheckbox);
+    await waitFor(() => {
+      expect(screen.getByText(/2 entries selected/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Clear selection'));
+    await waitFor(() => {
+      expect(screen.queryByText(/entries? selected/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('should show Check Out bulk action for entries without checkout', async () => {
+    const user = userEvent.setup();
+    setupTwoStudentData();
+    renderWithRouter(<DailyReview />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const selectAllCheckbox = screen.getByLabelText('Select all entries');
+    await user.click(selectAllCheckbox);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /check out \(2\)/i })).toBeInTheDocument();
+    });
+  });
+
+  it('should clear selection when filter changes', async () => {
+    const user = userEvent.setup();
+    setupTwoStudentData();
+    renderWithRouter(<DailyReview />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const selectAllCheckbox = screen.getByLabelText('Select all entries');
+    await user.click(selectAllCheckbox);
+    await waitFor(() => {
+      expect(screen.getByText(/2 entries selected/)).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText('Status filter'), 'no-checkout');
+
+    await waitFor(() => {
+      expect(screen.queryByText(/entries? selected/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('should open bulk check-out modal when bulk checkout is clicked', async () => {
+    const user = userEvent.setup();
+    setupTwoStudentData();
+    renderWithRouter(<DailyReview />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Adams, Alice').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const selectAllCheckbox = screen.getByLabelText('Select all entries');
+    await user.click(selectAllCheckbox);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /check out \(2\)/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /check out \(2\)/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/bulk check out/i)).toBeInTheDocument();
+      expect(screen.getByText(/students to check out/i)).toBeInTheDocument();
     });
   });
 });

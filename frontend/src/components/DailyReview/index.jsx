@@ -98,6 +98,21 @@ export default function DailyReview() {
   const [sortDirection, setSortDirection] = useState('asc');
   const [exporting, setExporting] = useState(false);
 
+  // Bulk selection state
+  const [selectedEntryIds, setSelectedEntryIds] = useState(new Set());
+  const [bulkCheckInModal, setBulkCheckInModal] = useState({
+    isOpen: false, checkInTime: '', reason: '', loading: false, error: null
+  });
+  const [bulkCheckOutModal, setBulkCheckOutModal] = useState({
+    isOpen: false, checkOutTime: '', reason: '', loading: false, error: null
+  });
+  const [bulkEditModal, setBulkEditModal] = useState({
+    isOpen: false, checkInTime: '', checkOutTime: '', reason: '', loading: false, error: null
+  });
+  const [bulkVoidModal, setBulkVoidModal] = useState({
+    isOpen: false, reason: '', loading: false, error: null
+  });
+
   // Quick check-in modal state
   const [quickCheckInModal, setQuickCheckInModal] = useState({
     isOpen: false,
@@ -239,6 +254,11 @@ export default function DailyReview() {
 
     return () => unsubscribe();
   }, [currentEvent?.id, selectedDate]);
+
+  // Clear selection when filters or date change
+  useEffect(() => {
+    setSelectedEntryIds(new Set());
+  }, [searchTerm, activityFilter, statusFilter, selectedDate]);
 
   // Full roster: explicitly added students + anyone who has ever checked in for this event
   const fullRosterIds = useMemo(
@@ -422,6 +442,55 @@ export default function DailyReview() {
   const filteredEntries = useMemo(() => {
     return studentRows.flatMap(row => row.details);
   }, [studentRows]);
+
+  // Bulk selection derived values
+  const selectedEntries = useMemo(
+    () => filteredEntries.filter(e => selectedEntryIds.has(e.id)),
+    [filteredEntries, selectedEntryIds]
+  );
+  const bulkableCheckInEntries = useMemo(
+    () => selectedEntries.filter(e => e.isNoCheckIn),
+    [selectedEntries]
+  );
+  const bulkableCheckOutEntries = useMemo(
+    () => selectedEntries.filter(e => !e.isNoCheckIn && !e.isVoided && !e.checkOutTime),
+    [selectedEntries]
+  );
+  const bulkableEditEntries = useMemo(
+    () => selectedEntries.filter(e => !e.isNoCheckIn && !e.isVoided),
+    [selectedEntries]
+  );
+  const bulkableVoidEntries = useMemo(
+    () => selectedEntries.filter(e => !e.isNoCheckIn && !e.isVoided),
+    [selectedEntries]
+  );
+  const isAllSelected = useMemo(
+    () => filteredEntries.length > 0 && filteredEntries.every(e => selectedEntryIds.has(e.id)),
+    [filteredEntries, selectedEntryIds]
+  );
+  const isSomeSelected = useMemo(
+    () => !isAllSelected && filteredEntries.some(e => selectedEntryIds.has(e.id)),
+    [filteredEntries, isAllSelected, selectedEntryIds]
+  );
+
+  const toggleEntry = useCallback((entryId) => {
+    setSelectedEntryIds(prev => {
+      const next = new Set(prev);
+      if (next.has(entryId)) next.delete(entryId);
+      else next.add(entryId);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelectedEntryIds(prev => {
+      const allSelected = filteredEntries.every(e => prev.has(e.id));
+      if (allSelected) return new Set();
+      return new Set(filteredEntries.map(e => e.id));
+    });
+  }, [filteredEntries]);
+
+  const clearSelection = useCallback(() => setSelectedEntryIds(new Set()), []);
 
   // Calculate summary stats
   const stats = useMemo(() => {
@@ -812,6 +881,49 @@ export default function DailyReview() {
     });
   };
 
+  // Bulk action modal openers
+  const openBulkCheckInModal = () => {
+    const startTime = currentEvent?.typicalStartTime || '09:00';
+    setBulkCheckInModal({
+      isOpen: true,
+      checkInTime: getLocalDateTimeValue(selectedDate, startTime),
+      reason: '',
+      loading: false,
+      error: null
+    });
+  };
+
+  const openBulkCheckOutModal = () => {
+    const endTime = currentEvent?.typicalEndTime || '15:00';
+    setBulkCheckOutModal({
+      isOpen: true,
+      checkOutTime: getLocalDateTimeValue(selectedDate, endTime),
+      reason: '',
+      loading: false,
+      error: null
+    });
+  };
+
+  const openBulkEditModal = () => {
+    setBulkEditModal({
+      isOpen: true,
+      checkInTime: '',
+      checkOutTime: '',
+      reason: '',
+      loading: false,
+      error: null
+    });
+  };
+
+  const openBulkVoidModal = () => {
+    setBulkVoidModal({
+      isOpen: true,
+      reason: '',
+      loading: false,
+      error: null
+    });
+  };
+
   // Handle void entry
   const handleVoidEntry = async () => {
     if (!voidModal.entry || !voidModal.reason || voidModal.reason.trim().length < 5) {
@@ -844,6 +956,120 @@ export default function DailyReview() {
         loading: false,
         error: error.message || 'Failed to void entry'
       }));
+    }
+  };
+
+  // Bulk action handlers
+  const handleBulkCheckIn = async () => {
+    if (!bulkCheckInModal.checkInTime || !bulkCheckInModal.reason) {
+      setBulkCheckInModal(prev => ({ ...prev, error: 'Check-in time and reason are required' }));
+      return;
+    }
+    setBulkCheckInModal(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const quickCheckInFunc = httpsCallable(functions, 'quickCheckIn');
+      for (const entry of bulkableCheckInEntries) {
+        await quickCheckInFunc({
+          studentId: entry.studentId,
+          eventId: currentEvent.id,
+          activityId: entry.activityId,
+          date: selectedDate,
+          checkInTime: new Date(bulkCheckInModal.checkInTime).toISOString(),
+          reason: bulkCheckInModal.reason
+        });
+      }
+      setBulkCheckInModal({ isOpen: false, checkInTime: '', reason: '', loading: false, error: null });
+      setSelectedEntryIds(new Set());
+    } catch (error) {
+      console.error('Bulk check-in error:', error);
+      setBulkCheckInModal(prev => ({ ...prev, loading: false, error: error.message || 'Failed to bulk check in' }));
+    }
+  };
+
+  const handleBulkCheckOut = async () => {
+    if (!bulkCheckOutModal.checkOutTime || !bulkCheckOutModal.reason) {
+      setBulkCheckOutModal(prev => ({ ...prev, error: 'Check-out time and reason are required' }));
+      return;
+    }
+    setBulkCheckOutModal(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const forceCheckOutFunc = httpsCallable(functions, 'forceCheckOut');
+      for (const entry of bulkableCheckOutEntries) {
+        await forceCheckOutFunc({
+          entryId: entry.id,
+          checkOutTime: new Date(bulkCheckOutModal.checkOutTime).toISOString(),
+          reason: bulkCheckOutModal.reason
+        });
+      }
+      setBulkCheckOutModal({ isOpen: false, checkOutTime: '', reason: '', loading: false, error: null });
+      setSelectedEntryIds(new Set());
+    } catch (error) {
+      console.error('Bulk checkout error:', error);
+      setBulkCheckOutModal(prev => ({ ...prev, loading: false, error: error.message || 'Failed to bulk checkout' }));
+    }
+  };
+
+  const handleBulkEdit = async () => {
+    if (!bulkEditModal.reason) {
+      setBulkEditModal(prev => ({ ...prev, error: 'Reason is required' }));
+      return;
+    }
+    if (!bulkEditModal.checkInTime && !bulkEditModal.checkOutTime) {
+      setBulkEditModal(prev => ({ ...prev, error: 'At least one time field must be set' }));
+      return;
+    }
+    setBulkEditModal(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      for (const entry of bulkableEditEntries) {
+        const newCheckIn = bulkEditModal.checkInTime
+          ? new Date(bulkEditModal.checkInTime)
+          : (entry.checkInTime ? new Date(entry.checkInTime) : null);
+        const newCheckOut = bulkEditModal.checkOutTime
+          ? new Date(bulkEditModal.checkOutTime)
+          : (entry.checkOutTime ? new Date(entry.checkOutTime) : null);
+
+        let hoursWorked = null;
+        let rawMinutes = null;
+        if (newCheckIn && newCheckOut) {
+          rawMinutes = Math.floor((newCheckOut - newCheckIn) / 1000 / 60);
+          hoursWorked = calculateHours(newCheckIn, newCheckOut).rounded;
+        }
+
+        const entryRef = doc(db, 'timeEntries', entry.id);
+        await updateDoc(entryRef, {
+          ...(bulkEditModal.checkInTime && { checkInTime: newCheckIn }),
+          ...(bulkEditModal.checkOutTime && { checkOutTime: newCheckOut }),
+          hoursWorked,
+          rawMinutes,
+          modifiedBy: 'admin',
+          modificationReason: `Bulk edit: ${bulkEditModal.reason}`,
+          modifiedAt: new Date()
+        });
+      }
+      setBulkEditModal({ isOpen: false, checkInTime: '', checkOutTime: '', reason: '', loading: false, error: null });
+      setSelectedEntryIds(new Set());
+    } catch (error) {
+      console.error('Bulk edit error:', error);
+      setBulkEditModal(prev => ({ ...prev, loading: false, error: error.message || 'Failed to bulk edit' }));
+    }
+  };
+
+  const handleBulkVoid = async () => {
+    if (!bulkVoidModal.reason || bulkVoidModal.reason.trim().length < 5) {
+      setBulkVoidModal(prev => ({ ...prev, error: 'Void reason must be at least 5 characters' }));
+      return;
+    }
+    setBulkVoidModal(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const voidTimeEntryFunc = httpsCallable(functions, 'voidTimeEntry');
+      for (const entry of bulkableVoidEntries) {
+        await voidTimeEntryFunc({ entryId: entry.id, voidReason: bulkVoidModal.reason.trim() });
+      }
+      setBulkVoidModal({ isOpen: false, reason: '', loading: false, error: null });
+      setSelectedEntryIds(new Set());
+    } catch (error) {
+      console.error('Bulk void error:', error);
+      setBulkVoidModal(prev => ({ ...prev, loading: false, error: error.message || 'Failed to bulk void' }));
     }
   };
 
@@ -1168,11 +1394,59 @@ export default function DailyReview() {
           </div>
         </div>
 
+        {/* Bulk Action Toolbar */}
+        {selectedEntryIds.size > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-medium text-blue-800">
+              {selectedEntryIds.size} {selectedEntryIds.size === 1 ? 'entry' : 'entries'} selected
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {bulkableCheckInEntries.length > 0 && (
+                <Button size="sm" variant="success" onClick={openBulkCheckInModal}>
+                  Check In ({bulkableCheckInEntries.length})
+                </Button>
+              )}
+              {bulkableCheckOutEntries.length > 0 && (
+                <Button size="sm" variant="secondary" onClick={openBulkCheckOutModal}>
+                  Check Out ({bulkableCheckOutEntries.length})
+                </Button>
+              )}
+              {bulkableEditEntries.length > 0 && (
+                <Button size="sm" variant="secondary" onClick={openBulkEditModal}>
+                  Edit ({bulkableEditEntries.length})
+                </Button>
+              )}
+              {bulkableVoidEntries.length > 0 && (
+                <Button size="sm" variant="danger" onClick={openBulkVoidModal}>
+                  Void ({bulkableVoidEntries.length})
+                </Button>
+              )}
+              <button
+                className="text-sm text-gray-600 hover:text-gray-900 underline"
+                onClick={clearSelection}
+              >
+                Clear selection
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Desktop Table View (md and up) */}
         <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
           <table className="w-full" role="table" aria-label="Daily student activity review">
             <thead className="bg-gray-50 border-b">
               <tr>
+                <th scope="col" className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    ref={(el) => { if (el) el.indeterminate = isSomeSelected; }}
+                    onChange={toggleAll}
+                    disabled={filteredEntries.length === 0}
+                    className="h-4 w-4 text-blue-600 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+                    aria-label="Select all entries"
+                  />
+                </th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity Details</th>
@@ -1182,13 +1456,13 @@ export default function DailyReview() {
             <tbody className="divide-y">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                     Loading...
                   </td>
                 </tr>
               ) : studentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                     {searchTerm || statusFilter !== 'all' || activityFilter !== 'all'
                       ? 'No entries match your filters'
                       : 'No entries for this date'}
@@ -1200,6 +1474,21 @@ export default function DailyReview() {
                     key={row.id}
                     className="hover:bg-gray-50 align-top"
                   >
+                    <td className="px-4 py-3">
+                      <div className="space-y-3">
+                        {row.details.map(entry => (
+                          <div key={`${entry.id}-sel`} className="flex items-start pt-0.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedEntryIds.has(entry.id)}
+                              onChange={() => toggleEntry(entry.id)}
+                              className="h-4 w-4 text-blue-600 rounded border-gray-300 cursor-pointer"
+                              aria-label={`Select entry for ${entry.student?.firstName} ${entry.student?.lastName} - ${entry.activity?.name || 'activity'}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-900">
                       {selectedDate}
                     </td>
@@ -1326,9 +1615,18 @@ export default function DailyReview() {
                     {row.details.map(entry => (
                       <div key={entry.id} className={entry.isVoided ? 'opacity-50' : ''}>
                         <div className="flex items-start justify-between gap-3">
-                          <span className={`uppercase font-bold text-[10px] text-blue-600 ${entry.isVoided ? 'line-through' : ''}`}>
-                            {entry.activity?.name || '--'}
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={selectedEntryIds.has(entry.id)}
+                              onChange={() => toggleEntry(entry.id)}
+                              className="h-4 w-4 text-blue-600 rounded border-gray-300 cursor-pointer flex-shrink-0"
+                              aria-label={`Select entry for ${entry.student?.firstName} ${entry.student?.lastName} - ${entry.activity?.name || 'activity'}`}
+                            />
+                            <span className={`uppercase font-bold text-[10px] text-blue-600 ${entry.isVoided ? 'line-through' : ''}`}>
+                              {entry.activity?.name || '--'}
+                            </span>
+                          </div>
                           <span className={`text-sm font-medium text-right ${getStatusClass(entry)}`}>
                             {getStatusDisplay(entry)}
                           </span>
@@ -1954,6 +2252,286 @@ export default function DailyReview() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Bulk Check-In Modal */}
+      <Modal
+        isOpen={bulkCheckInModal.isOpen}
+        onClose={() => setBulkCheckInModal(prev => ({ ...prev, isOpen: false }))}
+        title={`Bulk Check In (${bulkableCheckInEntries.length} entries)`}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setBulkCheckInModal(prev => ({ ...prev, isOpen: false }))}
+              disabled={bulkCheckInModal.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              onClick={handleBulkCheckIn}
+              loading={bulkCheckInModal.loading}
+            >
+              Check In All
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="bg-gray-50 p-3 rounded-lg max-h-36 overflow-y-auto">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Students to check in</p>
+            {bulkableCheckInEntries.map(entry => (
+              <p key={entry.id} className="text-sm text-gray-700">
+                {entry.student?.lastName}, {entry.student?.firstName} &mdash; {entry.activity?.name}
+              </p>
+            ))}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Check-In Time <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={bulkCheckInModal.checkInTime}
+              onChange={(e) => setBulkCheckInModal(prev => ({ ...prev, checkInTime: e.target.value }))}
+              className="input-field w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={bulkCheckInModal.reason}
+              onChange={(e) => setBulkCheckInModal(prev => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Missed scan-in, entered from roster review"
+              className="input-field w-full h-20 resize-none"
+            />
+          </div>
+          {bulkCheckInModal.error && (
+            <div className="text-red-600 text-sm">{bulkCheckInModal.error}</div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Bulk Check-Out Modal */}
+      <Modal
+        isOpen={bulkCheckOutModal.isOpen}
+        onClose={() => setBulkCheckOutModal(prev => ({ ...prev, isOpen: false }))}
+        title={`Bulk Check Out (${bulkableCheckOutEntries.length} entries)`}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setBulkCheckOutModal(prev => ({ ...prev, isOpen: false }))}
+              disabled={bulkCheckOutModal.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleBulkCheckOut}
+              loading={bulkCheckOutModal.loading}
+            >
+              Check Out All
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="bg-gray-50 p-3 rounded-lg max-h-36 overflow-y-auto">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Students to check out</p>
+            {bulkableCheckOutEntries.map(entry => (
+              <p key={entry.id} className="text-sm text-gray-700">
+                {entry.student?.lastName}, {entry.student?.firstName} &mdash; {entry.activity?.name}
+              </p>
+            ))}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Check-Out Time <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={bulkCheckOutModal.checkOutTime}
+              onChange={(e) => setBulkCheckOutModal(prev => ({ ...prev, checkOutTime: e.target.value }))}
+              className="input-field w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={bulkCheckOutModal.reason}
+              onChange={(e) => setBulkCheckOutModal(prev => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Forgot to check out, left with parent at 3pm"
+              className="input-field w-full h-20 resize-none"
+            />
+          </div>
+          {bulkCheckOutModal.error && (
+            <div className="text-red-600 text-sm">{bulkCheckOutModal.error}</div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Bulk Edit Modal */}
+      <Modal
+        isOpen={bulkEditModal.isOpen}
+        onClose={() => setBulkEditModal(prev => ({ ...prev, isOpen: false }))}
+        title={`Bulk Edit (${bulkableEditEntries.length} entries)`}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setBulkEditModal(prev => ({ ...prev, isOpen: false }))}
+              disabled={bulkEditModal.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleBulkEdit}
+              loading={bulkEditModal.loading}
+            >
+              Apply to All
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Set new times for <span className="font-bold">{bulkableEditEntries.length}</span> selected {bulkableEditEntries.length === 1 ? 'entry' : 'entries'}.
+            Leave a field blank to keep each entry&apos;s existing value.
+          </p>
+          <div className="bg-gray-50 p-3 rounded-lg max-h-36 overflow-y-auto">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Entries to edit</p>
+            {bulkableEditEntries.map(entry => (
+              <p key={entry.id} className="text-sm text-gray-700">
+                {entry.student?.lastName}, {entry.student?.firstName} &mdash; {entry.activity?.name}
+              </p>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Check-In Time
+              </label>
+              <input
+                type="datetime-local"
+                value={bulkEditModal.checkInTime}
+                onChange={(e) => setBulkEditModal(prev => ({ ...prev, checkInTime: e.target.value }))}
+                className="input-field w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Check-Out Time
+              </label>
+              <input
+                type="datetime-local"
+                value={bulkEditModal.checkOutTime}
+                onChange={(e) => setBulkEditModal(prev => ({ ...prev, checkOutTime: e.target.value }))}
+                className="input-field w-full"
+              />
+            </div>
+          </div>
+          {bulkEditModal.checkInTime && bulkEditModal.checkOutTime && (
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm text-gray-600">
+                Calculated hours:{' '}
+                <span className="font-bold">
+                  {(() => {
+                    const checkIn = new Date(bulkEditModal.checkInTime);
+                    const checkOut = new Date(bulkEditModal.checkOutTime);
+                    return formatHours(calculateHours(checkIn, checkOut).rounded);
+                  })()}
+                </span>
+              </p>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason for Change <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={bulkEditModal.reason}
+              onChange={(e) => setBulkEditModal(prev => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Corrected times based on sign-in sheet"
+              className="input-field w-full h-20 resize-none"
+            />
+          </div>
+          {bulkEditModal.error && (
+            <div className="text-red-600 text-sm">{bulkEditModal.error}</div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Bulk Void Modal */}
+      <Modal
+        isOpen={bulkVoidModal.isOpen}
+        onClose={() => setBulkVoidModal(prev => ({ ...prev, isOpen: false }))}
+        title={`Bulk Void (${bulkableVoidEntries.length} entries)`}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setBulkVoidModal(prev => ({ ...prev, isOpen: false }))}
+              disabled={bulkVoidModal.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleBulkVoid}
+              loading={bulkVoidModal.loading}
+              disabled={!bulkVoidModal.reason || bulkVoidModal.reason.trim().length < 5}
+            >
+              Void All
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+            <p className="text-sm text-amber-800 font-medium">
+              This will void <span className="font-bold">{bulkableVoidEntries.length}</span> {bulkableVoidEntries.length === 1 ? 'entry' : 'entries'},
+              excluding them from all hour calculations. Entries are preserved for audit purposes.
+            </p>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg max-h-36 overflow-y-auto">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Entries to void</p>
+            {bulkableVoidEntries.map(entry => (
+              <p key={entry.id} className="text-sm text-gray-700">
+                {entry.student?.lastName}, {entry.student?.firstName} &mdash; {entry.activity?.name}
+              </p>
+            ))}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason for Voiding <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={bulkVoidModal.reason}
+              onChange={(e) => setBulkVoidModal(prev => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Duplicate entries, data entry error"
+              className="input-field w-full h-20 resize-none"
+            />
+            {bulkVoidModal.reason && bulkVoidModal.reason.trim().length < 5 && (
+              <p className="text-xs text-gray-500 mt-1">
+                Minimum 5 characters required ({5 - bulkVoidModal.reason.trim().length} more needed)
+              </p>
+            )}
+          </div>
+          {bulkVoidModal.error && (
+            <div className="text-red-600 text-sm">{bulkVoidModal.error}</div>
+          )}
+        </div>
       </Modal>
     </div>
   );
